@@ -1,0 +1,32 @@
+/// Real-time OCR overlay stabilization engine.
+library;
+
+export 'src/block_classifier.dart';
+export 'src/block_key.dart';
+export 'src/classification_result.dart';
+export 'src/block_meta.dart';
+export 'src/confidence.dart';
+export 'src/ocr_block.dart';
+export 'src/classification_input.dart';
+export 'src/contextual_invalidation.dart';
+export 'src/css_submap_membership.dart';
+export 'src/drift_tracker.dart';
+export 'src/iqr_outlier.dart';
+export 'src/hierarchy_tiers.dart';
+export 'src/hierarchy_weight.dart';
+export 'src/observable_block.dart';
+export 'src/overlap_resolver.dart';
+export 'src/merge_result.dart';
+export 'src/robust_stats.dart';
+export 'src/stabilization_result.dart';
+export 'src/spatial_block_index.dart';
+export 'src/stabilization_engine.dart';
+export 'src/submap_membership.dart';
+export 'src/text_dedup_utils.dart';
+export 'src/text_vote.dart';
+export 'src/tracked_block.dart';
+export 'src/types/absolute_rect.dart';
+export 'src/types/container_id.dart';
+export 'src/types/scroll_context.dart';
+export 'src/types/space_key.dart';
+export 'src/types/sticky_fallback.dart';
