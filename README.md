@@ -188,15 +188,3 @@ to support different input sources:
 | WebView | `CssSubmapMembership` (default) | `CaptureSnapshotAdapter` (app-side) |
 | PDF | Custom (page-based submaps) | Custom (page geometry) |
 | Camera | Custom (frame regions) | Custom (camera frame) |
-
-## Roadmap
-
-- [x] Extract DriftTracker and SpatialBlockIndex (#516)
-- [x] Specify TrackedBlock public contract (#518)
-- [x] ClassificationInput abstraction (#519)
-- [x] SubmapMembership interface (#520)
-- [x] Contextual invalidation callback (#521)
-- [x] Package README and API docs (#522)
-- [x] Extract OverlayCacheService (SAR merge, dedup pipeline)
-- [x] Extract BlockClassifierService
-- [x] Graduate to standalone repository
