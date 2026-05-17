@@ -84,21 +84,37 @@ class MergeResult {
     required this.isProvisional,
     required this.provisionalCapturesRemaining,
     required this.sourceQuality,
-  }) : assert(
-         !isProvisional || provisionalCapturesRemaining > 0,
-         'isProvisional requires provisionalCapturesRemaining > 0',
-       ),
-       assert(observationCount >= 1, 'observationCount must be >= 1'),
-       // Defense-in-depth: PositionConfidence/TextConfidence enforce range
-       // in `.from()` but the primary `(double)` constructor bypasses it
-       // for const fixture ergonomics. Re-assert here so engine outputs
-       // can't carry an out-of-range value forward.
-       assert(
-         positionConfidence.raw >= 0 && positionConfidence.raw <= 1.0,
-         'positionConfidence must be in [0.0, 1.0]',
-       ),
-       assert(
-         textConfidence.raw >= 0 && textConfidence.raw <= 1.0,
-         'textConfidence must be in [0.0, 1.0]',
-       );
+  }) {
+    // Engine-output state. Per project policy (feedback_assert_vs_throw_in_storage):
+    // asserts strip in release; production-critical invariants on stored state
+    // must throw so a bypass via the unvalidated primary extension-type
+    // constructor (`PositionConfidence(double)`) or a future engine bug
+    // cannot silently propagate corrupted values into consumer caches.
+    if (isProvisional && provisionalCapturesRemaining <= 0) {
+      throw ArgumentError(
+        'isProvisional requires provisionalCapturesRemaining > 0',
+      );
+    }
+    if (observationCount < 1) {
+      throw ArgumentError.value(
+        observationCount,
+        'observationCount',
+        'must be >= 1',
+      );
+    }
+    if (positionConfidence.raw < 0 || positionConfidence.raw > 1.0) {
+      throw ArgumentError.value(
+        positionConfidence.raw,
+        'positionConfidence',
+        'must be in [0.0, 1.0]',
+      );
+    }
+    if (textConfidence.raw < 0 || textConfidence.raw > 1.0) {
+      throw ArgumentError.value(
+        textConfidence.raw,
+        'textConfidence',
+        'must be in [0.0, 1.0]',
+      );
+    }
+  }
 }
