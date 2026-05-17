@@ -5,3 +5,6 @@ pubspec.lock
 .idea/
 .vscode/
 *.iml
+
+# Local agentic scaffolding (UBP, etc.) — not part of the package source
+.ultra/
