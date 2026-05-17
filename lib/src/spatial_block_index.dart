@@ -130,6 +130,11 @@ class SpatialBlockIndex<T extends TrackedBlock> {
   /// Clear the entire index.
   void clear() => _cells.clear();
 
+  /// Whether the index contains zero blocks. O(1) — checks the underlying
+  /// cell map. Prefer this over `allBlocks.isEmpty`, which allocates an
+  /// identity `Set` and iterates every cell.
+  bool get isEmpty => _cells.isEmpty;
+
   /// All unique blocks in the index (identity-based dedup).
   ///
   /// Uses identity rather than value equality so that Equatable blocks
