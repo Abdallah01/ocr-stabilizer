@@ -1,3 +1,27 @@
+## 0.2.1
+
+Docs + metadata polish. No API change. First pub.dev-shipped release of the
+v0.2.x line.
+
+### Documentation
+- README: install snippet updated to `^0.2.1` with a breaking-change pointer
+  back to the 0.2.0 typed-confidence migration. (#14)
+- README: `TrackedBlock<T>` example now lists all 14 getters (was missing
+  `innerScrollerTop`, `sourceQuality`) with a follow-up note pointing
+  integrators at `DefaultTrackedBlock<T>` or `ObservableBlock<T>` as
+  appropriate. (#14)
+- README: API Reference tables refreshed for v0.2.x — corrected getter
+  count, generic on `ObservableBlock<T>`, documented `DefaultTrackedBlock<T>`,
+  `PositionConfidence`, `TextConfidence`, plus the previously-undocumented
+  exports (`StabilizationEngine`, `BlockClassifierService`, `OverlapResolver`,
+  `BlockKeyGenerator`, `MergeResult`, `StabilizationResult`,
+  `ClassificationResult`, `TextVote`, `IqrOutlier`, `TextDedupUtils`). (#14)
+
+### Metadata
+- `pubspec.yaml` gains `homepage:` and pub.dev `topics:` (`ocr`, `overlay`,
+  `tracking`, `slam`, `flutter`). (#14)
+- `.gitignore` excludes local agentic-scaffolding directory (`.ultra/`). (#14)
+
 ## 0.2.0
 
 ### Breaking
