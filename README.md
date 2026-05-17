@@ -22,12 +22,14 @@ adapts SLAM techniques to the OCR domain.
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^0.2.0
+  ocr_stabilizer: ^0.2.1
 ```
 
-> **0.2.0 is a breaking change** from 0.1.0 — `TrackedBlock.positionConfidence`
-> and `textConfidence` switched from `double` to typed `PositionConfidence` /
-> `TextConfidence`. See the [CHANGELOG](CHANGELOG.md#020) for the migration.
+> **0.2.0 was a breaking change** from 0.1.0 —
+> `TrackedBlock.positionConfidence` and `textConfidence` switched from
+> `double` to typed `PositionConfidence` / `TextConfidence`. See the
+> [CHANGELOG](CHANGELOG.md#020) for the migration. 0.2.1 is a docs-only
+> follow-up — no further API change.
 
 ## Getting Started
 
