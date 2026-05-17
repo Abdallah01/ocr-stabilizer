@@ -27,9 +27,9 @@ class _TestBlock implements ObservableBlock<Never> {
   @override
   final bool isFromStickyElement;
   @override
-  final double positionConfidence;
+  final PositionConfidence positionConfidence;
   @override
-  final double textConfidence;
+  final TextConfidence textConfidence;
   @override
   final int sourceQuality;
   @override
@@ -71,8 +71,8 @@ class _TestBlock implements ObservableBlock<Never> {
     this.innerScrollerTop = 0,
     this.originalText = '',
     this.isFromStickyElement = false,
-    this.positionConfidence = 0.5,
-    this.textConfidence = 0.5,
+    this.positionConfidence = const PositionConfidence(0.5),
+    this.textConfidence = const TextConfidence(0.5),
     this.sourceQuality = 0,
     this.observationCount = 1,
     this.classificationVotes = const {},
@@ -110,8 +110,8 @@ class _TestBlock implements ObservableBlock<Never> {
   _TestBlock copyWith({
     AbsoluteRect? absoluteRect,
     String? originalText,
-    double? positionConfidence,
-    double? textConfidence,
+    PositionConfidence? positionConfidence,
+    TextConfidence? textConfidence,
     int? sourceQuality,
     int? observationCount,
     Map<int, int>? classificationVotes,
@@ -197,6 +197,8 @@ _TestBlock _block({
   String text = '测试文本内容',
   double posConf = 0.5,
   double textConf = 0.5,
+  // posConf/textConf kept as raw doubles for ergonomic test call sites;
+  // wrapped into typed values when forwarded to _TestBlock below.
   int sourceQuality = 0,
   int observationCount = 1,
   bool isVR = false,
@@ -213,8 +215,8 @@ _TestBlock _block({
   return _TestBlock(
     absoluteRect: AbsoluteRect(Rect.fromLTWH(left, top, width, height)),
     originalText: text,
-    positionConfidence: posConf,
-    textConfidence: textConf,
+    positionConfidence: PositionConfidence.from(posConf),
+    textConfidence: TextConfidence.from(textConf),
     sourceQuality: sourceQuality,
     observationCount: observationCount,
     isViewportRelative: isVR,

@@ -13,6 +13,7 @@ import 'submap_membership.dart';
 import 'text_dedup_utils.dart';
 import 'text_vote.dart';
 import 'types/absolute_rect.dart';
+import 'types/confidence_types.dart';
 import 'types/space_key.dart';
 
 /// Well-observed threshold: blocks with this many observations signal
@@ -366,8 +367,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     );
 
     // 3. Weighted average against corrected position.
-    final totalConf = existing.positionConfidence + fresh.positionConfidence;
-    final w = totalConf > 0 ? fresh.positionConfidence / totalConf : 0.5;
+    final totalConf =
+        existing.positionConfidence.raw + fresh.positionConfidence.raw;
+    final w = totalConf > 0 ? fresh.positionConfidence.raw / totalConf : 0.5;
     final mergedRaw = Rect.lerp(existing.absoluteRect.raw, correctedRect, w)!;
 
     // 4a. Classification vote accumulation
@@ -401,8 +403,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       if (existingNormKey.isNotEmpty) {
         updatedTextVotes[existingNormKey] = TextVote(
           rawText: existing.originalText,
-          score: existing.textConfidence,
-          bestConfidence: existing.textConfidence,
+          score: existing.textConfidence.raw,
+          bestConfidence: existing.textConfidence.raw,
         );
       }
     }
@@ -414,16 +416,16 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final existingVote = updatedTextVotes[normalizedKey];
     final bestRaw =
         (existingVote == null ||
-            fresh.textConfidence > existingVote.bestConfidence)
+            fresh.textConfidence.raw > existingVote.bestConfidence)
         ? freshText
         : existingVote.rawText;
     updatedTextVotes[normalizedKey] = TextVote(
       rawText: bestRaw,
       bestConfidence: max(
-        fresh.textConfidence,
+        fresh.textConfidence.raw,
         existingVote?.bestConfidence ?? 0.0,
       ),
-      score: (existingVote?.score ?? 0.0) + fresh.textConfidence,
+      score: (existingVote?.score ?? 0.0) + fresh.textConfidence.raw,
     );
     // Bounded growth: cap at top entries
     if (updatedTextVotes.length > _kMaxTextVotes) {
@@ -444,13 +446,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     if (textWasPromoted) {
       mergedTextConf = winnerBestConf;
     } else if (existing.originalText == fresh.originalText) {
-      final totalTextConf = existing.textConfidence + fresh.textConfidence;
-      final tw = totalTextConf > 0 ? fresh.textConfidence / totalTextConf : 0.5;
+      final existingTC = existing.textConfidence.raw;
+      final freshTC = fresh.textConfidence.raw;
+      final totalTextConf = existingTC + freshTC;
+      final tw = totalTextConf > 0 ? freshTC / totalTextConf : 0.5;
       mergedTextConf =
-          (existing.textConfidence * (1 - tw) + fresh.textConfidence * tw)
-              .clamp(0.0, 1.0);
+          (existingTC * (1 - tw) + freshTC * tw).clamp(0.0, 1.0);
     } else {
-      mergedTextConf = existing.textConfidence;
+      mergedTextConf = existing.textConfidence.raw;
     }
 
     // 4d. Source quality: prefer higher tier
@@ -464,10 +467,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // Build MergeResult
     final result = MergeResult(
       mergedRect: AbsoluteRect(mergedRaw),
-      positionConfidence: min(totalConf, 1.0),
+      positionConfidence: PositionConfidence.from(min(totalConf, 1.0)),
       driftCorrection: regionDrift,
       winningOriginalText: winningText,
-      textConfidence: mergedTextConf,
+      textConfidence: TextConfidence.from(mergedTextConf),
       updatedTextVotes: Map.unmodifiable(updatedTextVotes),
       textWasPromoted: textWasPromoted,
       updatedClassificationVotes: Map.unmodifiable(classVotes),

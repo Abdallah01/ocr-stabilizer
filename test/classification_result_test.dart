@@ -14,13 +14,13 @@ void main() {
         ),
       ];
       const rect = AbsoluteRect(Rect.fromLTRB(10, 20, 60, 45));
-      const meta = BlockMeta(
+      final meta = BlockMeta(
         isViewportRelative: false,
         isInnerScrollerChild: false,
         innerScrollerTop: 0,
-        captureContext: ScrollContext(scrollY: 100),
-        positionConfidence: 0.8,
-        textConfidence: 0.9,
+        captureContext: const ScrollContext(scrollY: 100),
+        positionConfidence: PositionConfidence.from(0.8),
+        textConfidence: TextConfidence.from(0.9),
       );
 
       final group = ClassifiedGroup(
@@ -54,13 +54,13 @@ void main() {
           lines: const [],
         ),
       ];
-      const meta = BlockMeta(
+      final meta = BlockMeta(
         isViewportRelative: false,
         isInnerScrollerChild: false,
         innerScrollerTop: 0,
-        captureContext: ScrollContext(scrollY: 200),
-        positionConfidence: 0.7,
-        textConfidence: 0.8,
+        captureContext: const ScrollContext(scrollY: 200),
+        positionConfidence: PositionConfidence.from(0.7),
+        textConfidence: TextConfidence.from(0.8),
       );
       final group = ClassifiedGroup(
         group: blocks,

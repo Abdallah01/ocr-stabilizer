@@ -42,9 +42,9 @@ class _DemoBlock implements ObservableBlock<void> {
   @override
   final int observationCount;
   @override
-  final double positionConfidence;
+  final PositionConfidence positionConfidence;
   @override
-  final double textConfidence;
+  final TextConfidence textConfidence;
   @override
   final Map<int, int> classificationVotes;
   @override
@@ -63,8 +63,8 @@ class _DemoBlock implements ObservableBlock<void> {
     required double width,
     required double height,
     this.observationCount = 1,
-    this.positionConfidence = 1.0,
-    this.textConfidence = 1.0,
+    this.positionConfidence = PositionConfidence.groundTruth,
+    this.textConfidence = TextConfidence.groundTruth,
     this.classificationVotes = const {},
     this.carouselIdVotes = const {-1: 1},
     this.textVotes = const {},

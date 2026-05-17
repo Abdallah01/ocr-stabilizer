@@ -13,15 +13,15 @@ void main() {
           scrollX: 100.0,
           hzScrollerIndex: 2,
         ),
-        positionConfidence: 0.85,
-        textConfidence: 0.92,
+        positionConfidence: PositionConfidence.from(0.85),
+        textConfidence: TextConfidence.from(0.92),
       );
       expect(meta.isViewportRelative, isTrue);
       expect(meta.captureScrollY, 500.0);
       expect(meta.captureScrollX, 100.0);
       expect(meta.hzScrollerIndex, 2);
-      expect(meta.positionConfidence, 0.85);
-      expect(meta.textConfidence, 0.92);
+      expect(meta.positionConfidence.raw, 0.85);
+      expect(meta.textConfidence.raw, 0.92);
     });
 
     test('optional fields have correct defaults', () {
@@ -30,8 +30,8 @@ void main() {
         isInnerScrollerChild: false,
         innerScrollerTop: 0,
         captureContext: ScrollContext.none,
-        positionConfidence: 0.5,
-        textConfidence: 0.5,
+        positionConfidence: PositionConfidence.from(0.5),
+        textConfidence: TextConfidence.from(0.5),
       );
       expect(meta.isFromStickyElement, isFalse);
       expect(meta.stickyFallbackScrollY, 0.0);
@@ -48,8 +48,8 @@ void main() {
         isInnerScrollerChild: true,
         innerScrollerTop: 200.0,
         captureContext: const ScrollContext(scrollY: 100.0),
-        positionConfidence: 0.7,
-        textConfidence: 0.8,
+        positionConfidence: PositionConfidence.from(0.7),
+        textConfidence: TextConfidence.from(0.8),
         containerId: const ContainerId('sidebar_abc'),
       );
       expect(meta.containerId, const ContainerId('sidebar_abc'));
@@ -70,8 +70,8 @@ void main() {
           isIc: true,
           hzScrollerIndex: 1,
         ),
-        positionConfidence: 0.9,
-        textConfidence: 0.95,
+        positionConfidence: PositionConfidence.from(0.9),
+        textConfidence: TextConfidence.from(0.95),
       );
       expect(meta.isFromStickyElement, isTrue);
       expect(meta.stickyFallbackScrollY, 300.0);
@@ -88,8 +88,8 @@ void main() {
           isInnerScrollerChild: false,
           innerScrollerTop: 0,
           captureContext: const ScrollContext(hzScrollerIndex: 0),
-          positionConfidence: 0.5,
-          textConfidence: 0.5,
+          positionConfidence: PositionConfidence.from(0.5),
+          textConfidence: TextConfidence.from(0.5),
         );
         expect(meta.isHorizontalScrollChild, isTrue);
       },
@@ -103,8 +103,8 @@ void main() {
           isInnerScrollerChild: false,
           innerScrollerTop: 0,
           captureContext: const ScrollContext(hzScrollerIndex: 0),
-          positionConfidence: 0.5,
-          textConfidence: 0.5,
+          positionConfidence: PositionConfidence.from(0.5),
+          textConfidence: TextConfidence.from(0.5),
         );
         expect(meta.isHorizontalScrollChild, isFalse);
       },

@@ -1,3 +1,4 @@
+import 'types/confidence_types.dart';
 import 'types/container_id.dart';
 import 'types/scroll_context.dart';
 import 'types/sticky_fallback.dart';
@@ -29,11 +30,11 @@ class BlockMeta {
   /// Fallback coordinate context for sticky element demotion.
   final StickyFallback stickyFallback;
 
-  /// Spatial confidence score (0.0-1.0) from position stability.
-  final double positionConfidence;
+  /// Spatial confidence score from position stability.
+  final PositionConfidence positionConfidence;
 
-  /// Text recognition confidence (0.0-1.0) from OCR engine.
-  final double textConfidence;
+  /// Text recognition confidence from OCR engine.
+  final TextConfidence textConfidence;
 
   /// Creates block metadata for a classified group.
   const BlockMeta({

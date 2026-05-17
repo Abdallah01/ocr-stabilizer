@@ -9,6 +9,7 @@ import 'confidence.dart';
 import 'iqr_outlier.dart';
 import 'ocr_block.dart';
 import 'types/absolute_rect.dart';
+import 'types/confidence_types.dart';
 import 'types/scroll_context.dart';
 import 'types/sticky_fallback.dart';
 
@@ -332,8 +333,8 @@ class BlockClassifierService {
           isIc: fallbackIsIc,
           hzScrollerIndex: matchedHzIndex,
         ),
-        positionConfidence: posConf,
-        textConfidence: txtConf,
+        positionConfidence: PositionConfidence.from(posConf),
+        textConfidence: TextConfidence.from(txtConf),
       );
 
       classified.add(
