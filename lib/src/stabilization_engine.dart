@@ -96,8 +96,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// MUST call `spatialIndex.rebuild(result.stableBlocks)` (or the equivalent
   /// `add`/`remove` calls) after each [stabilize] invocation. If you skip
   /// this step, the spatial index becomes stale and contradiction detection
-  /// plus intra-batch dedup silently degrade — no exception, no error, just
-  /// wrong results.
+  /// plus inter-batch matching (`_findMatch` in the merge pass) silently
+  /// degrade — no exception, no error, just wrong results.
   ///
   /// In debug mode, [stabilize] prints a `[StabilizationEngine] WARNING`
   /// line when it detects an obviously-stale index (last call returned
@@ -110,7 +110,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // looks like "last call returned N blocks but index is now empty."
     if (kDebugMode &&
         _lastStabilizeOutputCount > 0 &&
-        spatialIndex.allBlocks.isEmpty) {
+        spatialIndex.isEmpty) {
       debugPrint(
         '[StabilizationEngine] WARNING: spatialIndex appears stale — '
         'last stabilize returned $_lastStabilizeOutputCount blocks but '
