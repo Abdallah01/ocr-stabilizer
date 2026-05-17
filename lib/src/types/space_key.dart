@@ -16,5 +16,9 @@ extension type const SpaceKey(String _raw) {
   SpaceKey.unknown() : _raw = 'unknown:0';
 
   /// The region index encoded in this key.
-  int get regionIndex => int.parse(_raw.split(':').last);
+  ///
+  /// Returns 0 as a safe fallback if the trailing segment is not a valid
+  /// integer (forward-compat: future format extensions and externally-
+  /// constructed keys must not crash callers). See #1.
+  int get regionIndex => int.tryParse(_raw.split(':').last) ?? 0;
 }
