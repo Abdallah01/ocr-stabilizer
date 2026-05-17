@@ -22,8 +22,12 @@ adapts SLAM techniques to the OCR domain.
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^0.1.0
+  ocr_stabilizer: ^0.2.0
 ```
+
+> **0.2.0 is a breaking change** from 0.1.0 — `TrackedBlock.positionConfidence`
+> and `textConfidence` switched from `double` to typed `PositionConfidence` /
+> `TextConfidence`. See the [CHANGELOG](CHANGELOG.md#020) for the migration.
 
 ## Getting Started
 
@@ -74,16 +78,22 @@ class MyBlock implements TrackedBlock<MyPayload> {
   @override final ContainerId? containerId;
   @override final bool isViewportRelative;
   @override final bool isInnerScrollerChild;
+  @override final double innerScrollerTop;
   @override final bool isHorizontalScrollChild;
   @override final ScrollContext scrollContext;
   @override final bool isFromStickyElement;
   @override final StickyFallback stickyFallback;
   @override final PositionConfidence positionConfidence;
   @override final TextConfidence textConfidence;
-  // ... other required getters
+  @override final int sourceQuality;
   @override final MyPayload payload;  // opaque — engine carries but never reads
 }
 ```
+
+For the stabilization pipeline (vote accumulation, provisional state,
+SAR-merge history), implement `ObservableBlock<T>` instead — it extends
+`TrackedBlock<T>` with 9 more getters. Most integrators want
+`DefaultTrackedBlock<T>` rather than rolling their own.
 
 The generic `T` carries app-specific data (translations, styles) without
 coupling the engine to your domain types.
@@ -180,8 +190,8 @@ A block's identity is a six-dimensional signature:
 
 | Type | Purpose |
 |------|---------|
-| `TrackedBlock<T>` | Core block contract (13 getters including payload) |
-| `ObservableBlock` | Observation history (counts, votes, provisional state) |
+| `TrackedBlock<T>` | Core block contract (14 getters including the opaque `payload`) |
+| `ObservableBlock<T>` | Extends `TrackedBlock`; adds observation history (9 getters: counts, votes, provisional state) |
 | `ClassificationInput` | Platform-agnostic viewport geometry |
 | `CarouselInput` | Carousel-specific geometry |
 | `SubmapMembership` | Strategy for coordinate-space partitioning |
@@ -191,10 +201,30 @@ A block's identity is a six-dimensional signature:
 
 | Type | Purpose |
 |------|---------|
+| `StabilizationEngine<T, P>` | SAR-merge, intra-batch dedup, contradiction detection |
 | `DriftTracker` | Regional drift correction with submap isolation |
 | `SpatialBlockIndex` | Grid-cell spatial index for overlap queries |
+| `BlockClassifierService` | Classifies blocks into fixed / sticky / carousel / IC / normal |
+| `OverlapResolver` | Spatial NMS with language-aware thresholds |
+| `BlockKeyGenerator` | Position + text dedup keys with fuzzy neighbor matching |
 | `CssSubmapMembership` | Default WebView submap partitioning |
 | `RobustStats` | Robust statistics (median, MAD, IQR) |
+| `IqrOutlier` | Tukey-fence outlier detection |
+| `TextDedupUtils` | Levenshtein, Jaccard, CJK detection helpers |
+
+### Reference Implementations
+
+| Type | Purpose |
+|------|---------|
+| `DefaultTrackedBlock<T>` | Concrete `ObservableBlock<T>` with documented defaults, `copyWith`, and `applyMerge(MergeResult)` — the fastest path for new integrators |
+
+### Result Types
+
+| Type | Purpose |
+|------|---------|
+| `StabilizationResult<T>` | Output of `engine.stabilize()` — stable blocks + bookkeeping |
+| `MergeResult` | Exhaustive engine-computed delta passed to `BlockMerger` |
+| `ClassificationResult` | Output of `BlockClassifierService` |
 
 ### Value Types
 
@@ -202,6 +232,7 @@ A block's identity is a six-dimensional signature:
 |------|---------|
 | `ScrollContext` | Scroll offsets and carousel identity at capture time |
 | `StickyFallback` | Fallback coordinate context for demoted sticky elements |
+| `TextVote` | Accumulated confidence evidence for one text variant |
 
 ### Extension Types
 
@@ -210,6 +241,8 @@ A block's identity is a six-dimensional signature:
 | `AbsoluteRect` | `Rect` | World-space coordinate safety |
 | `ContainerId` | `String` | Stable container identity |
 | `SpaceKey` | `String` | Typed drift observation keys |
+| `PositionConfidence` | `double` | Position-accuracy confidence in [0, 1] |
+| `TextConfidence` | `double` | OCR-text confidence in [0, 1] |
 
 ## Platform Support
 
