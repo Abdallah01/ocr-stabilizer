@@ -7,6 +7,7 @@
 // coordinate spaces) for OCR position correction.
 // ============================================================================
 
+import 'dart:collection' show Queue;
 import 'dart:ui' show Offset, Rect;
 
 import 'package:flutter/foundation.dart'
@@ -26,11 +27,12 @@ import 'types/space_key.dart';
 /// window of recent drifts; queries return the median, clamped to the median
 /// block height for the region (boundedness invariant).
 class DriftTracker {
-  /// Drift observations keyed by [SpaceKey].
-  final Map<SpaceKey, List<Offset>> _regionDrifts = {};
+  /// Drift observations keyed by [SpaceKey]. FIFO ring buffer per key,
+  /// bounded by [_maxPerRegion].
+  final Map<SpaceKey, Queue<Offset>> _regionDrifts = {};
 
   /// Block heights keyed by [SpaceKey] (same rolling window as drifts).
-  final Map<SpaceKey, List<double>> _regionBlockHeights = {};
+  final Map<SpaceKey, Queue<double>> _regionBlockHeights = {};
 
   /// Strategy for determining submap membership (default: CSS topology).
   final SubmapMembership submapMembership;
@@ -46,7 +48,7 @@ class DriftTracker {
   static const int _maxPerRegion = 20;
 
   /// Ring buffer of recent observations for debug export. Max 500 total.
-  final List<_DriftLogEntry> _observationLog = [];
+  final Queue<_DriftLogEntry> _observationLog = Queue<_DriftLogEntry>();
 
   /// Ring buffer cap.
   static const int _logCapacity = 500;
@@ -104,21 +106,22 @@ class DriftTracker {
         '[DRIFT] RECORDED key=$spaceKey drift=(${drift.dx.toStringAsFixed(1)},${drift.dy.toStringAsFixed(1)}) total=${(_regionDrifts[spaceKey]?.length ?? 0) + 1}',
       );
     }
-    final list = _regionDrifts.putIfAbsent(spaceKey, () => []);
-    list.add(drift);
-    if (list.length > _maxPerRegion) list.removeAt(0);
+    final list = _regionDrifts.putIfAbsent(spaceKey, () => Queue<Offset>());
+    list.addLast(drift);
+    if (list.length > _maxPerRegion) list.removeFirst();
 
-    final heightList = _regionBlockHeights.putIfAbsent(spaceKey, () => []);
-    heightList.add(blockHeight);
-    if (heightList.length > _maxPerRegion) heightList.removeAt(0);
+    final heightList =
+        _regionBlockHeights.putIfAbsent(spaceKey, () => Queue<double>());
+    heightList.addLast(blockHeight);
+    if (heightList.length > _maxPerRegion) heightList.removeFirst();
 
     // Append to observation log (ring buffer)
-    _observationLog.add(
+    _observationLog.addLast(
       _DriftLogEntry(DateTime.now(), spaceKey, drift, blockHeight),
     );
     // Evict oldest if over capacity (FIFO)
     if (_observationLog.length > _logCapacity) {
-      _observationLog.removeAt(0);
+      _observationLog.removeFirst();
     }
   }
 
@@ -166,7 +169,7 @@ class DriftTracker {
     final heights = _regionBlockHeights[spaceKey];
     if (heights == null || heights.isEmpty) return 16.0;
 
-    return RobustStats.median(heights) ?? 16.0;
+    return RobustStats.median(heights.toList()) ?? 16.0;
   }
 
   /// Adaptive overlap detection threshold for a space key.
