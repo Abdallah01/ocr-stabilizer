@@ -51,9 +51,9 @@ final blocks = ocrResults.map((ocr) => DefaultTrackedBlock<MyPayload>(
 final result = engine.stabilize(blocks);
 
 // Caller contract: rebuild the spatial index after each stabilize call.
-for (final b in result.stableBlocks) {
-  engine.spatialIndex.add(b);
-}
+// `rebuild` replaces the index atomically; using `add` in a real capture
+// loop without removing prior versions would accumulate stale blocks.
+engine.spatialIndex.rebuild(result.stableBlocks);
 ```
 
 See [`example/example.dart`](example/example.dart) for a runnable version.

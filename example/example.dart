@@ -20,10 +20,10 @@ void main() {
   print('Capture 1: ${result1.stableBlocks.length} stable blocks');
 
   // Caller contract: rebuild the spatial index after each stabilize call
-  // (see StabilizationEngine.stabilize docstring).
-  for (final b in result1.stableBlocks) {
-    engine.spatialIndex.add(b);
-  }
+  // (see StabilizationEngine.stabilize docstring). `rebuild` replaces the
+  // index atomically; using `add` in a real capture loop without removing
+  // prior versions would accumulate stale blocks.
+  engine.spatialIndex.rebuild(result1.stableBlocks);
 
   // Second capture: same text at slightly different positions (OCR jitter).
   final batch2 = [

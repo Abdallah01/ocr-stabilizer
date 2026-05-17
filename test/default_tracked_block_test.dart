@@ -38,7 +38,7 @@ void main() {
       expect(block.containerId, isNull);
     });
 
-    test('copyWith returns same instance when no fields specified', () {
+    test('copyWith preserves all fields when no overrides given', () {
       final block = DefaultTrackedBlock<String>(
         absoluteRect: const AbsoluteRect(Rect.fromLTWH(0, 0, 100, 30)),
         payload: 'p',
@@ -47,9 +47,26 @@ void main() {
 
       final clone = block.copyWith();
 
+      // A fresh instance with identical field values — not the same object.
+      expect(identical(clone, block), isFalse);
       expect(clone.originalText, 'hello');
       expect(clone.payload, 'p');
       expect(clone.observationCount, 1);
+    });
+
+    test('constructor asserts TrackedBlock invariant on containerId', () {
+      // containerId set without isInnerScrollerChild=true violates the
+      // TrackedBlock invariant — DefaultTrackedBlock fails fast at
+      // construction rather than silently misclassifying later.
+      expect(
+        () => DefaultTrackedBlock<int>(
+          absoluteRect: const AbsoluteRect(Rect.fromLTWH(0, 0, 100, 30)),
+          payload: 0,
+          containerId: const ContainerId('sidebar'),
+          // intentionally NOT setting isInnerScrollerChild: true
+        ),
+        throwsA(isA<AssertionError>()),
+      );
     });
 
     test('applyMerge wires MergeResult fields through copyWith', () {
@@ -113,7 +130,7 @@ void main() {
       ];
       // App must rebuild the index between calls — DefaultTrackedBlock
       // doesn't change that contract.
-      engine.spatialIndex.add(result1.stableBlocks.single);
+      engine.spatialIndex.rebuild(result1.stableBlocks);
       final result2 = engine.stabilize(batch2);
       expect(result2.stableBlocks, hasLength(1));
       expect(result2.stableBlocks.single.observationCount, 2);

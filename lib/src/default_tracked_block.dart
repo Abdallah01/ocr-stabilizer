@@ -110,6 +110,10 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
 
   /// Construct a tracked block. All fields are optional except [absoluteRect]
   /// and [payload] — defaults are documented in the class docstring.
+  ///
+  /// Asserts the [TrackedBlock] invariant: if [containerId] is non-null,
+  /// [isInnerScrollerChild] must be true. Mismatched flags would misclassify
+  /// the block into the wrong drift coordinate space (see TrackedBlock).
   const DefaultTrackedBlock({
     required this.absoluteRect,
     required this.payload,
@@ -134,7 +138,10 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
     this.groupSignature = 0,
     this.needsReclassification = false,
     this.exclusionHitCount = 0,
-  });
+  }) : assert(
+          containerId == null || isInnerScrollerChild,
+          'TrackedBlock invariant: containerId requires isInnerScrollerChild',
+        );
 
   /// Per-field immutable update. Pass only the fields that change.
   DefaultTrackedBlock<T> copyWith({
