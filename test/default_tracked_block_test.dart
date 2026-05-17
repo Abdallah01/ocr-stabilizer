@@ -54,10 +54,11 @@ void main() {
       expect(clone.observationCount, 1);
     });
 
-    test('constructor asserts TrackedBlock invariant on containerId', () {
+    test('constructor throws on TrackedBlock invariant violation', () {
       // containerId set without isInnerScrollerChild=true violates the
-      // TrackedBlock invariant — DefaultTrackedBlock fails fast at
-      // construction rather than silently misclassifying later.
+      // TrackedBlock invariant — DefaultTrackedBlock throws ArgumentError
+      // (not just asserts) so the check holds in release builds, where
+      // a silent misclassification would corrupt drift corrections.
       expect(
         () => DefaultTrackedBlock<int>(
           absoluteRect: const AbsoluteRect(Rect.fromLTWH(0, 0, 100, 30)),
@@ -65,7 +66,7 @@ void main() {
           containerId: const ContainerId('sidebar'),
           // intentionally NOT setting isInnerScrollerChild: true
         ),
-        throwsA(isA<AssertionError>()),
+        throwsA(isA<ArgumentError>()),
       );
     });
 

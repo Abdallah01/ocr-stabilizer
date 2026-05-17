@@ -111,10 +111,14 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
   /// Construct a tracked block. All fields are optional except [absoluteRect]
   /// and [payload] — defaults are documented in the class docstring.
   ///
-  /// Asserts the [TrackedBlock] invariant: if [containerId] is non-null,
-  /// [isInnerScrollerChild] must be true. Mismatched flags would misclassify
-  /// the block into the wrong drift coordinate space (see TrackedBlock).
-  const DefaultTrackedBlock({
+  /// Throws [ArgumentError] if the [TrackedBlock] invariant is violated:
+  /// when [containerId] is non-null, [isInnerScrollerChild] must be true.
+  /// Mismatched flags would misclassify the block into the wrong drift
+  /// coordinate space (see TrackedBlock). Uses `throw` rather than `assert`
+  /// per project policy (feedback_assert_vs_throw_in_storage) — this is the
+  /// public reference implementation of a state-owning type, so the check
+  /// must hold in release builds as well as debug.
+  DefaultTrackedBlock({
     required this.absoluteRect,
     required this.payload,
     this.containerId,
@@ -138,10 +142,17 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
     this.groupSignature = 0,
     this.needsReclassification = false,
     this.exclusionHitCount = 0,
-  }) : assert(
-          containerId == null || isInnerScrollerChild,
-          'TrackedBlock invariant: containerId requires isInnerScrollerChild',
-        );
+  }) {
+    if (containerId != null && !isInnerScrollerChild) {
+      throw ArgumentError(
+        'TrackedBlock invariant: containerId requires isInnerScrollerChild '
+        '(got containerId=$containerId, isInnerScrollerChild=false). '
+        'Setting containerId without isInnerScrollerChild misclassifies the '
+        'block into the wrong drift coordinate space and silently corrupts '
+        'drift corrections.',
+      );
+    }
+  }
 
   /// Per-field immutable update. Pass only the fields that change.
   DefaultTrackedBlock<T> copyWith({
