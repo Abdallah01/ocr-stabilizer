@@ -7,8 +7,8 @@ repository: https://github.com/Abdallah01/ocr-stabilizer
 issue_tracker: https://github.com/Abdallah01/ocr-stabilizer/issues
 
 environment:
-  sdk: ^3.8.1
-  flutter: '>=3.0.0'
+  sdk: ^3.3.0
+  flutter: '>=3.19.0'
 
 dependencies:
   flutter:
