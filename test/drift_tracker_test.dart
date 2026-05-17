@@ -45,9 +45,9 @@ class _TestBlock implements TrackedBlock<Never> {
   final bool stickyFallbackIsIc;
   final int stickyFallbackHzIndex;
   @override
-  final double positionConfidence;
+  final PositionConfidence positionConfidence;
   @override
-  final double textConfidence;
+  final TextConfidence textConfidence;
   @override
   final int sourceQuality;
 
@@ -67,8 +67,8 @@ class _TestBlock implements TrackedBlock<Never> {
     this.stickyFallbackScrollX = 0,
     this.stickyFallbackIsIc = false,
     this.stickyFallbackHzIndex = -1,
-    this.positionConfidence = 0.5,
-    this.textConfidence = 0.5,
+    this.positionConfidence = const PositionConfidence(0.5),
+    this.textConfidence = const TextConfidence(0.5),
     this.sourceQuality = 0,
   });
 
@@ -109,9 +109,9 @@ class _PayloadBlock implements TrackedBlock<String> {
   @override
   bool get isFromStickyElement => false;
   @override
-  double get positionConfidence => 0.5;
+  PositionConfidence get positionConfidence => const PositionConfidence(0.5);
   @override
-  double get textConfidence => 0.5;
+  TextConfidence get textConfidence => const TextConfidence(0.5);
   @override
   int get sourceQuality => 0;
 

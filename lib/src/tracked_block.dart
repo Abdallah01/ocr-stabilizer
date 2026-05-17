@@ -1,4 +1,5 @@
 import 'types/absolute_rect.dart';
+import 'types/confidence_types.dart';
 import 'types/container_id.dart';
 import 'types/scroll_context.dart';
 import 'types/sticky_fallback.dart';
@@ -60,11 +61,11 @@ abstract interface class TrackedBlock<T> {
 
   // ── Confidence ──
 
-  /// Position accuracy confidence (0.0–1.0).
-  double get positionConfidence;
+  /// Position accuracy confidence. Range [0, 1].
+  PositionConfidence get positionConfidence;
 
-  /// OCR text confidence (0.0–1.0).
-  double get textConfidence;
+  /// OCR text confidence. Range [0, 1].
+  TextConfidence get textConfidence;
 
   // ── Source quality ──
 

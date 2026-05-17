@@ -174,7 +174,7 @@ class OverlapResolver {
   /// Combined quality score: text confidence weighted higher than position
   /// confidence because a bad translation is worse than slight position jitter.
   static double qualityScore(TrackedBlock block) =>
-      block.positionConfidence * 0.4 + block.textConfidence * 0.6;
+      block.positionConfidence.raw * 0.4 + block.textConfidence.raw * 0.6;
 
   // ── NMS Resolution ─────────────────────────────────────────────────
 

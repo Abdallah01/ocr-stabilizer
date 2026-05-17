@@ -26,6 +26,7 @@ export 'src/text_dedup_utils.dart';
 export 'src/text_vote.dart';
 export 'src/tracked_block.dart';
 export 'src/types/absolute_rect.dart';
+export 'src/types/confidence_types.dart';
 export 'src/types/container_id.dart';
 export 'src/types/scroll_context.dart';
 export 'src/types/space_key.dart';
