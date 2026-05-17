@@ -1,6 +1,8 @@
 import 'dart:math' show max, min;
 import 'dart:ui' show Offset, Rect;
 
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
+
 import 'block_key.dart';
 import 'drift_tracker.dart';
 import 'hierarchy_weight.dart';
@@ -72,6 +74,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Overlap resolver for spatial NMS.
   final OverlapResolver _resolver = const OverlapResolver();
 
+  /// Size of [stableBlocks] returned by the previous [stabilize] call.
+  /// Used by the debug-mode staleness guard (see [stabilize] WARNING).
+  int _lastStabilizeOutputCount = 0;
+
   /// Core entry point: stabilize a batch of fresh blocks against the model.
   ///
   /// [freshBlocks] — raw OCR observations for this frame (may contain
@@ -83,7 +89,37 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// - [StabilizationResult.contradictions] — detected contradictions
   /// - [StabilizationResult.invalidatedTexts] — texts needing re-translation
   /// - [StabilizationResult.wellObservedTexts] — texts reaching stability
+  ///
+  /// ## ⚠️ Caller contract: rebuild the spatial index
+  ///
+  /// **This method does NOT update [spatialIndex] internally.** The consumer
+  /// MUST call `spatialIndex.rebuild(result.stableBlocks)` (or the equivalent
+  /// `add`/`remove` calls) after each [stabilize] invocation. If you skip
+  /// this step, the spatial index becomes stale and contradiction detection
+  /// plus intra-batch dedup silently degrade — no exception, no error, just
+  /// wrong results.
+  ///
+  /// In debug mode, [stabilize] prints a `[StabilizationEngine] WARNING`
+  /// line when it detects an obviously-stale index (last call returned
+  /// blocks, but the index is now empty). This is a heuristic — it catches
+  /// the common "forgot to wire rebuild at all" mistake but not partial
+  /// rebuilds. See #2 for the long-term enforce-internally design.
   StabilizationResult<T> stabilize(List<T> freshBlocks) {
+    // Debug-mode staleness guard (#2). The most common integration error
+    // is wiring [stabilize] without ever rebuilding [spatialIndex] — that
+    // looks like "last call returned N blocks but index is now empty."
+    if (kDebugMode &&
+        _lastStabilizeOutputCount > 0 &&
+        spatialIndex.allBlocks.isEmpty) {
+      debugPrint(
+        '[StabilizationEngine] WARNING: spatialIndex appears stale — '
+        'last stabilize returned $_lastStabilizeOutputCount blocks but '
+        'spatialIndex is empty. Did you forget to call '
+        'spatialIndex.rebuild(result.stableBlocks) after the previous '
+        'stabilize call? See StabilizationEngine.stabilize docstring.',
+      );
+    }
+
     // 1. Dedup pipeline
     final deduped = _dedup(freshBlocks);
 
@@ -113,6 +149,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         stableBlocks.add(fresh);
       }
     }
+
+    _lastStabilizeOutputCount = stableBlocks.length;
 
     return StabilizationResult<T>(
       stableBlocks: stableBlocks,

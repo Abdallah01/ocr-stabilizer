@@ -2,6 +2,7 @@
 
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
@@ -948,6 +949,58 @@ void main() {
       // highObs is in a different region (top=200 vs top=100, regionSize=500 → same region)
       // Both are in same normal space, but highObs has observationCount >= 3
       expect(uncorrected, isNot(contains(highObs)));
+    });
+  });
+
+  group('StabilizationEngine spatialIndex contract (#2)', () {
+    test('stabilize() does NOT auto-update spatialIndex — caller owns rebuild',
+        () {
+      final spatialIndex = SpatialBlockIndex<_TestBlock>();
+      final engine = StabilizationEngine<_TestBlock, Never>(
+        merger: _testMerger,
+        spatialIndex: spatialIndex,
+      );
+
+      final fresh = _block(text: 'hello', top: 100);
+      final result = engine.stabilize([fresh]);
+
+      // Engine produced a stable block...
+      expect(result.stableBlocks, hasLength(1));
+      // ...but did NOT add it to spatialIndex. This is the documented
+      // contract: the caller is responsible for rebuilding the index.
+      // The debug-mode warning in stabilize() catches when callers
+      // forget this.
+      expect(spatialIndex.allBlocks, isEmpty);
+    });
+
+    test('debug staleness warning fires when stabilize sees stale index', () {
+      final logs = <String>[];
+      final originalDebugPrint = debugPrint;
+      debugPrint = (String? msg, {int? wrapWidth}) {
+        if (msg != null) logs.add(msg);
+      };
+      try {
+        final spatialIndex = SpatialBlockIndex<_TestBlock>();
+        final engine = StabilizationEngine<_TestBlock, Never>(
+          merger: _testMerger,
+          spatialIndex: spatialIndex,
+        );
+
+        // First call: produces a stable block. Caller (intentionally for
+        // this test) skips spatialIndex.rebuild(...).
+        engine.stabilize([_block(text: 'first', top: 100)]);
+
+        // Second call: engine sees that the previous call produced
+        // output but the index is empty → fires the warning.
+        engine.stabilize([_block(text: 'second', top: 200)]);
+
+        expect(
+          logs.where((m) => m.contains('spatialIndex appears stale')),
+          isNotEmpty,
+        );
+      } finally {
+        debugPrint = originalDebugPrint;
+      }
     });
   });
 }
