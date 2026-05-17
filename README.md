@@ -25,6 +25,41 @@ dependencies:
   ocr_stabilizer: ^0.1.0
 ```
 
+## Getting Started
+
+The fastest path is `DefaultTrackedBlock<T>` — a concrete reference
+implementation with documented defaults for every required field, including
+the load-bearing ones like `carouselIdVotes: {-1: 1}` that need careful
+initialization.
+
+```dart
+import 'package:ocr_stabilizer/ocr_stabilizer.dart';
+
+final engine = StabilizationEngine<DefaultTrackedBlock<MyPayload>, MyPayload>(
+  merger: (existing, fresh, merge) => existing.applyMerge(merge),
+);
+
+// Each capture:
+final blocks = ocrResults.map((ocr) => DefaultTrackedBlock<MyPayload>(
+  absoluteRect: ocr.absoluteRect,
+  originalText: ocr.text,
+  payload: ocr.payload,
+  positionConfidence: PositionConfidence.from(ocr.posConf),
+  textConfidence: TextConfidence.from(ocr.txtConf),
+)).toList();
+
+final result = engine.stabilize(blocks);
+
+// Caller contract: rebuild the spatial index after each stabilize call.
+for (final b in result.stableBlocks) {
+  engine.spatialIndex.add(b);
+}
+```
+
+See [`example/example.dart`](example/example.dart) for a runnable version.
+
+For app-specific block types not covered by `DefaultTrackedBlock`, implement
+`TrackedBlock<T>` directly — see the next section.
 
 ## Core Components
 
@@ -43,6 +78,8 @@ class MyBlock implements TrackedBlock<MyPayload> {
   @override final ScrollContext scrollContext;
   @override final bool isFromStickyElement;
   @override final StickyFallback stickyFallback;
+  @override final PositionConfidence positionConfidence;
+  @override final TextConfidence textConfidence;
   // ... other required getters
   @override final MyPayload payload;  // opaque — engine carries but never reads
 }

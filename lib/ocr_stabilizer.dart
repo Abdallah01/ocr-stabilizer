@@ -6,6 +6,7 @@ export 'src/block_key.dart';
 export 'src/classification_result.dart';
 export 'src/block_meta.dart';
 export 'src/confidence.dart';
+export 'src/default_tracked_block.dart';
 export 'src/ocr_block.dart';
 export 'src/classification_input.dart';
 export 'src/contextual_invalidation.dart';
