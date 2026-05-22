@@ -217,7 +217,8 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
   ///
   /// Fields engine-computed:
   /// position, text (winning + votes + confidence), classification votes,
-  /// carousel votes, observation count, provisional state, source quality.
+  /// needs reclassification, carousel votes, observation count,
+  /// provisional state, source quality.
   /// Fields preserved from `this`: payload, containerId, all coordinate-space
   /// flags, scrollContext, sticky state, groupSignature.
   DefaultTrackedBlock<T> applyMerge(MergeResult merge) {
