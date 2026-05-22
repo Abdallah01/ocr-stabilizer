@@ -946,6 +946,34 @@ void main() {
       // Both are in same normal space, but highObs has observationCount >= 3
       expect(uncorrected, isNot(contains(highObs)));
     });
+
+    test('resetDriftPropagation clears the regional-drift baseline', () {
+      final driftTracker = DriftTracker();
+      final engine = _createEngine(driftTracker: driftTracker);
+
+      // Drive a consistent shift past threshold for one space key.
+      for (var i = 0; i < 5; i++) {
+        final obs = _block(text: '测试文本内容', top: 100 + 10.0);
+        driftTracker.addObservation(
+          obs,
+          const Offset(5.0, 10.0),
+          blockHeight: 30.0,
+        );
+      }
+
+      // First call detects the shift and records the baseline.
+      expect(engine.checkDriftPropagation(), isNotEmpty);
+      // Second call sees the baseline at the current median → no shift.
+      expect(engine.checkDriftPropagation(), isEmpty);
+
+      engine.resetDriftPropagation();
+
+      // The reset clears only the engine baseline — the drift tracker
+      // keeps its observations (orthogonal state).
+      expect(driftTracker.observedKeys, isNotEmpty);
+      // Baseline cleared → the same shift is detected afresh.
+      expect(engine.checkDriftPropagation(), isNotEmpty);
+    });
   });
 
   group('StabilizationEngine spatialIndex contract (#13)', () {
