@@ -180,12 +180,21 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   }
 
   /// Clear the regional-drift baseline so the next [checkDriftPropagation]
-  /// call treats every space key as freshly observed.
+  /// call compares the current median against zero for every space key, as
+  /// if no prior baseline existed. Recorded observations in [driftTracker]
+  /// are not touched.
   ///
-  /// Call this on a session boundary (page navigation, context reset) to
-  /// stop a previous context's drift baseline from contaminating the first
-  /// dedup pass of the next one. Pairs with [DriftTracker.clear] — that
-  /// clears recorded observations, this clears the propagation baseline.
+  /// For a full session reset (page navigation, context change), pair this
+  /// with [DriftTracker.clear] — that discards the old context's
+  /// observations, this discards the baseline. They govern different state:
+  /// calling only [DriftTracker.clear] leaves a stale baseline that
+  /// suppresses the new context's first real shift; calling only this
+  /// leaves stale observations that still feed drift corrections.
+  ///
+  /// Calling this alone is also valid mid-session — it makes
+  /// [checkDriftPropagation] re-emit the current drift so corrections reach
+  /// newly-added uncorrected blocks, without discarding the observation
+  /// window.
   void resetDriftPropagation() {
     _lastRegionalDrift.clear();
   }

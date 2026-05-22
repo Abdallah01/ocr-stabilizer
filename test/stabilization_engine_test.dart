@@ -951,8 +951,7 @@ void main() {
       final driftTracker = DriftTracker();
       final engine = _createEngine(driftTracker: driftTracker);
 
-      // Drive a consistent shift past threshold for one space key — the
-      // same observation loop as the detect-shift test above.
+      // Drive a consistent shift past threshold for one space key.
       for (var i = 0; i < 5; i++) {
         final obs = _block(text: '测试文本内容', top: 100 + 10.0);
         driftTracker.addObservation(
@@ -969,6 +968,9 @@ void main() {
 
       engine.resetDriftPropagation();
 
+      // The reset clears only the engine baseline — the drift tracker
+      // keeps its observations (orthogonal state).
+      expect(driftTracker.observedKeys, isNotEmpty);
       // Baseline cleared → the same shift is detected afresh.
       expect(engine.checkDriftPropagation(), isNotEmpty);
     });
