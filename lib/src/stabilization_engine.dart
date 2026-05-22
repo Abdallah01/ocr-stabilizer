@@ -179,6 +179,17 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         .toList();
   }
 
+  /// Clear the regional-drift baseline so the next [checkDriftPropagation]
+  /// call treats every space key as freshly observed.
+  ///
+  /// Call this on a session boundary (page navigation, context reset) to
+  /// stop a previous context's drift baseline from contaminating the first
+  /// dedup pass of the next one. Pairs with [DriftTracker.clear] — that
+  /// clears recorded observations, this clears the propagation baseline.
+  void resetDriftPropagation() {
+    _lastRegionalDrift.clear();
+  }
+
   // ── Dedup pipeline ──────────────────────────────────────────────────
 
   /// Filter noise and remove intra-batch duplicates.
