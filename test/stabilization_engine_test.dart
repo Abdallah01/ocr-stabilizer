@@ -961,11 +961,13 @@ void main() {
       // stabilize() rebuilds spatialIndex from its own stableBlocks before
       // returning — there is no caller-side rebuild. This supersedes the
       // old #2 contract (caller owns rebuild + debug staleness warning).
+      // unorderedEquals proves the index holds the same block instances as
+      // stableBlocks (identity equality — _TestBlock has no `==`).
+      expect(result.stableBlocks, hasLength(1));
       expect(
         engine.spatialIndex.allBlocks,
-        hasLength(result.stableBlocks.length),
+        unorderedEquals(result.stableBlocks),
       );
-      expect(engine.spatialIndex.isEmpty, isFalse);
     });
   });
 }

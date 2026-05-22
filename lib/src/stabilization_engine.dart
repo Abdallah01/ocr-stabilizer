@@ -38,7 +38,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Drift tracker shared with the app (the app may also feed observations).
   final DriftTracker driftTracker;
 
-  /// Spatial index shared with the app (the app may query for rendering).
+  /// Spatial index rebuilt by the engine on each [stabilize] call; the app
+  /// may query it between calls for rendering lookups.
   final SpatialBlockIndex<T> spatialIndex;
 
   /// Optional context-change detector. When non-null, the engine calls this
@@ -86,7 +87,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// - [StabilizationResult.wellObservedTexts] — texts reaching stability
   ///
   /// [spatialIndex] is rebuilt internally from the returned `stableBlocks`
-  /// before this method returns — callers do not manage it (#13).
+  /// before this method returns — callers no longer rebuild it after each
+  /// [stabilize] call (#13).
   StabilizationResult<T> stabilize(List<T> freshBlocks) {
     // 1. Dedup pipeline
     final deduped = _dedup(freshBlocks);
@@ -294,6 +296,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Public entry point for consumers that do their own block matching but
   /// want to delegate the merge math to the engine. Returns a [MergeOutput]
   /// containing the merged block and signals.
+  ///
+  /// Unlike [stabilize], `merge` does not touch [spatialIndex] — a consumer
+  /// calling `merge` directly owns the spatial index lifecycle.
   ///
   /// When [trackDrift] is true (default), records drift observations.
   /// Existing drift correction is always applied regardless of this flag.
