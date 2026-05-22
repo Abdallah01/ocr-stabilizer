@@ -64,11 +64,13 @@ class MergeResult {
   /// Best source-quality tier observed (engine picks max of fresh/existing).
   final int sourceQuality;
 
-  /// All fields are engine-computed. Invariants:
+  /// All fields are engine-computed. The constructor throws [ArgumentError]
+  /// on any violation of:
   /// - If [isProvisional], [provisionalCapturesRemaining] must be > 0
   /// - [observationCount] is >= 1
-  /// - [positionConfidence] / [textConfidence] range invariant is enforced
-  ///   by the [PositionConfidence] / [TextConfidence] types themselves.
+  /// - [positionConfidence] / [textConfidence] are in [0.0, 1.0] and not
+  ///   NaN — checked here because the primary [PositionConfidence] /
+  ///   [TextConfidence] constructors are unchecked.
   MergeResult({
     required this.mergedRect,
     required this.positionConfidence,
@@ -102,14 +104,18 @@ class MergeResult {
         'must be >= 1',
       );
     }
-    if (positionConfidence.raw < 0 || positionConfidence.raw > 1.0) {
+    if (positionConfidence.raw.isNaN ||
+        positionConfidence.raw < 0 ||
+        positionConfidence.raw > 1.0) {
       throw ArgumentError.value(
         positionConfidence.raw,
         'positionConfidence',
         'must be in [0.0, 1.0]',
       );
     }
-    if (textConfidence.raw < 0 || textConfidence.raw > 1.0) {
+    if (textConfidence.raw.isNaN ||
+        textConfidence.raw < 0 ||
+        textConfidence.raw > 1.0) {
       throw ArgumentError.value(
         textConfidence.raw,
         'textConfidence',

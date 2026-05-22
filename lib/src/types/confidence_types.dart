@@ -10,20 +10,30 @@
 // Pattern mirrors `lib/src/types/absolute_rect.dart` and `container_id.dart`.
 // =============================================================================
 
-/// Confidence in a block's [absoluteRect] (position accuracy). Range [0, 1].
+/// Confidence in a block's `absoluteRect` (position accuracy). Range [0, 1].
 ///
-/// Construct via [PositionConfidence.from] for runtime values (asserts the
-/// range) or the static [groundTruth] sentinel for deterministic origins
-/// (DOM `getBoundingClientRect` reads, etc.) that should win SAR-merge
-/// tie-breaks against noisier OCR observations.
+/// The primary constructor `PositionConfidence(double)` is `const` and
+/// **unchecked** — it is the only `const`-capable path, kept for `const`
+/// sentinels with literal in-range values. It validates nothing: an
+/// out-of-range or NaN value built this way flows into the engine
+/// unchecked. (`MergeResult`'s constructor guards engine *output*, but code
+/// that reads `raw` directly — e.g. dedup quality scoring — does not.)
+/// For any runtime value use [PositionConfidence.from], which validates
+/// and throws.
 extension type const PositionConfidence(double raw) {
-  /// Validated factory. Asserts the input is in [0, 1] in debug mode.
-  PositionConfidence.from(double v)
-      : assert(
-          v >= 0.0 && v <= 1.0,
-          'PositionConfidence must be in [0.0, 1.0], got $v',
-        ),
-        raw = v;
+  /// Validated factory for runtime values. Throws [ArgumentError] on a NaN
+  /// or out-of-[0, 1] input — in release builds as well as debug. Not
+  /// `const`; see the type doc for the `const` path.
+  factory PositionConfidence.from(double value) {
+    if (value.isNaN || value < 0.0 || value > 1.0) {
+      throw ArgumentError.value(
+        value,
+        'value',
+        'PositionConfidence must be in [0.0, 1.0]',
+      );
+    }
+    return PositionConfidence(value);
+  }
 
   /// Deterministic ground truth (1.0). Used by producers whose position
   /// is read directly from the DOM rather than estimated by OCR.
@@ -32,16 +42,28 @@ extension type const PositionConfidence(double raw) {
 
 /// Confidence in a block's OCR text (recognition accuracy). Range [0, 1].
 ///
-/// Construct via [TextConfidence.from] for runtime values or [groundTruth]
-/// for deterministic DOM-sourced text.
+/// The primary constructor `TextConfidence(double)` is `const` and
+/// **unchecked** — it is the only `const`-capable path, kept for `const`
+/// sentinels with literal in-range values. It validates nothing: an
+/// out-of-range or NaN value built this way flows into the engine
+/// unchecked. (`MergeResult`'s constructor guards engine *output*, but code
+/// that reads `raw` directly — e.g. dedup quality scoring — does not.)
+/// For any runtime value use [TextConfidence.from], which validates
+/// and throws.
 extension type const TextConfidence(double raw) {
-  /// Validated factory. Asserts the input is in [0, 1] in debug mode.
-  TextConfidence.from(double v)
-      : assert(
-          v >= 0.0 && v <= 1.0,
-          'TextConfidence must be in [0.0, 1.0], got $v',
-        ),
-        raw = v;
+  /// Validated factory for runtime values. Throws [ArgumentError] on a NaN
+  /// or out-of-[0, 1] input — in release builds as well as debug. Not
+  /// `const`; see the type doc for the `const` path.
+  factory TextConfidence.from(double value) {
+    if (value.isNaN || value < 0.0 || value > 1.0) {
+      throw ArgumentError.value(
+        value,
+        'value',
+        'TextConfidence must be in [0.0, 1.0]',
+      );
+    }
+    return TextConfidence(value);
+  }
 
   /// Deterministic ground truth (1.0). Used by producers whose text is
   /// read directly from the DOM rather than estimated by OCR.
