@@ -9,12 +9,14 @@ flutter test      # must be green before you start
 
 ## Branches
 
-Prefix branches by intent: `feat/`, `fix/`, `perf/`, `docs/`, `chore/`, `release/`.
+Prefix branches by intent: `feat/`, `fix/`, `perf/`, `refactor/`, `test/`, `ci/`, `docs/`, `chore/`, `release/`.
 
 ## Commits
 
-Conventional Commits — `feat:`, `fix:`, `docs:`, `perf:`, `chore:`. Reference an
-issue with `fix: #N ...` to auto-close it on merge.
+Conventional Commits — `feat:`, `fix:`, `docs:`, `perf:`, `refactor:`, `test:`,
+`ci:`, `chore:`. To auto-close an issue on merge, put a closing keyword
+(`Closes #N`, `Fixes #N`) in the commit body or PR description — not the
+`type:` subject prefix.
 
 ## Tests
 
