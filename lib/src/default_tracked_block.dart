@@ -105,9 +105,6 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
   @override
   final bool needsReclassification;
 
-  @override
-  final int exclusionHitCount;
-
   /// Construct a tracked block. All fields are optional except [absoluteRect]
   /// and [payload] — defaults are documented in the class docstring.
   ///
@@ -141,7 +138,6 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
     this.provisionalCapturesRemaining = 0,
     this.groupSignature = 0,
     this.needsReclassification = false,
-    this.exclusionHitCount = 0,
   }) {
     if (containerId != null && !isInnerScrollerChild) {
       throw ArgumentError(
@@ -178,7 +174,6 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
     int? provisionalCapturesRemaining,
     int? groupSignature,
     bool? needsReclassification,
-    int? exclusionHitCount,
   }) {
     return DefaultTrackedBlock<T>(
       absoluteRect: absoluteRect ?? this.absoluteRect,
@@ -206,7 +201,6 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
       groupSignature: groupSignature ?? this.groupSignature,
       needsReclassification:
           needsReclassification ?? this.needsReclassification,
-      exclusionHitCount: exclusionHitCount ?? this.exclusionHitCount,
     );
   }
 
@@ -225,7 +219,7 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
   /// position, text (winning + votes + confidence), classification votes,
   /// carousel votes, observation count, provisional state, source quality.
   /// Fields preserved from `this`: payload, containerId, all coordinate-space
-  /// flags, scrollContext, sticky state, groupSignature, exclusionHitCount.
+  /// flags, scrollContext, sticky state, groupSignature.
   DefaultTrackedBlock<T> applyMerge(MergeResult merge) {
     return copyWith(
       absoluteRect: merge.mergedRect,

@@ -34,7 +34,4 @@ abstract interface class ObservableBlock<T> implements TrackedBlock<T> {
 
   /// Whether classification votes flipped to a different weight tier.
   bool get needsReclassification;
-
-  /// Count of observations overlapping exclusion zones.
-  int get exclusionHitCount;
 }
