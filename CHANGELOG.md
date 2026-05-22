@@ -1,3 +1,44 @@
+## 0.3.0
+
+A breaking release bundling four API changes. Pre-1.0, breaking changes
+take a minor version bump.
+
+### Breaking
+- `ObservableBlock` no longer declares `exclusionHitCount`, and
+  `DefaultTrackedBlock` no longer carries it. The field was inert
+  engine-side — never read or written by merge, dedup, drift correction,
+  or the spatial index. It is consumer-managed state and does not belong
+  on the package's block contract. Migration: a consumer with
+  `@override int get exclusionHitCount;` on its own block class removes the
+  `@override` annotation — the field stays, it is just no longer an
+  interface member. Consumers that do not need the field drop it entirely.
+  (#23)
+- `PositionConfidence.from` / `TextConfidence.from` now throw `ArgumentError`
+  on out-of-range **or NaN** input. Previously they validated with `assert`
+  only, which is stripped in release builds — an invalid confidence passed
+  silently in production. Migration: catch `ArgumentError` instead of
+  `AssertionError`; any code that relied on release-mode silent acceptance
+  of an out-of-range value now gets a thrown exception. The primary
+  `const PositionConfidence(double)` / `const TextConfidence(double)`
+  constructor stays public and unchecked — it is the only `const`-capable
+  path, kept for `const` literal sentinels. (#26)
+
+### Changed
+- `StabilizationEngine.stabilize()` now rebuilds `spatialIndex` internally
+  from its returned `stableBlocks` before returning. The old caller
+  contract (call `spatialIndex.rebuild(result.stableBlocks)` after every
+  `stabilize()`) is retired, along with the debug-mode staleness guard.
+  Callers can drop the post-`stabilize()` rebuild call — a redundant
+  rebuild is harmless, so this is non-breaking. (#24)
+- `MergeResult`'s confidence boundary checks now also reject NaN (NaN fails
+  both `< 0` and `> 1.0`, so it previously slipped through). (#26)
+
+### Added
+- `StabilizationEngine.resetDriftPropagation()` — clears the engine's
+  regional-drift baseline so a consumer can reset propagation state on a
+  session boundary (page navigation, context reset) without a stale
+  baseline triggering a spurious correction. (#25)
+
 ## 0.2.2
 
 ### Added
