@@ -22,14 +22,14 @@ adapts SLAM techniques to the OCR domain.
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^0.2.1
+  ocr_stabilizer: ^0.2.2
 ```
 
 > **0.2.0 was a breaking change** from 0.1.0 —
 > `TrackedBlock.positionConfidence` and `textConfidence` switched from
 > `double` to typed `PositionConfidence` / `TextConfidence`. See the
-> [CHANGELOG](CHANGELOG.md#020) for the migration. 0.2.1 is a docs-only
-> follow-up — no further API change.
+> [CHANGELOG](CHANGELOG.md#020) for the migration. 0.2.1 and 0.2.2 are
+> docs/infra-only follow-ups — no further API change.
 
 ## Getting Started
 
@@ -260,3 +260,9 @@ to support different input sources:
 | WebView | `CssSubmapMembership` (default) | `CaptureSnapshotAdapter` (app-side) |
 | PDF | Custom (page-based submaps) | Custom (page geometry) |
 | Camera | Custom (frame regions) | Custom (camera frame) |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, conventions, and the
+release flow.
+

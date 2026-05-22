@@ -1,3 +1,10 @@
+## 0.2.2
+
+### Added
+- CI: GitHub Actions workflow running `flutter analyze` + `flutter test` on
+  push and PR (#15).
+- `CONTRIBUTING.md` documenting dev setup, conventions, and release flow (#16).
+
 ## 0.2.1
 
 Docs + metadata polish. No API change. First pub.dev-shipped release of the
