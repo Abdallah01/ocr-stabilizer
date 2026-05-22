@@ -59,6 +59,23 @@ void main() {
       );
     });
 
+    test('throws on NaN confidence (primary ctor bypass)', () {
+      // NaN fails both `< 0` and `> 1.0` comparisons — the boundary guard
+      // must test isNaN explicitly or a NaN confidence slips through.
+      expect(
+        () => _validResult(
+          positionConfidence: const PositionConfidence(double.nan),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        () => _validResult(
+          textConfidence: const TextConfidence(double.nan),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
     test('throws on observationCount < 1', () {
       expect(
         () => _validResult(observationCount: 0),

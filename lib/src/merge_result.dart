@@ -102,14 +102,18 @@ class MergeResult {
         'must be >= 1',
       );
     }
-    if (positionConfidence.raw < 0 || positionConfidence.raw > 1.0) {
+    if (positionConfidence.raw.isNaN ||
+        positionConfidence.raw < 0 ||
+        positionConfidence.raw > 1.0) {
       throw ArgumentError.value(
         positionConfidence.raw,
         'positionConfidence',
         'must be in [0.0, 1.0]',
       );
     }
-    if (textConfidence.raw < 0 || textConfidence.raw > 1.0) {
+    if (textConfidence.raw.isNaN ||
+        textConfidence.raw < 0 ||
+        textConfidence.raw > 1.0) {
       throw ArgumentError.value(
         textConfidence.raw,
         'textConfidence',

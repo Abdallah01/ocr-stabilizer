@@ -9,15 +9,13 @@ void main() {
       expect(PositionConfidence.from(1.0).raw, 1.0);
     });
 
-    test('.from rejects out-of-range values', () {
-      expect(
-        () => PositionConfidence.from(-0.1),
-        throwsA(isA<AssertionError>()),
-      );
-      expect(
-        () => PositionConfidence.from(1.1),
-        throwsA(isA<AssertionError>()),
-      );
+    test('.from throws ArgumentError on out-of-range values', () {
+      expect(() => PositionConfidence.from(-0.1), throwsArgumentError);
+      expect(() => PositionConfidence.from(1.1), throwsArgumentError);
+    });
+
+    test('.from throws ArgumentError on NaN', () {
+      expect(() => PositionConfidence.from(double.nan), throwsArgumentError);
     });
 
     test('.groundTruth is 1.0', () {
@@ -32,15 +30,13 @@ void main() {
       expect(TextConfidence.from(1.0).raw, 1.0);
     });
 
-    test('.from rejects out-of-range values', () {
-      expect(
-        () => TextConfidence.from(-0.1),
-        throwsA(isA<AssertionError>()),
-      );
-      expect(
-        () => TextConfidence.from(1.1),
-        throwsA(isA<AssertionError>()),
-      );
+    test('.from throws ArgumentError on out-of-range values', () {
+      expect(() => TextConfidence.from(-0.1), throwsArgumentError);
+      expect(() => TextConfidence.from(1.1), throwsArgumentError);
+    });
+
+    test('.from throws ArgumentError on NaN', () {
+      expect(() => TextConfidence.from(double.nan), throwsArgumentError);
     });
 
     test('.groundTruth is 1.0', () {
