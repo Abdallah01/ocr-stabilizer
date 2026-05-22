@@ -49,8 +49,6 @@ class _TestBlock implements ObservableBlock<Never> {
   final int groupSignature;
   @override
   final bool needsReclassification;
-  @override
-  final int exclusionHitCount;
 
   @override
   Never get payload => throw UnsupportedError('_TestBlock has no payload');
@@ -83,7 +81,6 @@ class _TestBlock implements ObservableBlock<Never> {
     this.provisionalCapturesRemaining = 0,
     this.groupSignature = 0,
     this.needsReclassification = false,
-    this.exclusionHitCount = 0,
     this.captureScrollY = 0,
     this.captureScrollX = 0,
     this.hzScrollerIndex = -1,
@@ -122,7 +119,6 @@ class _TestBlock implements ObservableBlock<Never> {
     int? provisionalCapturesRemaining,
     int? groupSignature,
     bool? needsReclassification,
-    int? exclusionHitCount,
     bool? isViewportRelative,
     bool? isInnerScrollerChild,
     bool? isHorizontalScrollChild,
@@ -145,7 +141,6 @@ class _TestBlock implements ObservableBlock<Never> {
       groupSignature: groupSignature ?? this.groupSignature,
       needsReclassification:
           needsReclassification ?? this.needsReclassification,
-      exclusionHitCount: exclusionHitCount ?? this.exclusionHitCount,
       isViewportRelative: isViewportRelative ?? this.isViewportRelative,
       isInnerScrollerChild: isInnerScrollerChild ?? this.isInnerScrollerChild,
       isHorizontalScrollChild:

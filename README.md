@@ -94,7 +94,7 @@ class MyBlock implements TrackedBlock<MyPayload> {
 
 For the stabilization pipeline (vote accumulation, provisional state,
 SAR-merge history), implement `ObservableBlock<T>` instead — it extends
-`TrackedBlock<T>` with 9 more getters. Most integrators want
+`TrackedBlock<T>` with 8 more getters. Most integrators want
 `DefaultTrackedBlock<T>` rather than rolling their own.
 
 The generic `T` carries app-specific data (translations, styles) without
@@ -193,7 +193,7 @@ A block's identity is a six-dimensional signature:
 | Type | Purpose |
 |------|---------|
 | `TrackedBlock<T>` | Core block contract (14 getters including the opaque `payload`) |
-| `ObservableBlock<T>` | Extends `TrackedBlock`; adds observation history (9 getters: counts, votes, provisional state) |
+| `ObservableBlock<T>` | Extends `TrackedBlock`; adds observation history (8 getters: counts, votes, provisional state) |
 | `ClassificationInput` | Platform-agnostic viewport geometry |
 | `CarouselInput` | Carousel-specific geometry |
 | `SubmapMembership` | Strategy for coordinate-space partitioning |
