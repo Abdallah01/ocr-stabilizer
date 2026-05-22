@@ -129,9 +129,8 @@ void main() {
           originalText: 'hello',
         ),
       ];
-      // App must rebuild the index between calls — DefaultTrackedBlock
-      // doesn't change that contract.
-      engine.spatialIndex.rebuild(result1.stableBlocks);
+      // stabilize() rebuilds engine.spatialIndex internally (#13) — the
+      // second call matches against batch1 with no caller-side rebuild.
       final result2 = engine.stabilize(batch2);
       expect(result2.stableBlocks, hasLength(1));
       expect(result2.stableBlocks.single.observationCount, 2);

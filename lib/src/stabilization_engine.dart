@@ -1,8 +1,6 @@
 import 'dart:math' show max, min;
 import 'dart:ui' show Offset, Rect;
 
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
-
 import 'block_key.dart';
 import 'drift_tracker.dart';
 import 'hierarchy_weight.dart';
@@ -40,7 +38,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Drift tracker shared with the app (the app may also feed observations).
   final DriftTracker driftTracker;
 
-  /// Spatial index shared with the app (the app may query for rendering).
+  /// Spatial index rebuilt by the engine on each [stabilize] call; the app
+  /// may query it between calls for rendering lookups.
   final SpatialBlockIndex<T> spatialIndex;
 
   /// Optional context-change detector. When non-null, the engine calls this
@@ -75,10 +74,6 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Overlap resolver for spatial NMS.
   final OverlapResolver _resolver = const OverlapResolver();
 
-  /// Size of [stableBlocks] returned by the previous [stabilize] call.
-  /// Used by the debug-mode staleness guard (see [stabilize] WARNING).
-  int _lastStabilizeOutputCount = 0;
-
   /// Core entry point: stabilize a batch of fresh blocks against the model.
   ///
   /// [freshBlocks] — raw OCR observations for this frame (may contain
@@ -91,36 +86,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// - [StabilizationResult.invalidatedTexts] — texts needing re-translation
   /// - [StabilizationResult.wellObservedTexts] — texts reaching stability
   ///
-  /// ## ⚠️ Caller contract: rebuild the spatial index
-  ///
-  /// **This method does NOT update [spatialIndex] internally.** The consumer
-  /// MUST call `spatialIndex.rebuild(result.stableBlocks)` (or the equivalent
-  /// `add`/`remove` calls) after each [stabilize] invocation. If you skip
-  /// this step, the spatial index becomes stale and contradiction detection
-  /// plus inter-batch matching (`_findMatch` in the merge pass) silently
-  /// degrade — no exception, no error, just wrong results.
-  ///
-  /// In debug mode, [stabilize] prints a `[StabilizationEngine] WARNING`
-  /// line when it detects an obviously-stale index (last call returned
-  /// blocks, but the index is now empty). This is a heuristic — it catches
-  /// the common "forgot to wire rebuild at all" mistake but not partial
-  /// rebuilds. See #2 for the long-term enforce-internally design.
+  /// [spatialIndex] is rebuilt internally from the returned `stableBlocks`
+  /// before this method returns — callers no longer rebuild it after each
+  /// [stabilize] call (#13).
   StabilizationResult<T> stabilize(List<T> freshBlocks) {
-    // Debug-mode staleness guard (#2). The most common integration error
-    // is wiring [stabilize] without ever rebuilding [spatialIndex] — that
-    // looks like "last call returned N blocks but index is now empty."
-    if (kDebugMode &&
-        _lastStabilizeOutputCount > 0 &&
-        spatialIndex.isEmpty) {
-      debugPrint(
-        '[StabilizationEngine] WARNING: spatialIndex appears stale — '
-        'last stabilize returned $_lastStabilizeOutputCount blocks but '
-        'spatialIndex is empty. Did you forget to call '
-        'spatialIndex.rebuild(result.stableBlocks) after the previous '
-        'stabilize call? See StabilizationEngine.stabilize docstring.',
-      );
-    }
-
     // 1. Dedup pipeline
     final deduped = _dedup(freshBlocks);
 
@@ -151,7 +120,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       }
     }
 
-    _lastStabilizeOutputCount = stableBlocks.length;
+    // Rebuild the spatial index so callers cannot get it wrong (#13).
+    spatialIndex.rebuild(stableBlocks);
 
     return StabilizationResult<T>(
       stableBlocks: stableBlocks,
@@ -326,6 +296,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Public entry point for consumers that do their own block matching but
   /// want to delegate the merge math to the engine. Returns a [MergeOutput]
   /// containing the merged block and signals.
+  ///
+  /// Unlike [stabilize], `merge` does not touch [spatialIndex] — a consumer
+  /// calling `merge` directly owns the spatial index lifecycle.
   ///
   /// When [trackDrift] is true (default), records drift observations.
   /// Existing drift correction is always applied regardless of this flag.

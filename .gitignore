@@ -8,3 +8,4 @@ pubspec.lock
 
 # Local agentic scaffolding (UBP, etc.) — not part of the package source
 .ultra/
+.claude/
