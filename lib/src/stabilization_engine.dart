@@ -522,10 +522,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
 
   /// Core merge implementation shared by [merge] and [_merge].
   ///
-  /// [wasBandFallback] is plumbed through from `_findMatch`; PR2-T8
-  /// uses it to wrap the merge result as provisional when set. Currently
-  /// unused inside this method body (T7 only threads the signal).
-  // ignore: unused_element_parameter
+  /// [wasBandFallback] — when `true` AND `existing` is not already
+  /// provisional, the merged result is marked provisional with
+  /// `bandFallback.provisionalCaptures` remaining. Future captures of this
+  /// now-provisional block flow through the freeze path at the top of
+  /// this method.
   MergeOutput<T> _mergeImpl(
     T fresh,
     T existing, {
@@ -676,21 +677,32 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
 
     final newObservationCount = existing.observationCount + 1;
 
-    // Build MergeResult
+    // Build MergeResult. When this merge came from the band-relaxed fallback
+    // path AND the existing block isn't already provisional, wrap the result
+    // as provisional with bandFallback.provisionalCaptures remaining. Future
+    // captures of this now-provisional block enter the freeze path above and
+    // decrement the counter until it graduates.
+    final mergedRectCalculated = AbsoluteRect(mergedRaw);
+    final mergedPositionConf = PositionConfidence.from(min(totalConf, 1.0));
+    final mergedTextConfTyped = TextConfidence.from(mergedTextConf);
+
+    final bool admitAsProvisional = wasBandFallback && !existing.isProvisional;
+
     final result = MergeResult(
-      mergedRect: AbsoluteRect(mergedRaw),
-      positionConfidence: PositionConfidence.from(min(totalConf, 1.0)),
+      mergedRect: mergedRectCalculated,
+      positionConfidence: mergedPositionConf,
       driftCorrection: regionDrift,
       winningOriginalText: winningText,
-      textConfidence: TextConfidence.from(mergedTextConf),
+      textConfidence: mergedTextConfTyped,
       updatedTextVotes: Map.unmodifiable(updatedTextVotes),
       textWasPromoted: textWasPromoted,
       updatedClassificationVotes: Map.unmodifiable(classVotes),
       needsReclassification: needsReclass,
       updatedCarouselIdVotes: Map.unmodifiable(carouselVotes),
       observationCount: newObservationCount,
-      isProvisional: false,
-      provisionalCapturesRemaining: 0,
+      isProvisional: admitAsProvisional,
+      provisionalCapturesRemaining:
+          admitAsProvisional ? bandFallback.provisionalCaptures : 0,
       sourceQuality: mergedSourceQuality,
     );
 
