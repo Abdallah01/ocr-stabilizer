@@ -2,7 +2,7 @@ name: ocr_stabilizer
 description: >-
   Real-time OCR overlay stabilization engine — drift correction,
   spatial indexing, block tracking. Built for Flutter.
-version: 0.3.0
+version: 0.4.0
 homepage: https://github.com/Abdallah01/ocr-stabilizer
 repository: https://github.com/Abdallah01/ocr-stabilizer
 issue_tracker: https://github.com/Abdallah01/ocr-stabilizer/issues

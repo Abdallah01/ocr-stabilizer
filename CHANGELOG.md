@@ -1,3 +1,56 @@
+## 0.4.0 - 2026-05-23
+
+### Added
+- `BandFallbackMode` enum (`off` | `observeOnly` | `admit`) configures the
+  band-relaxed fallback path inside `StabilizationEngine._findMatch`.
+  Default is `off`; switch to `observeOnly` to read `BandFallbackStats`
+  before committing to `admit`. See `docs/superpowers/specs/` for the
+  full design and default provenance (#20).
+- `BandFallbackConfig` value type wraps the band thresholds, candidate
+  observation floor, provisional-capture grant, and spatial confirmation
+  predicate. Constructor `assert`s on out-of-range values (preserves
+  const-constructibility); engine constructor throws `ArgumentError` for
+  release-build safety. Primary-path floors (Lev 0.70 / Jaccard 0.80) are
+  engine-owned, not configurable through this type (#20).
+- `BandFallbackStats` exposes per-capture counters: `primaryMatchesAdmitted`,
+  `primaryMatchesRejected`, `candidatesConsidered`, `rejectedCandidateFloor`,
+  `rejectedSpatial`, `bandMatchesIdentified`, `matchesAdmitted`. Read-only
+  public surface; engine mutates via a same-library `Internal` subclass.
+  Reset via `reset()`; the engine never resets it automatically (#20).
+- `BandSpatialPredicate` typedef mirrors `ContextualInvalidationCheck` —
+  `bool Function(TrackedBlock fresh, TrackedBlock candidate)`. When
+  `BandFallbackConfig.spatialConfirm` is `null`, the engine substitutes
+  a drift-aware `overlapRatio >= 0.80` closure (#20).
+- `StabilizationEngine` constructor gains a `bandFallback:
+  BandFallbackConfig` parameter (defaults to `mode: off` — backward
+  compatible) and a `bandStats` getter returning the read-only stats view
+  (#20).
+
+### Changed
+- **Breaking:** `StabilizationEngine.stabilize()` now throws
+  `ArgumentError` if any observation's `positionConfidence.raw` or
+  `textConfidence.raw` is `NaN` or outside `[0.0, 1.0]`. Catches any
+  `TrackedBlock` implementor at the engine entry, closing the documented
+  unchecked-`const`-Confidence gap (#27).
+- **Breaking:** `DefaultTrackedBlock` constructor throws `ArgumentError`
+  when `positionConfidence.raw` or `textConfidence.raw` is `NaN` or
+  outside `[0.0, 1.0]`. Early-fail at construction with a cleaner stack
+  trace than the engine-entry guard would produce. Consumers going through
+  `PositionConfidence.from()` / `TextConfidence.from()` (validated since
+  #19) are unaffected (#27).
+- `StabilizationEngine._findMatch` primary path now uses
+  `TextDedupUtils.isTextSimilarWithScores` (Lev OR Jaccard) instead of
+  `normalizedLevenshtein` alone. Floors are unchanged (Lev 0.70 /
+  Jaccard 0.80); the metric set widens — character-reordered text with
+  the same significant-character set now matches on the primary path
+  where it previously fell through (#20).
+
+### Fixed
+- `OverlapResolver.qualityScore` no longer silently propagates `NaN` into
+  the NMS comparison. NaN reaching `qualityScore` is now a debug-time
+  `AssertionError`; release builds skip the check (defended by engine
+  entry validation, above) (#27).
+
 ## 0.3.0
 
 A breaking release bundling four API changes. Pre-1.0, breaking changes
