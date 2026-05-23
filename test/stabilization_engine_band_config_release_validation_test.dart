@@ -84,6 +84,38 @@ void main() {
         );
       });
 
+      test('upper-bound bandLevenshteinFloor (0.70) is rejected', () {
+        // ignore: prefer_const_constructors
+        expect(
+          () => makeEngine(BandFallbackConfig(bandLevenshteinFloor: 0.70)),
+          throwsAnyError,
+        );
+      });
+
+      test('upper-bound bandJaccardFloor (0.80) is rejected', () {
+        // ignore: prefer_const_constructors
+        expect(
+          () => makeEngine(BandFallbackConfig(bandJaccardFloor: 0.80)),
+          throwsAnyError,
+        );
+      });
+
+      test('negative candidateObservationFloor (-1) is rejected', () {
+        // ignore: prefer_const_constructors
+        expect(
+          () => makeEngine(BandFallbackConfig(candidateObservationFloor: -1)),
+          throwsAnyError,
+        );
+      });
+
+      test('zero provisionalCaptures is rejected', () {
+        // ignore: prefer_const_constructors
+        expect(
+          () => makeEngine(BandFallbackConfig(provisionalCaptures: 0)),
+          throwsAnyError,
+        );
+      });
+
       test('valid edge config constructs cleanly', () {
         // candidateObservationFloor=0, provisionalCaptures=1 are the
         // tightest legal values; both band floors at 0.0 are also legal.

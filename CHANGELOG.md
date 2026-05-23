@@ -51,6 +51,12 @@
   the NMS comparison. NaN reaching `qualityScore` is now a debug-time
   `AssertionError`; release builds skip the check (defended by engine
   entry validation, above) (#27).
+- `StabilizationEngine` constructor now rejects `NaN` and `±Infinity` for
+  `BandFallbackConfig.bandLevenshteinFloor` and `bandJaccardFloor` in
+  release builds. The bare range check (`value < 0 || value >= floor`)
+  evaluated `false` for `NaN` under IEEE 754 and let it bypass the
+  defense; the `assert` in the const ctor catches it in debug only. Now
+  short-circuits on `!isFinite` before the range check (#20).
 
 ## 0.3.0
 
