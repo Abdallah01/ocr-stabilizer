@@ -6,11 +6,11 @@ import 'package:flutter/foundation.dart' show immutable;
 import 'tracked_block.dart';
 
 /// Operating mode for the band-relaxed fallback path inside
-/// [StabilizationEngine._findMatch].
+/// `StabilizationEngine._findMatch`.
 enum BandFallbackMode {
   /// No band-fallback work runs. Primary path counters
-  /// ([BandFallbackStats.primaryMatchesAdmitted] and
-  /// [BandFallbackStats.primaryMatchesRejected]) still tick because they
+  /// (`BandFallbackStats.primaryMatchesAdmitted` and
+  /// `BandFallbackStats.primaryMatchesRejected`) still tick because they
   /// are populated by the primary path, not the band loop.
   off,
 
@@ -36,11 +36,11 @@ typedef BandSpatialPredicate =
     bool Function(TrackedBlock fresh, TrackedBlock candidate);
 
 /// Configuration for the band-relaxed fallback path inside
-/// [StabilizationEngine._findMatch].
+/// `StabilizationEngine._findMatch`.
 ///
 /// Default is [BandFallbackMode.off]. Recommended adoption flow:
 /// ship with `mode: off`, switch to `observeOnly` to read
-/// [BandFallbackStats], commit to `admit` once the counter ratios
+/// `BandFallbackStats`, commit to `admit` once the counter ratios
 /// justify it.
 ///
 /// Primary-path floors (Lev 0.70 / Jaccard 0.80) are owned by the engine
@@ -117,6 +117,10 @@ class BandFallbackConfig {
             bandJaccardFloor >= 0.0 && bandJaccardFloor < 0.80,
             'bandJaccardFloor must be in [0.0, 0.80)'),
         assert(
+            // Gemini G1: `??` is required — `candidateObservationFloor` here
+            // refers to the nullable PARAMETER (Dart init-list scoping:
+            // parameters shadow fields), not the non-null field of the same
+            // name. `int? >= int` is a compile error under null safety.
             (candidateObservationFloor ?? (provisionalCaptures + 1)) >= 0,
             'candidateObservationFloor must be >= 0'),
         assert(provisionalCaptures >= 1,

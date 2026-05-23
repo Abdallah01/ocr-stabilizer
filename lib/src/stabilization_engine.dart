@@ -75,6 +75,13 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
 
   /// Creates a stabilization engine. The [merger] callback constructs an
   /// updated block from engine-computed merge data.
+  ///
+  /// Throws [ArgumentError] if [bandFallback] violates any invariant. This
+  /// mirrors the `BandFallbackConfig` constructor's `assert`-only checks with
+  /// a release-build `throw`, so a misconfigured engine fails fast at
+  /// construction rather than producing surprising behavior later.
+  /// ([BandFallbackConfig] uses `assert` to stay `const`-capable; the engine
+  /// ctor is non-const, so a `throw` here is free.)
   StabilizationEngine({
     required BlockMerger<T, P> merger,
     DriftTracker? driftTracker,
@@ -86,7 +93,49 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
        driftTracker =
            driftTracker ?? DriftTracker(submapMembership: submapMembership),
        spatialIndex = spatialIndex ?? SpatialBlockIndex<T>(),
-       _contextualCheck = contextualCheck;
+       _contextualCheck = contextualCheck {
+    _validateBandFallbackConfig(bandFallback);
+  }
+
+  /// Validate [BandFallbackConfig] invariants with release-safe [ArgumentError].
+  ///
+  /// [BandFallbackConfig] uses `assert` (debug-only, stripped in release) to
+  /// remain `const`-capable. This static helper re-checks those same invariants
+  /// with `throw` so production builds fail fast at engine construction time
+  /// rather than producing unexpected behavior (e.g. a floor of `>= 0.70`
+  /// that silently makes band admission unreachable, or `provisionalCaptures: 0`
+  /// violating the `MergeResult` invariant that `isProvisional` implies
+  /// `provisionalCapturesRemaining > 0`).
+  static void _validateBandFallbackConfig(BandFallbackConfig cfg) {
+    if (cfg.bandLevenshteinFloor < 0.0 || cfg.bandLevenshteinFloor >= 0.70) {
+      throw ArgumentError.value(
+        cfg.bandLevenshteinFloor,
+        'bandLevenshteinFloor',
+        'must be in [0.0, 0.70)',
+      );
+    }
+    if (cfg.bandJaccardFloor < 0.0 || cfg.bandJaccardFloor >= 0.80) {
+      throw ArgumentError.value(
+        cfg.bandJaccardFloor,
+        'bandJaccardFloor',
+        'must be in [0.0, 0.80)',
+      );
+    }
+    if (cfg.candidateObservationFloor < 0) {
+      throw ArgumentError.value(
+        cfg.candidateObservationFloor,
+        'candidateObservationFloor',
+        'must be >= 0',
+      );
+    }
+    if (cfg.provisionalCaptures < 1) {
+      throw ArgumentError.value(
+        cfg.provisionalCaptures,
+        'provisionalCaptures',
+        'must be >= 1',
+      );
+    }
+  }
 
   /// Current bucket width for dedup key generation.
   double bucketWidth = BlockKeyGenerator.kDefaultBucketSize;
@@ -371,30 +420,40 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
 
   /// Find a matching existing block for [fresh] in the spatial index.
   ///
-  /// Primary path: candidates with `isTextSimilarWithScores` clearing
-  /// Lev 0.70 OR Jaccard 0.80. Highest-scoring (by Levenshtein) candidate
-  /// wins.
+  /// Single-pass over candidates: scores are computed ONCE per candidate and
+  /// evaluated against both primary thresholds (Lev 0.70 / Jaccard 0.80) and
+  /// band thresholds ([BandFallbackConfig.bandLevenshteinFloor] /
+  /// [BandFallbackConfig.bandJaccardFloor]) in the same iteration. This
+  /// eliminates the double `isTextSimilarWithScores` call that the old
+  /// two-loop design incurred on primary misses.
   ///
-  /// On primary miss with [bandFallback.mode] != [BandFallbackMode.off]:
-  /// the band loop scans candidates against the relaxed band thresholds,
-  /// the observation-count floor, and the spatial-confirm predicate.
-  /// In [BandFallbackMode.admit] the first qualifying candidate is returned
-  /// as a band match; in [BandFallbackMode.observeOnly] the loop scans every
-  /// candidate to populate stats but always returns null.
+  /// Primary path: highest-Levenshtein candidate that clears primary thresholds
+  /// wins. Band path (only when [bandFallback.mode] != [BandFallbackMode.off]):
+  /// first candidate that clears the observation-count floor, spatial confirm,
+  /// AND band text floors is admitted ([BandFallbackMode.admit]) or tallied
+  /// ([BandFallbackMode.observeOnly]).
   ({T? match, bool wasBandFallback}) _findMatch(T fresh) {
     final candidates = spatialIndex.candidates(fresh);
+    final shouldRunBand = bandFallback.mode != BandFallbackMode.off;
 
-    // ── Primary path ──
     T? primaryMatch;
     double bestPrimarySim = 0.0;
+    T? bandAdmitted;
+
     for (final candidate in candidates) {
       if (candidate.isViewportRelative != fresh.isViewportRelative) continue;
+
+      // Compute scores ONCE per candidate — used by both the primary check
+      // (Lev 0.70 OR Jaccard 0.80, engine-owned defaults) and the band check
+      // (band floors from config, tested directly against the same scores).
       final scores = TextDedupUtils.isTextSimilarWithScores(
         fresh.originalText,
         candidate.originalText,
         // primary floors (Lev 0.70, Jacc 0.80) — engine-owned defaults,
         // matching the existing TextDedupUtils.isTextSimilar defaults.
       );
+
+      // ── Primary check ──
       if (scores.match) {
         // Pick the highest Lev-scoring candidate (Jaccard is a parallel
         // metric for admission, not a primary ordering signal).
@@ -402,9 +461,52 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
           bestPrimarySim = scores.levenshtein;
           primaryMatch = candidate;
         }
+        // Primary hit — this candidate is not a band candidate.
+        continue;
       }
+
+      // ── Band check (primary missed for this candidate) ──
+      if (!shouldRunBand) continue;
+      // admit mode: once a band candidate is locked, later candidates still
+      // need their primary check (done above via continue), but we skip
+      // redundant band evaluation — the first qualifying admit wins.
+      if (bandFallback.mode == BandFallbackMode.admit &&
+          bandAdmitted != null) {
+        continue;
+      }
+
+      _internalStats.recordCandidateConsidered();
+
+      if (candidate.observationCount < bandFallback.candidateObservationFloor) {
+        _internalStats.recordRejectedCandidateFloor();
+        continue;
+      }
+      if (!_effectiveSpatialConfirm(fresh, candidate)) {
+        _internalStats.recordRejectedSpatial();
+        continue;
+      }
+      // Test the same scores against the band thresholds directly — avoids a
+      // second isTextSimilarWithScores call. Semantically equivalent to
+      // calling isTextSimilarWithScores with levenshteinThreshold: bandLev,
+      // jaccardThreshold: bandJacc (OR logic mirrors the primary check).
+      final bandMatches =
+          scores.levenshtein >= bandFallback.bandLevenshteinFloor ||
+          scores.jaccard >= bandFallback.bandJaccardFloor;
+      if (!bandMatches) {
+        // Text-band miss isn't bucketed — would-have-matched is not the
+        // same as rejected, and a counter would skew the ratios.
+        continue;
+      }
+      _internalStats.recordBandMatchIdentified();
+      if (bandFallback.mode == BandFallbackMode.admit) {
+        bandAdmitted = candidate;
+        _internalStats.recordMatchAdmitted();
+        // Continue scanning remaining candidates for primary checks.
+      }
+      // observeOnly: keep scanning so all candidates contribute to counters.
     }
 
+    // ── Tally primary outcome ──
     if (primaryMatch != null) {
       _internalStats.recordPrimaryMatchAdmitted();
       return (match: primaryMatch, wasBandFallback: false);
@@ -418,52 +520,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // here would skew that ratio.
     _internalStats.recordPrimaryMatchRejected();
 
-    // ── Band fallback path ──
-    if (bandFallback.mode == BandFallbackMode.off) {
+    // ── Return band outcome ──
+    if (!shouldRunBand) {
       return (match: null, wasBandFallback: false);
     }
-
-    return _findBandMatch(fresh, candidates);
-  }
-
-  /// Band-relaxed fallback loop. Called only when the primary path misses
-  /// and `bandFallback.mode != off`. Behaves per `bandFallback.mode`:
-  /// observeOnly scans everything for telemetry; admit returns the first
-  /// candidate that clears every gate.
-  ({T? match, bool wasBandFallback}) _findBandMatch(
-      T fresh, Iterable<T> candidates) {
-    T? admitted;
-    for (final candidate in candidates) {
-      if (candidate.isViewportRelative != fresh.isViewportRelative) continue;
-      _internalStats.recordCandidateConsidered();
-
-      if (candidate.observationCount < bandFallback.candidateObservationFloor) {
-        _internalStats.recordRejectedCandidateFloor();
-        continue;
-      }
-      if (!_effectiveSpatialConfirm(fresh, candidate)) {
-        _internalStats.recordRejectedSpatial();
-        continue;
-      }
-      final scores = TextDedupUtils.isTextSimilarWithScores(
-        fresh.originalText,
-        candidate.originalText,
-        levenshteinThreshold: bandFallback.bandLevenshteinFloor,
-        jaccardThreshold: bandFallback.bandJaccardFloor,
-      );
-      if (!scores.match) {
-        // Text-band miss isn't bucketed — would-have-matched is not the
-        // same as rejected, and a counter would skew the ratios.
-        continue;
-      }
-      _internalStats.recordBandMatchIdentified();
-      if (bandFallback.mode == BandFallbackMode.admit && admitted == null) {
-        admitted = candidate;
-        _internalStats.recordMatchAdmitted();
-        // admit mode: return early on first match.
-        return (match: admitted, wasBandFallback: true);
-      }
-      // observeOnly: keep scanning so all candidates contribute to counters.
+    if (bandAdmitted != null) {
+      return (match: bandAdmitted, wasBandFallback: true);
     }
     return (match: null, wasBandFallback: false);
   }
@@ -497,9 +559,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Internal merge used by [stabilize] — accumulates signals into lists.
   ///
   /// [wasBandFallback] flows through from `_findMatch`'s record return —
-  /// `true` when the match came via the band-relaxed fallback path. PR2-T8
-  /// wires it into [_mergeImpl]'s provisional-wrap branch; this task threads
-  /// it through unchanged.
+  /// `true` when the match came via the band-relaxed fallback path. When set,
+  /// `_mergeImpl` marks the merged result as provisional with
+  /// `bandFallback.provisionalCaptures` remaining (see `_mergeImpl` for the
+  /// wrap semantics).
   T _merge(
     T fresh,
     T existing,
