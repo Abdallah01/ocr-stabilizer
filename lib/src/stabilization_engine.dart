@@ -107,18 +107,26 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// violating the `MergeResult` invariant that `isProvisional` implies
   /// `provisionalCapturesRemaining > 0`).
   static void _validateBandFallbackConfig(BandFallbackConfig cfg) {
-    if (cfg.bandLevenshteinFloor < 0.0 || cfg.bandLevenshteinFloor >= 0.70) {
+    // IEEE 754 quirk: both `NaN < 0.0` and `NaN >= 0.70` are false, so the
+    // range check alone lets NaN slip past in release builds (where the
+    // const-ctor assert is stripped). Mirror the `Confidence.from`
+    // hardening from #27 by short-circuiting on `!isFinite` first.
+    if (!cfg.bandLevenshteinFloor.isFinite ||
+        cfg.bandLevenshteinFloor < 0.0 ||
+        cfg.bandLevenshteinFloor >= 0.70) {
       throw ArgumentError.value(
         cfg.bandLevenshteinFloor,
         'bandLevenshteinFloor',
-        'must be in [0.0, 0.70)',
+        'must be a finite value in [0.0, 0.70)',
       );
     }
-    if (cfg.bandJaccardFloor < 0.0 || cfg.bandJaccardFloor >= 0.80) {
+    if (!cfg.bandJaccardFloor.isFinite ||
+        cfg.bandJaccardFloor < 0.0 ||
+        cfg.bandJaccardFloor >= 0.80) {
       throw ArgumentError.value(
         cfg.bandJaccardFloor,
         'bandJaccardFloor',
-        'must be in [0.0, 0.80)',
+        'must be a finite value in [0.0, 0.80)',
       );
     }
     if (cfg.candidateObservationFloor < 0) {
