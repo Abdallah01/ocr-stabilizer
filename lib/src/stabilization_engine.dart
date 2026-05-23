@@ -1,6 +1,8 @@
 import 'dart:math' show max, min;
 import 'dart:ui' show Offset, Rect;
 
+import 'band_fallback_config.dart';
+import 'band_fallback_stats.dart';
 import 'block_key.dart';
 import 'drift_tracker.dart';
 import 'hierarchy_weight.dart';
@@ -48,6 +50,17 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// triggers translation invalidation.
   final bool Function(T fresh, T existing)? _contextualCheck;
 
+  /// Band-fallback configuration. Default: disabled (`mode: off`).
+  final BandFallbackConfig bandFallback;
+
+  /// Engine-side mutable counter surface. Exposed publicly via [bandStats]
+  /// as the read-only supertype.
+  final BandFallbackStatsInternal _internalStats = BandFallbackStatsInternal();
+
+  /// Read-only counter view for the matching path. See [BandFallbackStats]
+  /// for the per-counter semantics.
+  BandFallbackStats get bandStats => _internalStats;
+
   /// Creates a stabilization engine. The [merger] callback constructs an
   /// updated block from engine-computed merge data.
   StabilizationEngine({
@@ -56,6 +69,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     SpatialBlockIndex<T>? spatialIndex,
     SubmapMembership? submapMembership,
     bool Function(T fresh, T existing)? contextualCheck,
+    this.bandFallback = const BandFallbackConfig(),
   }) : _merger = merger,
        driftTracker =
            driftTracker ?? DriftTracker(submapMembership: submapMembership),
@@ -343,8 +357,13 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
 
   /// Find a matching existing block for [fresh] in the spatial index.
   ///
-  /// Only candidates with normalized Levenshtein similarity ≥ 0.70 are
-  /// considered. Returns the best match, or null if no match found.
+  /// Primary path: candidates with normalized Levenshtein similarity ≥ 0.70
+  /// are considered; the highest-scoring candidate wins.
+  ///
+  /// Primary-path counters (`primaryMatchesAdmitted` / `primaryMatchesRejected`)
+  /// tick on every call regardless of [bandFallback.mode]. The band-fallback
+  /// loop is added in a subsequent commit — currently any primary miss
+  /// returns null after ticking [primaryMatchesRejected].
   T? _findMatch(T fresh) {
     final candidates = spatialIndex.candidates(fresh);
     T? bestMatch;
@@ -362,6 +381,19 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         bestSimilarity = similarity;
         bestMatch = candidate;
       }
+    }
+
+    if (bestMatch != null) {
+      _internalStats.recordPrimaryMatchAdmitted();
+    } else {
+      // Tick on every primary miss, including empty-candidate-set cases.
+      // Holds the spec invariant:
+      //   primaryMatchesAdmitted + primaryMatchesRejected
+      //     == total fresh observations that reached _findMatch.
+      // Consumers compute "band fires as % of primary misses" as
+      // `bandMatchesIdentified / primaryMatchesRejected` — undercounting
+      // here would skew that ratio.
+      _internalStats.recordPrimaryMatchRejected();
     }
     return bestMatch;
   }
