@@ -81,9 +81,10 @@ class BandFallbackConfig {
   /// match. Must be `>= 1` (reflects `MergeResult`'s invariant that
   /// `isProvisional` implies `provisionalCapturesRemaining > 0`).
   ///
-  /// Default: `3`. Provenance: matches `ocr_translate_demo`'s value at
-  /// `lib/overlay/services/overlay_cache_service.dart:1603-1604` — cited
-  /// as proven app-side choice; the package owns the default thereafter.
+  /// Default: `3`. Picked to match the value already used by downstream
+  /// consumers as a proven 3-capture grace window; the package owns the
+  /// default thereafter — tune per deployment if the grace window is too
+  /// generous or too tight.
   final int provisionalCaptures;
 
   /// Spatial confirmation predicate. `null` means the engine substitutes a
@@ -117,10 +118,11 @@ class BandFallbackConfig {
             bandJaccardFloor >= 0.0 && bandJaccardFloor < 0.80,
             'bandJaccardFloor must be in [0.0, 0.80)'),
         assert(
-            // Gemini G1: `??` is required — `candidateObservationFloor` here
-            // refers to the nullable PARAMETER (Dart init-list scoping:
-            // parameters shadow fields), not the non-null field of the same
-            // name. `int? >= int` is a compile error under null safety.
+            // `??` is required: in this init-list position
+            // `candidateObservationFloor` refers to the nullable PARAMETER
+            // (init-list scoping — parameters shadow fields), not the
+            // non-null field of the same name. `int? >= int` is a compile
+            // error under null safety.
             (candidateObservationFloor ?? (provisionalCaptures + 1)) >= 0,
             'candidateObservationFloor must be >= 0'),
         assert(provisionalCaptures >= 1,

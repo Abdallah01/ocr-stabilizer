@@ -749,7 +749,15 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final mergedPositionConf = PositionConfidence.from(min(totalConf, 1.0));
     final mergedTextConfTyped = TextConfidence.from(mergedTextConf);
 
-    final bool admitAsProvisional = wasBandFallback && !existing.isProvisional;
+    // The provisional-freeze path above (line ~600) returns early when
+    // `existing.isProvisional` is true, so `existing` is structurally
+    // guaranteed non-provisional here. Lock that invariant with an
+    // executable assert so a refactor of the freeze path can't silently
+    // double-wrap a still-provisional block.
+    assert(!existing.isProvisional,
+        'provisional freeze path should have returned before reaching '
+        'band-admit wrap');
+    final bool admitAsProvisional = wasBandFallback;
 
     final result = MergeResult(
       mergedRect: mergedRectCalculated,
@@ -793,11 +801,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// well-observed (eligible for contradiction detection).
   static const int _kMinObsForContradiction = 3;
 
-  /// Detect grouping contradictions: ≥2 fresh blocks spatially subdivide
-  /// a well-observed cached block.
+  /// Detect grouping contradictions in [freshBlocks] against the spatial
+  /// index: ≥2 fresh blocks spatially subdivide a well-observed cached
+  /// block.
   ///
-  /// Returns [ContradictionEvent]s — the app decides whether to evict.
-  /// Detect grouping contradictions in [freshBlocks] against the spatial index.
+  /// Returns [ContradictionEvent]s — the consumer decides whether to evict.
   ///
   /// Thresholds: height ratio < 0.70, overlap ratio ≥ 0.30, text similarity
   /// ≥ 0.60 (Levenshtein on space-joined subdivider texts).
@@ -862,11 +870,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     return events;
   }
 
-  /// Detect splitting contradictions: a single fresh block subsumes
-  /// ≥2 well-observed cached blocks.
+  /// Detect splitting contradictions in [freshBlocks] against the spatial
+  /// index: a single fresh block subsumes ≥2 well-observed cached blocks.
   ///
-  /// Returns [ContradictionEvent]s — the app decides whether to evict.
-  /// Detect splitting contradictions in [freshBlocks] against the spatial index.
+  /// Returns [ContradictionEvent]s — the consumer decides whether to evict.
   ///
   /// Thresholds: height ratio < 0.70, containment ≥ 0.80, text similarity
   /// ≥ 0.60 (Levenshtein on space-joined subsumed texts).

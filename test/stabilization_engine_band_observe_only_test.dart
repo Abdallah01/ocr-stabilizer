@@ -46,9 +46,13 @@ void main() {
           reason: 'observeOnly scans candidates');
       expect(engine.bandStats.primaryMatchesRejected, greaterThanOrEqualTo(1),
           reason: 'second call primary missed');
-      // bandMatchesIdentified depends on whether the chosen text pair clears
-      // the band floors AND the spatial confirm. Identical rect → spatial
-      // passes; text band depends on exact Lev/Jaccard scores.
+      // 'hxlxo wxrxd' vs 'hello world':
+      //   Lev = 1 - 4/11 ≈ 0.636 → below primary 0.70, above band 0.50.
+      //   Jaccard (char-set) = 7/9 ≈ 0.778 → below primary 0.80, above band 0.60.
+      // Both clear band thresholds, identical rect clears spatial confirm,
+      // observationCount=5 clears candidateObservationFloor=1.
+      expect(engine.bandStats.bandMatchesIdentified, 1,
+          reason: 'band thresholds + spatial gate + obs floor all pass');
     });
 
     test('observeOnly scans every candidate, not just the first match', () {
