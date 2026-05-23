@@ -31,8 +31,8 @@ to pub.dev. No other features ride along.
   into `Confidence` itself would require either dropping `const` on
   `PositionConfidence.groundTruth` / `TextConfidence.groundTruth` (breaks
   default-parameter-value use in `DefaultTrackedBlock`) or refactoring those
-  defaults to nullable+init-list. Noted as a v0.5.x cleanup candidate; see
-  §9 Risks.
+  defaults to nullable+init-list. Would require revisiting 0.2.0's
+  const-sentinel trade-off; deferred pending a concrete reason.
 
 ---
 
@@ -99,6 +99,11 @@ method, before any merge work runs, validate that every block's
 the offending field and observation index. This catches any
 `TrackedBlock` implementor — `DefaultTrackedBlock` or otherwise — at one
 single seam.
+
+Note that `MergeResult`'s 0.2.0 throw already guards engine *output*;
+this PR adds the symmetric guard at engine *input*. The two together
+bracket the pipeline — anything that violates the Confidence invariants
+fails at one end or the other, regardless of where it originated.
 
 ```dart
 // inside StabilizationEngine.stabilize(...)
@@ -663,10 +668,10 @@ and an interactive y/N prompt).
 - Bump `ocr_translate_demo`'s `ocr_stabilizer` constraint to `^0.4.0` in
   the same PR that wires `resetDriftPropagation()` (the unblock of
   `Abdallah01/ocr_translate_demo#1084`).
-- Open follow-up issues for: corpus-data-driven band-threshold tuning
-  (once `observeOnly` mode has produced counter data); Option A\*
-  Confidence-validation cleanup (drop `const` on `groundTruth`, refactor
-  `DefaultTrackedBlock` defaults to nullable+init-list).
+- Open follow-up issue for corpus-data-driven band-threshold tuning,
+  once `observeOnly` mode has produced counter data. (Option A\*
+  Confidence-validation cleanup is *not* pre-tracked — see §1; a tracking
+  issue is filed only if a concrete reason emerges.)
 
 ---
 
@@ -699,7 +704,7 @@ and an interactive y/N prompt).
 | `DefaultTrackedBlock` ctor + engine-entry guard duplicate work for the common path.                                 | Intentional — ctor produces a clearer stack trace at the right source location; engine guard catches non-`DefaultTrackedBlock` implementors. The redundancy is a feature. |
 | `candidateObservationFloor: provisionalCaptures + 1` may surprise consumers who expected `2`.                       | Documented in dartdoc; lowering to `1` or `2` re-enables provisional-on-provisional. Default biases toward conservative.        |
 | `BandFallbackStatsInternal` is public to the package — a determined consumer can downcast and mutate.               | Convention, not enforcement; the `Internal` suffix is the signal. Out-of-scope to add a Dart-language private mechanism here.    |
-| Option A\* (lifting validation into `Confidence`) would be cleaner but breaks default-parameter-value sites.        | Deferred to v0.5.x with a refactor of `DefaultTrackedBlock` defaults to nullable+init-list; tracked in §1 Out of scope.         |
+| Option A\* (lifting validation into `Confidence`) would be cleaner but breaks default-parameter-value sites.        | Would require revisiting 0.2.0's const-sentinel trade-off; deferred pending a concrete reason. Tracked in §1 Out of scope.       |
 | Provisional admission interacts with drift propagation in unexpected ways.                                          | TDD step 17 explicitly locks the decay path; existing provisional infrastructure carries the load.                              |
 
 ---
@@ -728,7 +733,7 @@ This spec was revised after a first-round review. Resolutions, by item:
 | # | Reviewer point                                       | Resolution                                                                                                                    |
 |---|-------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
 | 1 | Sentinel-function pattern is a footgun.               | Replaced with nullable `spatialConfirm`; engine substitutes default closure when `null`. No public sentinel.                  |
-| 2 | `Confidence` validation gap.                          | Grep confirmed const-context use (default param in `DefaultTrackedBlock`). Engine-entry validation (Option C done properly) catches any `TrackedBlock` implementor; ctor `throw` stays for early-fail; `qualityScore` collapses to debug assert. Cleaner Option A\* deferred to v0.5.x. |
+| 2 | `Confidence` validation gap.                          | Grep confirmed const-context use (default param in `DefaultTrackedBlock`). Engine-entry validation (Option C done properly) catches any `TrackedBlock` implementor; ctor `throw` stays for early-fail; `qualityScore` collapses to debug assert. Cleaner Option A\* deferred pending a concrete reason. |
 | 3 | "Count but don't admit" can't deliver instrumentation.| Replaced with `BandFallbackMode.observeOnly` — full loop, all counters, no admission. Real measurement vehicle.               |
 | 4 | `candidateObservationFloor: 2` vs `provisionalCaptures: 3` interaction. | Default changed to `provisionalCaptures + 1` (= 4) — semantically "candidate has cleared its own provisional window." Documented; consumers can override. |
 | 5 | `BandFallbackStats` public mutable fields.            | Read-only public class with private constructor + private fields + public getters + `reset()`. `BandFallbackStatsInternal` subclass with public mutators; engine holds the Internal, exposes the supertype. |
