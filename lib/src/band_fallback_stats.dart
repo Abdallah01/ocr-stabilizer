@@ -77,13 +77,27 @@ class BandFallbackStats {
 /// signals "package-internal API"; a determined consumer can downcast and
 /// mutate, but the convention is enforced socially, not by the language.
 class BandFallbackStatsInternal extends BandFallbackStats {
+  /// Construct a fresh stats sink with every counter at zero.
   BandFallbackStatsInternal() : super._();
 
+  /// Increment [BandFallbackStats.primaryMatchesAdmitted].
   void recordPrimaryMatchAdmitted() => _primaryMatchesAdmitted++;
+
+  /// Increment [BandFallbackStats.primaryMatchesRejected].
   void recordPrimaryMatchRejected() => _primaryMatchesRejected++;
+
+  /// Increment [BandFallbackStats.candidatesConsidered].
   void recordCandidateConsidered() => _candidatesConsidered++;
+
+  /// Increment [BandFallbackStats.rejectedCandidateFloor].
   void recordRejectedCandidateFloor() => _rejectedCandidateFloor++;
+
+  /// Increment [BandFallbackStats.rejectedSpatial].
   void recordRejectedSpatial() => _rejectedSpatial++;
+
+  /// Increment [BandFallbackStats.bandMatchesIdentified].
   void recordBandMatchIdentified() => _bandMatchesIdentified++;
+
+  /// Increment [BandFallbackStats.matchesAdmitted].
   void recordMatchAdmitted() => _matchesAdmitted++;
 }

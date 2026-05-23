@@ -1,6 +1,10 @@
 /// Real-time OCR overlay stabilization engine.
 library;
 
+export 'src/band_fallback_config.dart'
+    show BandFallbackMode, BandFallbackConfig, BandSpatialPredicate;
+export 'src/band_fallback_stats.dart'
+    show BandFallbackStats, BandFallbackStatsInternal;
 export 'src/block_classifier.dart';
 export 'src/block_key.dart';
 export 'src/classification_result.dart';
