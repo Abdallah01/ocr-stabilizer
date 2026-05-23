@@ -1,7 +1,7 @@
 # v0.4.0 — Band-Fallback Inter-Batch Matching + `qualityScore` NaN Guard
 
-**Status:** Approved. Ready for implementation planning.
-**Date:** 2026-05-23
+**Status:** Approved (revised after first-round review). Ready for implementation planning.
+**Date:** 2026-05-23 (initial), revised 2026-05-23 post-review.
 **Repository:** `ocr-stabilizer` (community-facing Dart package).
 **Release target:** `0.4.0`.
 **Closes:** [#27](https://github.com/Abdallah01/ocr-stabilizer/issues/27), [#20](https://github.com/Abdallah01/ocr-stabilizer/issues/20).
@@ -13,130 +13,155 @@
 Three PRs land on `main` in order, after which the maintainer publishes 0.4.0
 to pub.dev. No other features ride along.
 
-| # | Branch                             | Issue | Net effect                                                                                            |
-|---|------------------------------------|-------|-------------------------------------------------------------------------------------------------------|
-| 1 | `fix/27-quality-score-nan-guard`   | #27   | `qualityScore` returns `0.0` on NaN input; `DefaultTrackedBlock` rejects NaN/out-of-range confidence. |
-| 2 | `feat/20-band-fallback`            | #20   | Optional band-relaxed fallback in `_findMatch`, gated by a default-off config + stats.                |
-| 3 | `chore/release-0.4.0`              | —     | CHANGELOG header + `pubspec.yaml` version bump.                                                       |
+| # | Branch                             | Issue | Net effect                                                                                                                       |
+|---|------------------------------------|-------|----------------------------------------------------------------------------------------------------------------------------------|
+| 1 | `fix/27-confidence-nan-guard`      | #27   | Engine entry validates incoming `TrackedBlock` confidence; `DefaultTrackedBlock` ctor throws on NaN/out-of-range; `qualityScore` debug-asserts. |
+| 2 | `feat/20-band-fallback`            | #20   | Optional band-relaxed fallback in `_findMatch`, gated by `BandFallbackMode` (off / observeOnly / admit). Default `off`. Stats expose primary + band counters. |
+| 3 | `chore/release-0.4.0`              | —     | CHANGELOG header + `pubspec.yaml` version bump.                                                                                  |
 
-Out of scope (deferred to a later release):
+### Out of scope (deferred)
 
 - Tuning the band thresholds against real-corpus data. Default config ships
-  `enabled: false` precisely so consumers can opt in and measure first
-  ([feedback_instrument_before_phone_investigation](https://github.com/Abdallah01/ocr_translate_demo/) pattern).
+  `mode: BandFallbackMode.off` precisely so consumers can switch to
+  `observeOnly` first and read counters before committing to `admit`.
 - App-side adoption (`ocr_translate_demo`). The app keeps consuming 0.3.x
   until 0.4.0 is on pub.dev; the unblock PR there lands separately under
-  [#1084](https://github.com/Abdallah01/ocr_translate_demo/issues/1084).
+  [Abdallah01/ocr_translate_demo#1084](https://github.com/Abdallah01/ocr_translate_demo/issues/1084).
+- **Confidence-validation cleanup (Option A\*).** Lifting NaN/range validation
+  into `Confidence` itself would require either dropping `const` on
+  `PositionConfidence.groundTruth` / `TextConfidence.groundTruth` (breaks
+  default-parameter-value use in `DefaultTrackedBlock`) or refactoring those
+  defaults to nullable+init-list. Noted as a v0.5.x cleanup candidate; see
+  §9 Risks.
 
 ---
 
-## 2. Design principles (locked in this session)
+## 2. Design principles
 
 1. **Community-facing first.** Every numeric or behavioral knob the app's
-   pipeline exposes implicitly must become an explicit parameter so other
+   pipeline exposes implicitly becomes an explicit parameter so other
    consumers can deviate. Defaults reflect the app's proven choices because
    the app is the most-tested reference.
-2. **App-pattern parity for defaults.** Where the in-repo app
-   (`c:/src/ocr_project`) already solves the same problem, the package's
-   default value matches the app's value verbatim and the spec cites the
-   line. See
-   [feedback_check_app_first_for_package_design](file:///C:/Users/Ad_88/.claude/projects/c--src-ocr-project/memory/feedback_check_app_first_for_package_design.md).
-3. **Non-negotiable invariants enforced at the constructor.** Anything the
-   app proves shouldn't be optional must `throw` (not `assert`) on
-   construction, in the established style of `DefaultTrackedBlock`'s
+2. **App-pattern provenance for defaults.** Where the in-repo app already
+   solves the same problem, the package's default value is *cited* against
+   the app's value and the spec records the file:line. The package owns the
+   default thereafter — defaults don't track app changes.
+3. **Non-negotiable invariants enforced as exceptions.** Anything that
+   shouldn't be optional `throw`s (not `assert`s) on construction or at the
+   engine entry, in the established style of `DefaultTrackedBlock`'s
    `containerId` check at [default_tracked_block.dart:142-150](../../lib/src/default_tracked_block.dart#L142-L150).
 4. **Non-generic predicate signatures.** New predicate types mirror the
    existing `ContextualInvalidationCheck` shape — `bool Function(TrackedBlock,
    TrackedBlock)` — for consistency with the engine's existing seam. No
-   speculative generics.
-5. **Default OFF for new fuzzy admission paths.** A band-relaxed match is a
-   strictly more permissive matcher; ship with the flag off and stats on so
-   consumers see candidate volume before flipping.
+   speculative generics, no engine-internal types (`SpaceKey`,
+   `DriftTracker`) leaked into public signatures.
+5. **Make invalid state unrepresentable.** Where the configuration space has
+   three modes, use a three-state enum, not two booleans with a forbidden
+   combination.
+6. **Default OFF for new permissive matchers.** Ship with the flag off and
+   stats on so consumers see candidate volume *and* what would have been
+   admitted before flipping.
 
 ---
 
-## 3. PR 1 — #27 `qualityScore` NaN guard
+## 3. PR 1 — #27 Confidence NaN/range invariants
 
 ### Problem
 
 `OverlapResolver.qualityScore` at [overlap_resolver.dart:176-177](../../lib/src/overlap_resolver.dart#L176-L177)
-multiplies and sums two `Confidence.raw` values. If either is `NaN` the
-score is `NaN`, which silently poisons `OverlapResolver.resolveOverlap`'s
-quality comparison (NaN compares false against every double). The block
-that "loses" the comparison is chosen arbitrarily by sort stability.
+multiplies two `Confidence.raw` values. If either is `NaN` the score is
+`NaN`, which silently poisons `resolveOverlap`'s quality comparison
+(NaN compares false against every double). The block that "loses" the
+comparison is chosen arbitrarily by sort stability.
 
-#19 fixed the upstream entry points (`PositionConfidence.from` /
-`TextConfidence.from` reject NaN), but two gaps remain:
+#19 fixed the upstream factories (`PositionConfidence.from` /
+`TextConfidence.from` reject NaN). Two gaps remain:
 
-- **Direct `DefaultTrackedBlock` construction** bypasses the `.from()`
-  factories — a consumer can still build a block with a hand-rolled
-  `Confidence(NaN)` and slip past the gate.
-- **Defense in depth:** if a future code path constructs `Confidence`
-  directly, `qualityScore` should fail safe rather than silently NaN.
+- The **primary const constructors** `PositionConfidence(double)` and
+  `TextConfidence(double)` are documented as intentionally unchecked
+  ([confidence_types.dart:14-22](../../lib/src/types/confidence_types.dart#L14-L22))
+  to support `const` sentinels like `groundTruth`. Dart can't `throw` from
+  a `const` constructor, so the unchecked path is structurally required.
+- Therefore, **any code that constructs `Confidence` directly** (test
+  fixtures, future producers, etc.) can slip a NaN past the gate. Today
+  the only path that does is direct `DefaultTrackedBlock` construction in
+  tests; tomorrow it could be any new `TrackedBlock` implementor.
 
-### Solution — Option C: both A and B
+### Solution — engine-entry validation (Option C, done properly)
 
-**A. `qualityScore` defensive return.** When either component is NaN,
-return `0.0`. The block sinks to the bottom of the NMS comparison rather
-than poisoning it.
+Plug the gap **once, at the engine boundary**:
+
+**A. `StabilizationEngine.stabilize()` validates every incoming `TrackedBlock`.**
+At the entry of the public `stabilize(List<TrackedBlock> observations)`
+method, before any merge work runs, validate that every block's
+`positionConfidence.raw` and `textConfidence.raw` are finite values in
+`[0.0, 1.0]`. Throw `ArgumentError.value` on the first violation, naming
+the offending field and observation index. This catches any
+`TrackedBlock` implementor — `DefaultTrackedBlock` or otherwise — at one
+single seam.
+
+```dart
+// inside StabilizationEngine.stabilize(...)
+for (var i = 0; i < observations.length; i++) {
+  _assertValidConfidence(observations[i], i);
+}
+```
+
+**B. `DefaultTrackedBlock` constructor still throws on NaN/out-of-range.**
+Mirrors the existing `containerId` `throw` block at
+[default_tracked_block.dart:142-150](../../lib/src/default_tracked_block.dart#L142-L150).
+Belt-and-suspenders early-fail at construction time produces a clearer
+stack trace than a downstream engine-entry throw, even though the engine
+guard would catch the same case.
+
+**C. `qualityScore` collapses to a debug assert.** With (A) in place,
+NaN reaching `qualityScore` is a logic bug — the production guard is at
+the engine entry. Use `assert` so debug builds surface the bug; release
+builds skip the check for zero overhead. No 0.0 sentinel return.
 
 ```dart
 static double qualityScore(TrackedBlock block) {
   final pos = block.positionConfidence.raw;
   final txt = block.textConfidence.raw;
-  if (pos.isNaN || txt.isNaN) return 0.0;
+  assert(!pos.isNaN && !txt.isNaN,
+      'qualityScore reached with NaN confidence — '
+      'engine-entry validation should have caught this.');
   return pos * 0.4 + txt * 0.6;
 }
 ```
 
-**B. `DefaultTrackedBlock` constructor invariant.** Throw `ArgumentError`
-when `positionConfidence.raw` or `textConfidence.raw` is NaN or outside
-`[0.0, 1.0]`. Mirrors the existing `containerId` `throw` block at
-[default_tracked_block.dart:142-150](../../lib/src/default_tracked_block.dart#L142-L150)
-verbatim in style.
-
-```dart
-if (positionConfidence.raw.isNaN ||
-    positionConfidence.raw < 0.0 ||
-    positionConfidence.raw > 1.0) {
-  throw ArgumentError.value(
-    positionConfidence.raw,
-    'positionConfidence',
-    'must be a finite double in [0.0, 1.0]',
-  );
-}
-// (same shape for textConfidence)
-```
-
-Why `throw` over `assert`: storage/state-owning classes need production
-enforcement; asserts strip in release mode. See
-[feedback_assert_vs_throw_in_storage](file:///C:/Users/Ad_88/.claude/projects/c--src-ocr-project/memory/feedback_assert_vs_throw_in_storage.md).
+Why `throw` (at the engine entry / `DefaultTrackedBlock` ctor) over
+`assert` (at `qualityScore`): the first two are state-owning seams where
+production enforcement matters; the third is downstream of those guards
+and only fires on a logic bug worth catching in debug.
 
 ### TDD sequence
 
-1. **Red** — add `quality_score_nan_test.dart`:
-   - block with `positionConfidence.raw = NaN` → expect `qualityScore == 0.0`.
-   - block with `textConfidence.raw = NaN` → expect `qualityScore == 0.0`.
-   - block with both NaN → expect `0.0`.
-   - sanity: block with both 1.0 → expect `1.0`.
-2. **Green** — add the `isNaN` guard in `qualityScore`. Run target test.
-3. **Red** — add `default_tracked_block_confidence_invariant_test.dart`:
-   - `DefaultTrackedBlock(... positionConfidence: Confidence(double.nan) ...)`
-     → expect `ArgumentError`.
+1. **Red** — `default_tracked_block_confidence_invariant_test.dart`:
+   - `DefaultTrackedBlock(... positionConfidence: PositionConfidence(double.nan) ...)` → `ArgumentError`.
    - same for `textConfidence`.
-   - same for `Confidence(-0.1)` and `Confidence(1.1)` on each.
-   - sanity: `Confidence(0.0)` and `Confidence(1.0)` construct successfully.
-4. **Green** — add the constructor throws. Run target tests.
-5. **Refactor** — extract a private `_validateConfidence(name, value)`
-   helper inside `DefaultTrackedBlock` to keep the two checks DRY.
-6. **Full suite** — run `flutter test` once; commit.
+   - same for `PositionConfidence(-0.1)` and `PositionConfidence(1.1)`.
+   - sanity: `PositionConfidence(0.0)` and `PositionConfidence(1.0)` construct successfully.
+2. **Green** — add the constructor throws to `DefaultTrackedBlock`, modelled on the existing `containerId` block. Extract a private `_validateConfidence(name, raw)` helper for DRYness while adding.
+3. **Red** — `stabilization_engine_confidence_entry_validation_test.dart`:
+   - `engine.stabilize([blockWithNaNPositionConfidence])` → `ArgumentError` whose message names the field and observation index.
+   - same for `textConfidence`.
+   - same for out-of-range values constructed via a hand-rolled `TrackedBlock` impl that bypasses `DefaultTrackedBlock` (proves the engine catches non-`DefaultTrackedBlock` implementors too).
+   - sanity: a valid block list runs through without throwing.
+4. **Green** — add the entry-validation loop in `stabilize()`.
+5. **Red** — `quality_score_debug_assert_test.dart`:
+   - In a debug build only (Dart's `assert` is debug-only), construct a `Confidence(double.nan)` block via the *unchecked* primary constructor (bypassing both `DefaultTrackedBlock` and the engine entry), pass it directly to `OverlapResolver.qualityScore(...)`, expect `AssertionError`.
+   - In a release build, the assert is stripped; can't be tested in the same target. Document this in the test.
+6. **Green** — replace `qualityScore`'s body with the assert + plain return.
+7. **Refactor** — none planned; the helper extracted in step 2 is the only DRY opportunity.
+8. **Full suite** — `flutter test` once; commit.
 
 ### Commit shape
 
-Single commit, message:
+Single squashed commit, message:
 
 ```
-fix(overlap): #27 qualityScore returns 0.0 on NaN; reject NaN/out-of-range Confidence in DefaultTrackedBlock
+fix(engine): #27 validate Confidence at engine entry; throw in DefaultTrackedBlock ctor; debug-assert in qualityScore
 
 Closes #27
 ```
@@ -145,16 +170,23 @@ Closes #27
 
 ```markdown
 ### Fixed
-- `OverlapResolver.qualityScore` returns `0.0` when either confidence
-  component is `NaN` instead of propagating `NaN` into the NMS comparison
-  (#27).
+- `OverlapResolver.qualityScore` no longer silently propagates `NaN` into
+  the NMS comparison. NaN reaching `qualityScore` is now a debug-time
+  `AssertionError`; release builds skip the check (defended by entry
+  validation, below) (#27).
 
 ### Changed
+- **Breaking:** `StabilizationEngine.stabilize()` now throws
+  `ArgumentError` if any observation's `positionConfidence.raw` or
+  `textConfidence.raw` is `NaN` or outside `[0.0, 1.0]`. Catches any
+  `TrackedBlock` implementor at the engine entry, closing the documented
+  unchecked-`const`-Confidence gap (#27).
 - **Breaking:** `DefaultTrackedBlock` constructor throws `ArgumentError`
   when `positionConfidence.raw` or `textConfidence.raw` is `NaN` or
-  outside `[0.0, 1.0]`. Consumers already going through
-  `PositionConfidence.from()` / `TextConfidence.from()` (the documented
-  entry points, validated since #19) are unaffected (#27).
+  outside `[0.0, 1.0]`. Early-fail at construction with a cleaner stack
+  trace than the engine-entry guard would produce. Consumers going through
+  `PositionConfidence.from()` / `TextConfidence.from()` (validated since
+  #19) are unaffected (#27).
 ```
 
 ---
@@ -164,105 +196,167 @@ Closes #27
 ### Problem
 
 `_findMatch` at [stabilization_engine.dart:293-312](../../lib/src/stabilization_engine.dart#L293-L312)
-rejects any candidate whose `normalizedLevenshtein` score is below 0.70.
-On real captures, OCR jitter (one character flipped, one ligature
-mis-segmented) reliably drops a stable block below the floor for one
-frame, even when the spatial position is unambiguous. The block then
-respawns rather than merging, which the user observes as the overlay
+rejects any candidate whose text similarity (`isTextSimilarWithScores`)
+is below the **primary path floors of Lev ≥ 0.70 / Jaccard ≥ 0.80** —
+matching `ocr_translate_demo`'s [`TextDedupUtils.isTextSimilar`](../../lib/src/text_dedup_utils.dart#L162)
+defaults. On real captures, OCR jitter (one character flipped, one
+ligature mis-segmented) reliably drops a stable block below those floors
+for one frame, even when the spatial position is unambiguous. The block
+then respawns rather than merging, which the user observes as the overlay
 "blinking off and back on."
 
-The 0.70 floor stays sound as a *high-confidence* match. The fix is a
-*band-relaxed* fallback: when no candidate clears 0.70, look at
-candidates whose text similarity is in a lower band AND whose spatial
-position confirms the match independently. Admit such a match as
-**provisional** so it gets a few frames to prove itself before influencing
-drift, and so misreads self-clean.
+The 0.70 / 0.80 floors stay sound as a *high-confidence* gate. The fix
+is a *band-relaxed* fallback: when no candidate clears the primary
+floors, look at candidates whose text similarity is in a lower band AND
+whose spatial position confirms the match independently. Admit such a
+match as **provisional** so it gets a few frames to prove itself before
+influencing drift, and so misreads self-clean.
 
 ### Approach summary
 
-```
+```text
 _findMatch(fresh, candidates):
-    primary = first candidate with isTextSimilarWithScores >= primary floors
+    primary = first candidate with isTextSimilarWithScores ≥ Lev 0.70 OR Jacc 0.80
     if primary != null:
+        bandStats.primaryMatchesAdmitted++
         return primary
-    if !bandFallback.enabled:
-        return null
+    bandStats.primaryMatchesRejected++
+    if bandFallback.mode == BandFallbackMode.off:
+        return null  // zero further work
+    // mode is observeOnly OR admit — run the full loop
     for c in candidates ordered by descending similarity:
         bandStats.candidatesConsidered++
         if c.observationCount < bandFallback.candidateObservationFloor:
             bandStats.rejectedCandidateFloor++; continue
-        if !bandFallback.spatialConfirm(fresh, c):
+        if !effectiveSpatialConfirm(fresh, c):
             bandStats.rejectedSpatial++; continue
-        if isTextSimilarWithScores(fresh.text, c.text,
-                                   levenshtein: bandFallback.bandLevenshteinFloor,
-                                   jaccard: bandFallback.bandJaccardFloor):
+        if !isTextSimilarWithScores(fresh.text, c.text,
+                                    levenshtein: bandFallback.bandLevenshteinFloor,
+                                    jaccard: bandFallback.bandJaccardFloor):
+            continue  // text-band miss; not bucketed (would-have-matched ≠ rejected)
+        bandStats.bandMatchesIdentified++
+        if bandFallback.mode == BandFallbackMode.admit:
             bandStats.matchesAdmitted++
-            return c  // caller wraps as provisional in _mergeImpl
-    return null
+            return c  // wrapped as provisional in _mergeImpl
+        // observeOnly: continue scanning so all candidates contribute to counters
+    return null  // observeOnly always returns null; admit returns null if no candidate matched
 ```
+
+`effectiveSpatialConfirm` is the engine's resolved predicate: either the
+consumer-supplied `bandFallback.spatialConfirm`, or — when that's `null` —
+a drift-aware closure the engine builds at construction time (see
+"Default spatial predicate" below).
 
 ### Public types
 
-#### `BandFallbackConfig` (new — `lib/src/band_fallback_config.dart`)
+#### `BandFallbackMode` (new — `lib/src/band_fallback_config.dart`)
 
-Non-generic value type. Lives next to `OverlapResolverConfig`. Exported
-from the package barrel.
+```dart
+/// Operating mode for the band-relaxed fallback path inside
+/// [StabilizationEngine._findMatch].
+enum BandFallbackMode {
+  /// No band-fallback work runs. Primary path counters
+  /// ([BandFallbackStats.primaryMatchesAdmitted] and
+  /// [BandFallbackStats.primaryMatchesRejected]) still tick because they
+  /// are populated by the primary path, not the band loop.
+  off,
+
+  /// The full band loop runs, every counter populates, but no candidate is
+  /// ever returned. Use this mode to measure what `admit` *would* have
+  /// done before flipping. Loops scans all candidates so per-stage
+  /// counters reflect the full population, not just the first match.
+  observeOnly,
+
+  /// Production mode. The full band loop runs and returns the first
+  /// candidate that clears every gate. Matches are admitted as
+  /// provisional (see [BandFallbackConfig.provisionalCaptures]).
+  admit,
+}
+```
+
+#### `BandSpatialPredicate` (new — same file)
+
+```dart
+/// Spatial confirmation predicate for a band-relaxed candidate.
+/// Signature mirrors [ContextualInvalidationCheck] for consistency with
+/// the engine's existing predicate-injection seam — two `TrackedBlock`
+/// arguments, no engine-internal types leaked.
+typedef BandSpatialPredicate =
+    bool Function(TrackedBlock fresh, TrackedBlock candidate);
+```
+
+#### `BandFallbackConfig` (new — same file)
+
+Non-generic value type. Exported from the package barrel.
 
 ```dart
 /// Configuration for the band-relaxed fallback path inside
 /// [StabilizationEngine._findMatch].
 ///
-/// Default is **disabled**; consumers opt in once they have observability
-/// on the candidate volume reported by [BandFallbackStats].
+/// Default is [BandFallbackMode.off]. Recommended adoption flow:
+/// ship with `mode: off`, switch to `observeOnly` to read
+/// [BandFallbackStats], commit to `admit` once the counter ratios
+/// justify it.
+///
+/// Primary-path floors (Lev 0.70 / Jaccard 0.80) are owned by the engine
+/// and not configurable through this type — see
+/// [TextDedupUtils.isTextSimilarWithScores] for those.
 @immutable
 class BandFallbackConfig {
-  /// Master switch for *admitting* band-relaxed matches. When `false`,
-  /// no candidate is ever returned through the fallback path, but
-  /// [BandFallbackStats.candidatesConsidered] still ticks so consumers
-  /// can measure candidate volume before opting in.
-  final bool enabled;
+  /// Operating mode. Default: [BandFallbackMode.off].
+  final BandFallbackMode mode;
 
   /// Lower Levenshtein threshold for band-relaxed matches.
-  /// Range: `[0.0, 0.70)`. The upper bound is exclusive because matches at
-  /// `>= 0.70` go through the primary path.
+  /// Range: `[0.0, 0.70)` — the upper bound is exclusive because matches
+  /// at `>= 0.70` go through the primary path.
   /// Default: `0.50`.
   final double bandLevenshteinFloor;
 
   /// Lower Jaccard threshold for band-relaxed matches.
-  /// Range: `[0.0, 0.80)`. The upper bound is exclusive because matches at
-  /// `>= 0.80` go through the primary path.
+  /// Range: `[0.0, 0.80)` — the upper bound is exclusive because matches
+  /// at `>= 0.80` go through the primary path.
   /// Default: `0.60`.
   final double bandJaccardFloor;
 
   /// Minimum `observationCount` a candidate must have before it can be
-  /// considered for band-relaxed admission. Filters first-frame candidates
-  /// whose own existence is unconfirmed.
-  /// Must be `>= 0`. Default: `2`.
+  /// considered for band-relaxed admission. Filters candidates whose own
+  /// existence is still provisional, preventing a provisional fresh
+  /// observation from vouching for a provisional candidate.
+  ///
+  /// Must be `>= 0`. Default: `provisionalCaptures + 1` (= `4` with the
+  /// default `provisionalCaptures`) — semantically "candidate has
+  /// cleared its own provisional window."
+  ///
+  /// Consumers who want provisional-on-provisional admission (the
+  /// existing provisional-decay path is self-cleaning eventually) can
+  /// lower this to `1` or `2` explicitly.
   final int candidateObservationFloor;
 
   /// `provisionalCapturesRemaining` granted to a freshly band-admitted
   /// match. Must be `>= 1` (reflects [MergeResult]'s invariant that
   /// `isProvisional` implies `provisionalCapturesRemaining > 0`).
-  /// Default: `3` — matches `ocr_translate_demo`'s app-side value at
-  /// `lib/overlay/services/overlay_cache_service.dart:1603-1604`.
+  ///
+  /// Default: `3`. Provenance: matches `ocr_translate_demo`'s value at
+  /// `lib/overlay/services/overlay_cache_service.dart:1603-1604` — cited
+  /// as proven app-side choice; the package owns the default thereafter.
   final int provisionalCaptures;
 
-  /// Predicate that must return `true` before a band-relaxed match is
-  /// admitted. Receives the fresh observation and the candidate.
-  /// Default: drift-aware spatial overlap (see
-  /// [defaultDriftAwareSpatialConfirm]).
-  final BandSpatialPredicate spatialConfirm;
+  /// Spatial confirmation predicate. `null` means the engine substitutes a
+  /// drift-aware overlap-ratio closure at construction time (see
+  /// "Default spatial predicate" in the spec).
+  /// Default: `null`.
+  final BandSpatialPredicate? spatialConfirm;
 
   const BandFallbackConfig({
-    this.enabled = false,
+    this.mode = BandFallbackMode.off,
     this.bandLevenshteinFloor = 0.50,
     this.bandJaccardFloor = 0.60,
-    this.candidateObservationFloor = 2,
+    int? candidateObservationFloor,
     this.provisionalCaptures = 3,
-    this.spatialConfirm = defaultDriftAwareSpatialConfirm,
-  });
-  // Constructor body throws ArgumentError on out-of-range values
-  // (style mirrors DefaultTrackedBlock).
+    this.spatialConfirm,
+  }) : candidateObservationFloor =
+            candidateObservationFloor ?? (provisionalCaptures + 1);
+  // Constructor body throws ArgumentError on out-of-range values.
 }
 ```
 
@@ -275,100 +369,126 @@ Constructor invariants (all `throw ArgumentError.value`):
 | `candidateObservationFloor` | `>= 0`                                |
 | `provisionalCaptures`       | `>= 1`                                |
 
-`enabled` and `spatialConfirm` have no invariants beyond type.
+`mode` and `spatialConfirm` have no invariants beyond type.
 
-#### `BandSpatialPredicate` (new — `lib/src/band_fallback_config.dart`)
+#### Default spatial predicate (engine-internal closure)
 
-```dart
-/// Spatial confirmation predicate for a band-relaxed candidate.
-/// Signature mirrors [ContextualInvalidationCheck] for consistency with
-/// the engine's existing predicate-injection seam.
-typedef BandSpatialPredicate =
-    bool Function(TrackedBlock fresh, TrackedBlock candidate);
-```
-
-Default implementation lives next to the typedef:
-
-```dart
-/// Drift-aware overlap-ratio predicate. Mirrors the engine's spatial NMS
-/// pattern at [StabilizationEngine._dedup] which uses
-/// `overlapRatio(a, b, driftMargin)` from [OverlapResolver].
-///
-/// Returns `true` when the intersection-over-min-area between `fresh` and
-/// `candidate` reaches `0.80`, computed with the candidate's
-/// space-keyed drift margin. The 0.80 default matches the app's primary
-/// NMS gate at `lib/overlay/services/overlay_cache_service.dart:1573-1574`.
-bool defaultDriftAwareSpatialConfirm(
-  TrackedBlock fresh,
-  TrackedBlock candidate,
-) {
-  // Reaches into the engine's drift tracker via a closure injected at
-  // construction time — see StabilizationEngine.bandSpatialConfirm
-  // wiring.
-}
-```
-
-**Sentinel pattern for the default predicate.** `BandSpatialPredicate`
-takes only two block arguments, so it can't reach drift state directly.
-The package solves this by exporting `defaultDriftAwareSpatialConfirm`
-as a **sentinel function** — calling it directly throws
-`UnimplementedError` with a message pointing to the wiring docs. The
-engine identity-checks for this sentinel in its constructor and swaps in
-a real closure that has drift-tracker access:
+`BandSpatialPredicate` takes only two block arguments — it cannot reach
+drift state directly, and that's by design (principle 4: no engine-
+internal types leak). When `BandFallbackConfig.spatialConfirm` is
+`null`, the engine builds a closure at construction time that uses its
+own `DriftTracker` and `OverlapResolver`:
 
 ```dart
 // inside StabilizationEngine constructor
-final effectivePredicate = identical(
-        bandFallback.spatialConfirm, defaultDriftAwareSpatialConfirm)
-    ? (fresh, candidate) => _resolver.overlapRatio(
+final BandSpatialPredicate effectiveSpatialConfirm =
+    bandFallback.spatialConfirm ??
+    (fresh, candidate) => _resolver.overlapRatio(
           fresh,
           candidate,
           _driftTracker.driftMarginForKey(_spaceKeyFor(candidate)),
-        ) >= 0.80
-    : bandFallback.spatialConfirm;
+        ) >= 0.80;
 ```
 
-```dart
-// exported function — the sentinel itself
-bool defaultDriftAwareSpatialConfirm(TrackedBlock fresh, TrackedBlock candidate) {
-  throw UnimplementedError(
-    'defaultDriftAwareSpatialConfirm is a sentinel — it is replaced by '
-    'StabilizationEngine with a drift-tracker-aware closure. Pass a '
-    'custom BandSpatialPredicate if you need to call this directly.',
-  );
-}
-```
+The `0.80` threshold cites `ocr_translate_demo`'s primary NMS gate at
+`lib/overlay/services/overlay_cache_service.dart:1573-1574`; the
+drift-margin pattern mirrors the engine's own `_dedup` at
+[stabilization_engine.dart:237-244](../../lib/src/stabilization_engine.dart#L237-L244).
+Both are cited as provenance; the package owns the defaults thereafter.
 
-This keeps the public predicate signature clean while letting the default
-have access to drift state. Custom predicates that need drift can be
-constructed by consumers — supply a normal `BandSpatialPredicate` closure
-over your own state at engine construction time.
+Consumers who want a drift-aware custom predicate construct one
+themselves by closing over their own drift state at engine-construction
+time. The package does not export a callable default — the default is
+the engine's internal behavior when `spatialConfirm` is `null`.
 
 #### `BandFallbackStats` (new — `lib/src/band_fallback_stats.dart`)
 
-```dart
-/// Per-capture telemetry for the band-relaxed fallback path. Populated
-/// even when [BandFallbackConfig.enabled] is `false`, so consumers can
-/// measure candidate volume before opting in.
-class BandFallbackStats {
-  int candidatesConsidered = 0;
-  int matchesAdmitted = 0;
-  int rejectedSpatial = 0;
-  int rejectedCandidateFloor = 0;
+Public read-only view; the engine writes to a same-library
+`BandFallbackStatsInternal` subclass.
 
+```dart
+/// Per-capture telemetry for the matching path inside [StabilizationEngine].
+/// All counters are cumulative until [reset] is called.
+///
+/// Primary counters tick whether or not the band-fallback path is enabled —
+/// they reflect the primary path's outcome. Band counters only tick when
+/// [BandFallbackConfig.mode] is [BandFallbackMode.observeOnly] or
+/// [BandFallbackMode.admit].
+class BandFallbackStats {
+  BandFallbackStats._();
+
+  /// Number of fresh observations that found a primary-path match.
+  int get primaryMatchesAdmitted => _primaryMatchesAdmitted;
+  int _primaryMatchesAdmitted = 0;
+
+  /// Number of fresh observations that the primary path rejected.
+  /// `primaryMatchesAdmitted + primaryMatchesRejected` == total fresh
+  /// observations that reached `_findMatch`.
+  int get primaryMatchesRejected => _primaryMatchesRejected;
+  int _primaryMatchesRejected = 0;
+
+  /// Number of candidates the band loop scanned. Only ticks when
+  /// `mode != off`. Compare against `primaryMatchesRejected` to compute
+  /// "candidates considered per primary miss."
+  int get candidatesConsidered => _candidatesConsidered;
+  int _candidatesConsidered = 0;
+
+  /// Number of candidates the band loop rejected because their
+  /// `observationCount` was below `candidateObservationFloor`.
+  int get rejectedCandidateFloor => _rejectedCandidateFloor;
+  int _rejectedCandidateFloor = 0;
+
+  /// Number of candidates the band loop rejected because `spatialConfirm`
+  /// returned `false`.
+  int get rejectedSpatial => _rejectedSpatial;
+  int _rejectedSpatial = 0;
+
+  /// Number of candidates that passed every gate (observation floor,
+  /// spatial confirm, text band floors). In `admit` mode this also ticks
+  /// `matchesAdmitted`; in `observeOnly` mode it ticks alone.
+  int get bandMatchesIdentified => _bandMatchesIdentified;
+  int _bandMatchesIdentified = 0;
+
+  /// Number of band-relaxed matches actually returned by `_findMatch`.
+  /// Always `<= bandMatchesIdentified`. In `observeOnly` mode this stays
+  /// at zero by construction.
+  int get matchesAdmitted => _matchesAdmitted;
+  int _matchesAdmitted = 0;
+
+  /// Zero every counter. The engine does not call this automatically;
+  /// consumers reset between captures if they want per-capture buckets.
   void reset() {
-    candidatesConsidered = 0;
-    matchesAdmitted = 0;
-    rejectedSpatial = 0;
-    rejectedCandidateFloor = 0;
+    _primaryMatchesAdmitted = 0;
+    _primaryMatchesRejected = 0;
+    _candidatesConsidered = 0;
+    _rejectedCandidateFloor = 0;
+    _rejectedSpatial = 0;
+    _bandMatchesIdentified = 0;
+    _matchesAdmitted = 0;
   }
+}
+
+/// Engine-side mutation surface. Lives in the same library as
+/// [BandFallbackStats] so the underscore-private fields are accessible.
+/// Public to the package — consumers see only the [BandFallbackStats]
+/// supertype via [StabilizationEngine.bandStats].
+class BandFallbackStatsInternal extends BandFallbackStats {
+  BandFallbackStatsInternal() : super._();
+
+  void recordPrimaryMatchAdmitted() => _primaryMatchesAdmitted++;
+  void recordPrimaryMatchRejected() => _primaryMatchesRejected++;
+  void recordCandidateConsidered() => _candidatesConsidered++;
+  void recordRejectedCandidateFloor() => _rejectedCandidateFloor++;
+  void recordRejectedSpatial() => _rejectedSpatial++;
+  void recordBandMatchIdentified() => _bandMatchesIdentified++;
+  void recordMatchAdmitted() => _matchesAdmitted++;
 }
 ```
 
-A single instance lives on `StabilizationEngine` and is exposed via a
-read-only getter. Consumers `reset()` between captures if they want
-per-capture buckets; the engine never resets it automatically (avoids
-hiding behavior).
+The engine holds a `BandFallbackStatsInternal` and exposes it via
+`BandFallbackStats get bandStats => _internalStats;` (the supertype is
+the return type; the upcast hides the mutators). Consumers can read
+counters and call `reset()` but cannot corrupt them.
 
 ### Engine wiring changes
 
@@ -381,80 +501,88 @@ StabilizationEngine({
 })
 ```
 
-`_findMatch` is extended with the fallback loop described in §4 ↑.
-`_mergeImpl` already supports provisional admission — the band path
-simply produces a candidate that's then wrapped via the existing
-provisional-freeze path at [stabilization_engine.dart:354-374](../../lib/src/stabilization_engine.dart#L354-L374),
+`_findMatch` is extended with the pseudocode loop from "Approach summary"
+above. The primary-path counter (`recordPrimaryMatchAdmitted` /
+`recordPrimaryMatchRejected`) ticks regardless of `mode`. The band loop
+runs only when `mode != off`. `_mergeImpl` already supports provisional
+admission — the band path produces a candidate that's then wrapped via
+the existing provisional-freeze path at [stabilization_engine.dart:354-374](../../lib/src/stabilization_engine.dart#L354-L374),
 parameterized by `bandFallback.provisionalCaptures`.
 
-### Defaults table — provenance
+### Defaults table
 
-| Knob                          | Default | App reference                                                                                                                                            |
-|-------------------------------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `enabled`                     | `false` | Default-off is package convention for permissive matchers; instrumentation before opt-in.                                                               |
-| `bandLevenshteinFloor`        | `0.50`  | Mid-band between primary 0.70 and total-mismatch — gives ~20-point relaxation room. Conservative without app data; consumers tune from `BandFallbackStats`. |
-| `bandJaccardFloor`            | `0.60`  | Same logic against the app's 0.80 Jaccard floor in `TextDedupUtils.isTextSimilar`.                                                                       |
-| `candidateObservationFloor`   | `2`     | Excludes single-frame ghosts. App's `provisionalCapturesRemaining: 3` countdown means by `observationCount >= 2` a candidate has survived one frame.       |
-| `provisionalCaptures`         | `3`     | App at `lib/overlay/services/overlay_cache_service.dart:1603-1604`.                                                                                       |
-| `spatialConfirm`              | drift-aware `overlapRatio >= 0.80` | App at `lib/overlay/services/overlay_cache_service.dart:1573-1574`. Drift-awareness via `driftMarginForKey` mirrors engine `_dedup` at `stabilization_engine.dart:237-244`. |
+| Knob                          | Default                          | Source                                                                                                       |
+|-------------------------------|----------------------------------|--------------------------------------------------------------------------------------------------------------|
+| `mode`                        | `BandFallbackMode.off`           | Package convention for permissive matchers; instrumentation before opt-in.                                  |
+| Primary path Lev floor        | `0.70` (engine-owned, non-config) | Existing `TextDedupUtils.isTextSimilar` default; matches app's primary NMS at overlay_cache_service.dart:1513. |
+| Primary path Jaccard floor    | `0.80` (engine-owned, non-config) | Same.                                                                                                       |
+| `bandLevenshteinFloor`        | `0.50`                           | Mid-band between primary `0.70` and total-mismatch. Conservative without corpus data; consumers tune from stats. |
+| `bandJaccardFloor`            | `0.60`                           | Same logic vs primary `0.80`.                                                                                |
+| `candidateObservationFloor`   | `provisionalCaptures + 1` (= 4)  | "Candidate has cleared its own provisional window." Lower to enable provisional-on-provisional admission.   |
+| `provisionalCaptures`         | `3`                              | Cited from app's `overlay_cache_service.dart:1603-1604` as proven value; package owns the default.          |
+| Default `spatialConfirm`      | drift-aware `overlapRatio >= 0.80` (engine-internal closure when config is `null`) | `0.80` cited from app's primary NMS at `overlay_cache_service.dart:1573-1574`; drift-margin pattern from engine's own `_dedup`. |
 
 ### TDD sequence
 
 Order matters — each step ends green before the next begins.
 
-1. **Red** — `band_fallback_config_test.dart`:
-   - Default-constructed config has `enabled: false`, `bandLevenshteinFloor: 0.50`, `bandJaccardFloor: 0.60`, `candidateObservationFloor: 2`, `provisionalCaptures: 3`.
-   - `BandFallbackConfig(bandLevenshteinFloor: 0.70)` throws `ArgumentError`.
-   - `BandFallbackConfig(bandLevenshteinFloor: -0.01)` throws.
-   - `BandFallbackConfig(bandJaccardFloor: 0.80)` throws.
-   - `BandFallbackConfig(bandJaccardFloor: -0.01)` throws.
-   - `BandFallbackConfig(candidateObservationFloor: -1)` throws.
-   - `BandFallbackConfig(provisionalCaptures: 0)` throws.
-2. **Green** — create `lib/src/band_fallback_config.dart` with the type and the `BandSpatialPredicate` typedef. Add constructor validation.
-3. **Red** — `band_fallback_stats_test.dart`:
+1. **Red** — `band_fallback_mode_test.dart`:
+   - `BandFallbackMode.values` contains `off`, `observeOnly`, `admit` in that order.
+2. **Green** — create the enum in `lib/src/band_fallback_config.dart`.
+3. **Red** — `band_fallback_config_test.dart`:
+   - Default-constructed: `mode == off`, `bandLevenshteinFloor == 0.50`, `bandJaccardFloor == 0.60`, `candidateObservationFloor == 4` (= 3 + 1), `provisionalCaptures == 3`, `spatialConfirm == null`.
+   - Explicit `provisionalCaptures: 5` with no `candidateObservationFloor` → floor is `6`.
+   - Explicit `provisionalCaptures: 5` with `candidateObservationFloor: 2` → floor is `2` (consumer override wins).
+   - Out-of-range throws: `bandLevenshteinFloor: 0.70`, `bandLevenshteinFloor: -0.01`, `bandJaccardFloor: 0.80`, `bandJaccardFloor: -0.01`, `candidateObservationFloor: -1`, `provisionalCaptures: 0`.
+4. **Green** — implement `BandFallbackConfig` + constructor validation + `BandSpatialPredicate` typedef.
+5. **Red** — `band_fallback_stats_test.dart`:
    - All counters default to `0`.
-   - `reset()` zeroes counters that have been incremented.
-4. **Green** — create `lib/src/band_fallback_stats.dart`.
-5. **Red** — `default_drift_aware_spatial_confirm_test.dart`:
-   - Calling `defaultDriftAwareSpatialConfirm(blockA, blockB)` directly throws `UnimplementedError` whose message mentions "sentinel" and "StabilizationEngine".
-   - Wire an engine with the default config, feed it two identical-rect candidates, and assert through the band-fallback path that the engine's swapped-in closure returns `true` at `overlapRatio >= 0.80`. (The integration assertion goes via the engine-enabled test in step 9; this step only locks the sentinel-throws behavior.)
-6. **Green** — add `defaultDriftAwareSpatialConfirm` as the throwing sentinel. The engine's `identical(...)` swap is wired in step 8.
-7. **Red** — `band_fallback_engine_disabled_test.dart`:
-   - Engine constructed with default config (`enabled: false`).
-   - Feed a fresh observation whose primary Levenshtein vs. all candidates is `< 0.70` but the band floors would pass.
-   - Expect: no match (`_findMatch` returns null), `BandFallbackStats.matchesAdmitted == 0`.
-   - Expect: `BandFallbackStats.candidatesConsidered >= 1` — the disabled path still **counts** candidates so consumers can measure before opting in.
-   - Expect: `BandFallbackStats.rejectedSpatial == 0` and `rejectedCandidateFloor == 0` — rejection buckets only tick when the path is admitting matches.
-8. **Green** — extend `StabilizationEngine` constructor with `bandFallback` param + `bandStats` getter + sentinel swap (see §4 wiring). Implement the count-but-don't-admit branch in `_findMatch`: when `enabled: false`, iterate candidates that *would* be considered (passed primary, didn't match), tick `candidatesConsidered`, return null.
-9. **Red** — `band_fallback_engine_enabled_admits_test.dart`:
-   - Engine with `BandFallbackConfig(enabled: true)`.
-   - Candidate with `observationCount: 5`, overlap 1.0, text similarity in the band (e.g. Lev 0.55, Jacc 0.70).
-   - Fresh observation with primary similarity `< 0.70`.
-   - Expect: `_findMatch` returns the candidate; resulting merge is provisional with `provisionalCapturesRemaining: 3`; stats: `candidatesConsidered: 1`, `matchesAdmitted: 1`, rest 0.
-10. **Green** — add fallback loop in `_findMatch`. Wire band-admitted candidates through the existing provisional-freeze path with `bandFallback.provisionalCaptures`.
-11. **Red** — `band_fallback_engine_rejects_test.dart`:
-    - **Rejected by `candidateObservationFloor`:** candidate `observationCount: 1`, otherwise admissible → null; stats `rejectedCandidateFloor: 1`.
-    - **Rejected by `spatialConfirm`:** candidate non-overlapping but band text similarity passes → null; stats `rejectedSpatial: 1`.
-    - **Rejected by band text floor:** candidate text similarity below band floor → null; stats `candidatesConsidered: 1`, no rejection bucket (it just didn't match).
-12. **Green** — verify rejection branches; adjust counter placement if any test fails.
-13. **Red** — `band_fallback_engine_custom_predicate_test.dart`:
-    - Construct engine with a custom `spatialConfirm` that always returns `false`.
-    - Otherwise-admissible candidate → null; stats `rejectedSpatial: 1`. Locks the predicate-injection seam.
-14. **Green** — sanity check; should already pass.
-15. **Red** — `band_fallback_engine_provisional_decay_test.dart`:
+   - `reset()` zeroes counters that have been incremented (test via the `Internal` subclass to mutate, then read via the public supertype).
+   - `BandFallbackStats()` (public ctor) does not exist / is not callable (private constructor enforced).
+6. **Green** — implement both classes in `band_fallback_stats.dart`.
+7. **Red** — `stabilization_engine_band_off_primary_counters_test.dart`:
+   - Engine constructed with default config (`mode: off`).
+   - Feed an observation that finds a primary match → `primaryMatchesAdmitted == 1`, `candidatesConsidered == 0`.
+   - Feed an observation that does NOT find a primary match → `primaryMatchesRejected == 1`, `candidatesConsidered == 0` (off mode does zero band work).
+8. **Green** — extend `StabilizationEngine` ctor with `bandFallback` param + `bandStats` getter. Wire primary-path counters in `_findMatch`. Leave the band loop unwritten.
+9. **Red** — `stabilization_engine_band_observe_only_test.dart`:
+   - Engine with `mode: observeOnly`.
+   - Two candidates: one would clear every band gate, one would fail spatial.
+   - Fresh observation has no primary match.
+   - Expect: `_findMatch` returns `null` (observeOnly never returns a match), `primaryMatchesRejected == 1`, `candidatesConsidered == 2`, `bandMatchesIdentified == 1`, `rejectedSpatial == 1`, `matchesAdmitted == 0`.
+10. **Green** — implement the band loop with the observeOnly branch (scan all, count all, return null).
+11. **Red** — `stabilization_engine_band_admit_test.dart`:
+    - Engine with `mode: admit`.
+    - Candidate `observationCount: 5`, overlap 1.0, text similarity in the band (e.g. Lev 0.55, Jacc 0.70).
+    - Fresh observation with primary similarity below floors.
+    - Expect: `_findMatch` returns the candidate; resulting merge is provisional with `provisionalCapturesRemaining: 3`; `candidatesConsidered: 1`, `bandMatchesIdentified: 1`, `matchesAdmitted: 1`.
+12. **Green** — add the admit branch (return on first identified match). Wire provisional-freeze with `bandFallback.provisionalCaptures`.
+13. **Red** — `stabilization_engine_band_rejections_test.dart` (admit mode):
+    - **Rejected by `candidateObservationFloor`:** candidate `observationCount: 1`, floor `2` → null; `rejectedCandidateFloor: 1`, `bandMatchesIdentified: 0`.
+    - **Rejected by `spatialConfirm`:** non-overlapping candidate, band text passes → null; `rejectedSpatial: 1`, `bandMatchesIdentified: 0`.
+    - **Below band text floor:** candidate text similarity below `bandLevenshteinFloor` AND `bandJaccardFloor` → null; `candidatesConsidered: 1`, no rejection bucket (text-band miss isn't bucketed).
+14. **Green** — verify each branch; adjust counter placement if any test fails.
+15. **Red** — `stabilization_engine_band_custom_predicate_test.dart`:
+    - Construct engine with `spatialConfirm: (a, b) => false` and `mode: admit`.
+    - Otherwise-admissible candidate → null; `rejectedSpatial: 1`. Locks the predicate-injection seam.
+    - Also: with `spatialConfirm: null` (default), feed two identical-rect candidates and an out-of-bounds candidate; the default closure must accept the identical rects (`overlapRatio == 1.0 >= 0.80`) and reject the out-of-bounds one (`overlapRatio < 0.80`). Locks the engine's default closure behavior.
+16. **Green** — sanity check; should already pass.
+17. **Red** — `stabilization_engine_band_provisional_decay_test.dart`:
     - Admit a band-fallback match (provisional, captures=3).
-    - Run two more captures where the same observation appears with high primary similarity.
+    - Run two more captures where the same observation appears with primary similarity above floors.
     - Expect: after 3 total captures (admission + 2 confirmations), block is non-provisional (`isProvisional: false`, `provisionalCapturesRemaining: 0`). Locks the decay path's interaction with band admission.
-16. **Green** — verify; the existing provisional decay path should handle this without changes.
-17. **Refactor** — pull the fallback loop into a private `_findBandMatch(fresh, candidates)` helper on the engine for readability. Re-run targeted tests.
-18. **Full suite** — `flutter test` once; commit.
+18. **Green** — verify; the existing provisional decay path should handle this without changes.
+19. **Refactor** — pull the band loop into a private `_findBandMatch(fresh, candidates)` helper on the engine for readability. Re-run targeted tests.
+20. **Full suite** — `flutter test` once; commit.
 
 ### Commit shape
 
 Split into commits for review legibility (one squash on merge):
 
-- `feat(api): #20 add BandFallbackConfig + BandFallbackStats + BandSpatialPredicate`
-- `feat(engine): #20 wire band-relaxed fallback into _findMatch (default off)`
+- `feat(api): #20 add BandFallbackMode + BandFallbackConfig + BandSpatialPredicate`
+- `feat(api): #20 add BandFallbackStats (read-only public + Internal mutator)`
+- `feat(engine): #20 primary-path counters in _findMatch (no band loop yet)`
+- `feat(engine): #20 wire band loop with observeOnly + admit branches`
 - `refactor(engine): extract _findBandMatch helper`
 
 Squash-merge title:
@@ -469,22 +597,29 @@ Closes #20
 
 ```markdown
 ### Added
-- `BandFallbackConfig` value type configures an optional band-relaxed
-  fallback inside `StabilizationEngine._findMatch`. Default constructor
-  ships disabled; consumers opt in once they have measured candidate
-  volume from `BandFallbackStats`. See `docs/superpowers/specs/`
-  for the full design and provenance of every default (#20).
-- `BandFallbackStats` exposes per-capture counters for the fallback path:
-  `candidatesConsidered`, `matchesAdmitted`, `rejectedSpatial`,
-  `rejectedCandidateFloor`. Reset via `reset()`; the engine never resets
-  it automatically (#20).
+- `BandFallbackMode` enum (`off` | `observeOnly` | `admit`) configures the
+  band-relaxed fallback path inside `StabilizationEngine._findMatch`.
+  Default is `off`; switch to `observeOnly` to read `BandFallbackStats`
+  before committing to `admit`. See `docs/superpowers/specs/` for the
+  full design and default provenance (#20).
+- `BandFallbackConfig` value type wraps the band thresholds, candidate
+  observation floor, provisional-capture grant, and spatial confirmation
+  predicate. Constructor `throw`s on out-of-range values. Primary-path
+  floors (Lev 0.70 / Jaccard 0.80) are engine-owned, not configurable
+  through this type (#20).
+- `BandFallbackStats` exposes per-capture counters: `primaryMatchesAdmitted`,
+  `primaryMatchesRejected`, `candidatesConsidered`, `rejectedCandidateFloor`,
+  `rejectedSpatial`, `bandMatchesIdentified`, `matchesAdmitted`. Read-only
+  public surface; engine mutates via a same-library `Internal` subclass.
+  Reset via `reset()`; the engine never resets it automatically (#20).
 - `BandSpatialPredicate` typedef mirrors `ContextualInvalidationCheck` —
-  `bool Function(TrackedBlock fresh, TrackedBlock candidate)`. The
-  default predicate is a drift-aware overlap-ratio check at 0.80,
-  matching `ocr_translate_demo`'s primary NMS gate (#20).
+  `bool Function(TrackedBlock fresh, TrackedBlock candidate)`. When
+  `BandFallbackConfig.spatialConfirm` is `null`, the engine substitutes
+  a drift-aware `overlapRatio >= 0.80` closure (#20).
 - `StabilizationEngine` constructor gains a `bandFallback:
-  BandFallbackConfig` parameter (defaults to disabled — backward
-  compatible) and a `bandStats` getter (#20).
+  BandFallbackConfig` parameter (defaults to `mode: off` — backward
+  compatible) and a `bandStats` getter returning the read-only stats view
+  (#20).
 ```
 
 ---
@@ -502,8 +637,8 @@ Branch `chore/release-0.4.0`. Two file changes only.
 
 ### `CHANGELOG.md`
 
-Add a `## 0.4.0 - 2026-MM-DD` header above 0.3.0's entry, fold in the
-draft entries from PRs 1 and 2 verbatim.
+Add a `## 0.4.0 - <release date>` header above 0.3.0's entry, fold in
+the draft entries from PRs 1 and 2 verbatim.
 
 ### Commit + PR
 
@@ -512,8 +647,9 @@ Commit message:
 ```
 chore: release v0.4.0
 
-#20 band-fallback config + stats wired into the engine (default off).
-#27 qualityScore NaN guard + DefaultTrackedBlock constructor invariants.
+#27 engine-entry Confidence validation + DefaultTrackedBlock ctor throws.
+#20 band-fallback config + stats wired into the engine
+    (BandFallbackMode: off | observeOnly | admit; default off).
 
 See CHANGELOG.md for the full entry.
 ```
@@ -525,42 +661,80 @@ and an interactive y/N prompt).
 ### Post-release follow-up (not in this spec)
 
 - Bump `ocr_translate_demo`'s `ocr_stabilizer` constraint to `^0.4.0` in
-  the same PR that wires `resetDriftPropagation()` (the unblock of #1084).
-- Open follow-up issues for: corpus-data-driven band-threshold tuning;
-  optional `observeOnly` mode if any consumer requests it.
+  the same PR that wires `resetDriftPropagation()` (the unblock of
+  `Abdallah01/ocr_translate_demo#1084`).
+- Open follow-up issues for: corpus-data-driven band-threshold tuning
+  (once `observeOnly` mode has produced counter data); Option A\*
+  Confidence-validation cleanup (drop `const` on `groundTruth`, refactor
+  `DefaultTrackedBlock` defaults to nullable+init-list).
 
 ---
 
 ## 6. Non-goals (lock against scope creep)
 
 - **No app-side changes** in this spec. The unblock PR is separate.
-- **No DriftTracker API changes.** The default predicate reaches into
-  drift state via a constructor-time closure; no public surface change.
+- **No `DriftTracker` / `OverlapResolver` API changes.** The default spatial
+  predicate reaches into drift state via an engine-internal closure when
+  the consumer doesn't supply one; no public surface change.
 - **No `qualityScore` weight tuning.** The 0.4 / 0.6 split stays.
-- **No new public types beyond the three in §4.** Stats / config / predicate
-  typedef are the entire new surface.
-- **No primary `_findMatch` threshold change.** The 0.70 floor stays as
-  the high-confidence gate. Band fallback is strictly additive.
+- **No public type beyond:** `BandFallbackMode`, `BandFallbackConfig`,
+  `BandSpatialPredicate`, `BandFallbackStats` (+ `BandFallbackStatsInternal`,
+  package-public for the engine but consumers see only the supertype). No
+  default-predicate function exported.
+- **No primary `_findMatch` threshold change.** The Lev 0.70 / Jaccard 0.80
+  primary floors stay as the high-confidence gate. Band fallback is
+  strictly additive.
+- **No `Confidence` extension type changes.** The documented unchecked
+  primary constructor stays; engine-entry validation closes the gap from
+  the outside.
 
 ---
 
 ## 7. Risks
 
-| Risk                                                                                                       | Mitigation                                                                                          |
-|------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
-| Default thresholds (0.50 / 0.60 band) are guesses without corpus data.                                     | Ship default-off. Document `BandFallbackStats` as the measurement vehicle. Tune in 0.4.x.            |
-| `defaultDriftAwareSpatialConfirm` closes over engine state, making it untestable in isolation.             | Test exercises the lambda the engine builds with a hand-rolled drift tracker. Documented in spec. |
-| Adding a constructor invariant to `DefaultTrackedBlock` is technically breaking.                            | Documented as Breaking in CHANGELOG. The breaking surface is "constructors with NaN/out-of-range" — should be zero in practice given the documented `.from()` entry points. |
-| Stats-at-zero on disabled path contradicts "measure before opt-in" promise.                                | Spec pin in §4 step 7: explicit decision, leaves room for a future `observeOnly` mode.              |
-| Provisional admission interacts with drift propagation in unexpected ways.                                 | TDD step 15 explicitly locks the decay path; existing provisional infrastructure carries the load. |
+| Risk                                                                                                                | Mitigation                                                                                                                       |
+|---------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| Band default thresholds (0.50 / 0.60) are guesses without corpus data.                                              | Ship `mode: off`. `observeOnly` is the measurement vehicle — counter ratios drive the eventual `admit` flip and threshold tuning. |
+| Engine-entry validation adds per-call overhead.                                                                     | One linear pass over observations checking two doubles each. Microbench in the test if a regression appears; otherwise negligible. |
+| `DefaultTrackedBlock` ctor + engine-entry guard duplicate work for the common path.                                 | Intentional — ctor produces a clearer stack trace at the right source location; engine guard catches non-`DefaultTrackedBlock` implementors. The redundancy is a feature. |
+| `candidateObservationFloor: provisionalCaptures + 1` may surprise consumers who expected `2`.                       | Documented in dartdoc; lowering to `1` or `2` re-enables provisional-on-provisional. Default biases toward conservative.        |
+| `BandFallbackStatsInternal` is public to the package — a determined consumer can downcast and mutate.               | Convention, not enforcement; the `Internal` suffix is the signal. Out-of-scope to add a Dart-language private mechanism here.    |
+| Option A\* (lifting validation into `Confidence`) would be cleaner but breaks default-parameter-value sites.        | Deferred to v0.5.x with a refactor of `DefaultTrackedBlock` defaults to nullable+init-list; tracked in §1 Out of scope.         |
+| Provisional admission interacts with drift propagation in unexpected ways.                                          | TDD step 17 explicitly locks the decay path; existing provisional infrastructure carries the load.                              |
 
 ---
 
 ## 8. Acceptance criteria (release readiness)
 
-- [ ] PR #1 (`fix/27-...`) merged to `main` with green CI / local tests; CHANGELOG draft included.
-- [ ] PR #2 (`feat/20-...`) merged to `main` with green CI / local tests; CHANGELOG draft included.
-- [ ] PR #3 (`chore/release-0.4.0`) merged to `main`; CHANGELOG `## 0.4.0` header dated; `pubspec.yaml` bumped.
+- [ ] PR #1 (`fix/27-...`) merged to `main` with green local tests; CHANGELOG draft included.
+- [ ] PR #2 (`feat/20-...`) merged to `main` with green local tests; CHANGELOG draft included.
+- [ ] PR #3 (`chore/release-0.4.0`) merged to `main`; CHANGELOG `## 0.4.0` header dated; `pubspec.yaml` bumped to `0.4.0`.
+- [ ] `dart run dart_pre_publish` / `dart pub publish --dry-run` reports no warnings against the new public surface.
+- [ ] **pana score 160/160** against the new public surface — every new
+      public symbol (`BandFallbackMode`, `BandFallbackConfig`,
+      `BandSpatialPredicate`, `BandFallbackStats`, `BandFallbackStats.reset`,
+      every counter getter, every engine ctor/getter addition) has dartdoc
+      coverage that holds the documentation score.
 - [ ] `git tag v0.4.0` pushed.
 - [ ] Maintainer runs `flutter pub publish` (out-of-band).
-- [ ] Issue #1084 in `ocr_translate_demo` unblocks (separate PR).
+- [ ] Issue `Abdallah01/ocr_translate_demo#1084` unblocked (separate PR).
+
+---
+
+## 9. Resolved review items (post-first-round)
+
+This spec was revised after a first-round review. Resolutions, by item:
+
+| # | Reviewer point                                       | Resolution                                                                                                                    |
+|---|-------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| 1 | Sentinel-function pattern is a footgun.               | Replaced with nullable `spatialConfirm`; engine substitutes default closure when `null`. No public sentinel.                  |
+| 2 | `Confidence` validation gap.                          | Grep confirmed const-context use (default param in `DefaultTrackedBlock`). Engine-entry validation (Option C done properly) catches any `TrackedBlock` implementor; ctor `throw` stays for early-fail; `qualityScore` collapses to debug assert. Cleaner Option A\* deferred to v0.5.x. |
+| 3 | "Count but don't admit" can't deliver instrumentation.| Replaced with `BandFallbackMode.observeOnly` — full loop, all counters, no admission. Real measurement vehicle.               |
+| 4 | `candidateObservationFloor: 2` vs `provisionalCaptures: 3` interaction. | Default changed to `provisionalCaptures + 1` (= 4) — semantically "candidate has cleared its own provisional window." Documented; consumers can override. |
+| 5 | `BandFallbackStats` public mutable fields.            | Read-only public class with private constructor + private fields + public getters + `reset()`. `BandFallbackStatsInternal` subclass with public mutators; engine holds the Internal, exposes the supertype. |
+| 6 | `qualityScore` returning `0.0` collides with legitimate zeros. | Resolved by #2 — guard becomes debug assert; release builds skip; engine entry catches NaN. No magic `0.0` return.          |
+| 7 | Local `file:///` links break for everyone else.       | All stripped; rationale inlined where useful.                                                                                 |
+| 8 | "Matches the app's value verbatim" reads like coupling. | Reframed throughout: "cited as provenance; the package owns the default thereafter."                                          |
+| 9 | No primary-path counter.                              | Added `primaryMatchesAdmitted` + `primaryMatchesRejected` to `BandFallbackStats`. Always tick. Enables "band fires as % of primary misses" from a single read. |
+| 10| pana 160/160 not in acceptance.                       | Added to §8.                                                                                                                  |
+| 11| Primary floors never stated explicitly.               | Called out in §4 problem section, defaults table, and `BandFallbackConfig` dartdoc.                                           |
