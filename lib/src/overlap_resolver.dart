@@ -173,8 +173,19 @@ class OverlapResolver {
 
   /// Combined quality score: text confidence weighted higher than position
   /// confidence because a bad translation is worse than slight position jitter.
-  static double qualityScore(TrackedBlock block) =>
-      block.positionConfidence.raw * 0.4 + block.textConfidence.raw * 0.6;
+  ///
+  /// NaN-on-input is a logic bug — the production guard is
+  /// [StabilizationEngine.stabilize]'s entry validation (#27).
+  /// This assert is the developer-facing safety net in debug builds;
+  /// release builds strip it for zero overhead.
+  static double qualityScore(TrackedBlock block) {
+    final pos = block.positionConfidence.raw;
+    final txt = block.textConfidence.raw;
+    assert(!pos.isNaN && !txt.isNaN,
+        'qualityScore reached with NaN confidence — '
+        'engine-entry validation should have caught this.');
+    return pos * 0.4 + txt * 0.6;
+  }
 
   // ── NMS Resolution ─────────────────────────────────────────────────
 
