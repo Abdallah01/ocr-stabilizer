@@ -74,6 +74,37 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Overlap resolver for spatial NMS.
   final OverlapResolver _resolver = const OverlapResolver();
 
+  /// Validate that an observation's confidence values are finite and in range.
+  ///
+  /// Engine *input* guard — symmetric to `MergeResult`'s 0.2.0 engine *output*
+  /// guard at [merge_result.dart:107-124]. Together they bracket the pipeline:
+  /// no NaN/out-of-range Confidence can enter or leave the engine.
+  ///
+  /// Throws [ArgumentError.value] naming the offending field and observation
+  /// index on the first violation. Catches any [ObservableBlock] implementor —
+  /// `DefaultTrackedBlock` already early-fails at construction, but a
+  /// hand-rolled implementor can still slip past the unchecked-`const`
+  /// `PositionConfidence(double)` / `TextConfidence(double)` primary
+  /// constructors documented at [confidence_types.dart:14-22].
+  void _assertValidConfidence(T block, int index) {
+    final pos = block.positionConfidence.raw;
+    if (pos.isNaN || pos < 0.0 || pos > 1.0) {
+      throw ArgumentError.value(
+        pos,
+        'positionConfidence',
+        'observation at index $index: must be a finite double in [0.0, 1.0]',
+      );
+    }
+    final txt = block.textConfidence.raw;
+    if (txt.isNaN || txt < 0.0 || txt > 1.0) {
+      throw ArgumentError.value(
+        txt,
+        'textConfidence',
+        'observation at index $index: must be a finite double in [0.0, 1.0]',
+      );
+    }
+  }
+
   /// Core entry point: stabilize a batch of fresh blocks against the model.
   ///
   /// [freshBlocks] — raw OCR observations for this frame (may contain
@@ -89,7 +120,16 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// [spatialIndex] is rebuilt internally from the returned `stableBlocks`
   /// before this method returns — callers no longer rebuild it after each
   /// [stabilize] call (#13).
+  ///
+  /// Throws [ArgumentError] if any observation carries an invalid (NaN or
+  /// out-of-range) [PositionConfidence] or [TextConfidence] value (#27).
   StabilizationResult<T> stabilize(List<T> freshBlocks) {
+    // Engine-entry Confidence validation (#27). Catches any ObservableBlock
+    // implementor at one seam, complementing MergeResult's engine-output guard.
+    for (var i = 0; i < freshBlocks.length; i++) {
+      _assertValidConfidence(freshBlocks[i], i);
+    }
+
     // 1. Dedup pipeline
     final deduped = _dedup(freshBlocks);
 
