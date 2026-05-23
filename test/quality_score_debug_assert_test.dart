@@ -15,21 +15,27 @@ import 'package:ocr_stabilizer/src/types/confidence_types.dart';
 /// `textConfidence` — so we use `noSuchMethod` to stub the rest of the
 /// `TrackedBlock` surface without writing 20+ getter overrides.
 class _NaNConfBlock implements TrackedBlock {
-  _NaNConfBlock({this.posIsNan = false, this.txtIsNan = false});
+  _NaNConfBlock({this.posIsNan = false, this.txtIsNan = false, this.posOutOfRange = false});
   final bool posIsNan;
   final bool txtIsNan;
+  final bool posOutOfRange;
 
   @override
-  PositionConfidence get positionConfidence => posIsNan
-      ? PositionConfidence(double.nan)
-      : const PositionConfidence(0.5);
+  PositionConfidence get positionConfidence {
+    if (posIsNan) return PositionConfidence(double.nan);
+    if (posOutOfRange) return const PositionConfidence(1.5);
+    return const PositionConfidence(0.5);
+  }
+
   @override
   TextConfidence get textConfidence =>
       txtIsNan ? TextConfidence(double.nan) : const TextConfidence(0.5);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError(
-      'qualityScore only reads positionConfidence + textConfidence');
+      '_NaNConfBlock fixture only stubs positionConfidence + textConfidence; '
+      'qualityScore tried to read ${invocation.memberName}. '
+      'If qualityScore now reads more fields, extend the fixture.');
 }
 
 void main() {
@@ -50,6 +56,14 @@ void main() {
 
     test('fires AssertionError on NaN textConfidence via bare impl', () {
       final bad = _NaNConfBlock(txtIsNan: true);
+      expect(
+        () => OverlapResolver.qualityScore(bad),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
+    test('fires AssertionError on out-of-range positionConfidence (1.5) via bare impl', () {
+      final bad = _NaNConfBlock(posOutOfRange: true);
       expect(
         () => OverlapResolver.qualityScore(bad),
         throwsA(isA<AssertionError>()),

@@ -157,7 +157,7 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
   // asserts strip in release; production-critical invariants on a state-owning
   // type must hold in release builds too.
   static void _validateConfidence(String name, double raw) {
-    if (raw.isNaN || raw < 0.0 || raw > 1.0) {
+    if (!raw.isFinite || raw < 0.0 || raw > 1.0) {
       throw ArgumentError.value(
         raw,
         name,

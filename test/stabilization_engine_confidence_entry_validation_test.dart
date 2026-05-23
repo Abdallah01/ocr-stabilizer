@@ -184,4 +184,88 @@ void main() {
       );
     });
   });
+
+  group('StabilizationEngine.merge entry validation (#27 follow-up)', () {
+    StabilizationEngine<ObservableBlock<Object>, Object> bareEngine() {
+      return StabilizationEngine<ObservableBlock<Object>, Object>(
+        merger: (existing, fresh, m) => existing,
+      );
+    }
+
+    test('throws when merge() receives fresh with NaN positionConfidence', () {
+      final engine = bareEngine();
+      final bad = _BareTrackedBlock(
+        positionConfidence: PositionConfidence(double.nan),
+        textConfidence: const TextConfidence(0.5),
+      );
+      final good = _BareTrackedBlock(
+        positionConfidence: const PositionConfidence(0.5),
+        textConfidence: const TextConfidence(0.5),
+      );
+      expect(
+        () => engine.merge(bad, good),
+        throwsA(isA<ArgumentError>()
+            .having((e) => e.toString(), 'message', contains('fresh:'))
+            .having(
+                (e) => e.toString(), 'message', contains('positionConfidence'))),
+      );
+    });
+
+    test('throws when merge() receives existing with NaN textConfidence', () {
+      final engine = bareEngine();
+      final good = _BareTrackedBlock(
+        positionConfidence: const PositionConfidence(0.5),
+        textConfidence: const TextConfidence(0.5),
+      );
+      final bad = _BareTrackedBlock(
+        positionConfidence: const PositionConfidence(0.5),
+        textConfidence: TextConfidence(double.nan),
+      );
+      expect(
+        () => engine.merge(good, bad),
+        throwsA(isA<ArgumentError>()
+            .having((e) => e.toString(), 'message', contains('existing:'))
+            .having(
+                (e) => e.toString(), 'message', contains('textConfidence'))),
+      );
+    });
+
+    test('throws when merge() receives existing with out-of-range positionConfidence', () {
+      final engine = bareEngine();
+      final goodFresh = _BareTrackedBlock(
+        positionConfidence: const PositionConfidence(0.5),
+        textConfidence: const TextConfidence(0.5),
+      );
+      final badExisting = _BareTrackedBlock(
+        positionConfidence: const PositionConfidence(1.1),
+        textConfidence: const TextConfidence(0.5),
+      );
+      expect(
+        () => engine.merge(goodFresh, badExisting),
+        throwsA(isA<ArgumentError>()
+            .having((e) => e.toString(), 'message', contains('existing:'))
+            .having((e) => e.toString(), 'message',
+                contains('positionConfidence'))),
+      );
+    });
+
+    test('throws when merge() receives infinite confidence', () {
+      final engine = bareEngine();
+      final bad = _BareTrackedBlock(
+        positionConfidence: PositionConfidence(double.infinity),
+        textConfidence: const TextConfidence(0.5),
+      );
+      final good = _BareTrackedBlock(
+        positionConfidence: const PositionConfidence(0.5),
+        textConfidence: const TextConfidence(0.5),
+      );
+      expect(
+        () => engine.merge(bad, good),
+        throwsA(isA<ArgumentError>()
+            .having((e) => e.toString(), 'message', contains('fresh:'))
+            .having((e) => e.toString(), 'message',
+                contains('positionConfidence'))),
+      );
+    });
+  });
 }

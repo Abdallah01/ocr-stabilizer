@@ -181,9 +181,12 @@ class OverlapResolver {
   static double qualityScore(TrackedBlock block) {
     final pos = block.positionConfidence.raw;
     final txt = block.textConfidence.raw;
-    assert(!pos.isNaN && !txt.isNaN,
-        'qualityScore reached with NaN confidence — '
-        'engine-entry validation should have caught this.');
+    assert(
+      pos.isFinite && pos >= 0.0 && pos <= 1.0 &&
+          txt.isFinite && txt >= 0.0 && txt <= 1.0,
+      'qualityScore reached with invalid confidence '
+      '(pos=$pos, txt=$txt) — engine-entry validation should have caught this.',
+    );
     return pos * 0.4 + txt * 0.6;
   }
 
