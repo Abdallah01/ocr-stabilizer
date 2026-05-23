@@ -27,11 +27,12 @@
   (#20).
 
 ### Changed
-- **Breaking:** `StabilizationEngine.stabilize()` now throws
-  `ArgumentError` if any observation's `positionConfidence.raw` or
-  `textConfidence.raw` is `NaN` or outside `[0.0, 1.0]`. Catches any
-  `TrackedBlock` implementor at the engine entry, closing the documented
-  unchecked-`const`-Confidence gap (#27).
+- **Breaking:** `StabilizationEngine.stabilize()` and
+  `StabilizationEngine.merge()` now throw `ArgumentError` if any
+  observation's `positionConfidence.raw` or `textConfidence.raw` is
+  `NaN` or outside `[0.0, 1.0]`. Catches any `TrackedBlock` implementor
+  at the engine entry, closing the documented unchecked-`const`-Confidence
+  gap (#27).
 - **Breaking:** `DefaultTrackedBlock` constructor throws `ArgumentError`
   when `positionConfidence.raw` or `textConfidence.raw` is `NaN` or
   outside `[0.0, 1.0]`. Early-fail at construction with a cleaner stack
