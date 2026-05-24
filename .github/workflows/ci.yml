@@ -14,3 +14,19 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+
+  pana:
+    # Score guard for issue #36: dartdoc 9.0.4 crashes on Windows due to
+    # CRLF offsets in Flutter SDK @docImport files
+    # (https://github.com/dart-lang/dartdoc/issues/4180), capping local pana at
+    # 150/160. pub.dev's scoring runs on Linux where the bug can't reproduce —
+    # this job is the authoritative pre-publish score check.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: dart pub global activate pana
+      - run: dart pub global run pana --exit-code-threshold 0
