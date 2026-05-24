@@ -60,7 +60,12 @@ void main() {
       expect(engine.bandStats.matchesAdmitted, 0);
     });
 
-    test('text-band miss is NOT bucketed in any rejection counter', () {
+    test('text-band miss ticks rejectedTextBand and no other rejection counter',
+        () {
+      // (Was previously named 'text-band miss is NOT bucketed in any rejection
+      // counter' — accurate when the band funnel had no text-miss counter.
+      // The v0.5.0 rejectedTextBand counter (#34 C1) closes that gap, so the
+      // test is renamed and now asserts the new tick.)
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
         bandFallback: const BandFallbackConfig(
@@ -78,6 +83,9 @@ void main() {
       expect(engine.bandStats.rejectedCandidateFloor, 0);
       expect(engine.bandStats.rejectedSpatial, 0,
           reason: 'spatial passed (identical rect)');
+      expect(engine.bandStats.rejectedTextBand, 1,
+          reason:
+              'text-band miss is now bucketed in rejectedTextBand (#34 C1)');
       expect(engine.bandStats.bandMatchesIdentified, 0);
       expect(engine.bandStats.matchesAdmitted, 0);
     });

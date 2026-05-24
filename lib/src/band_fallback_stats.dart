@@ -53,7 +53,9 @@ class BandFallbackStats {
   /// scanned for THIS primary miss", not "total candidates the engine
   /// considered for THIS primary miss". For accounting that's invariant
   /// to admit-mode early-exit, sum `rejectedCandidateFloor +
-  /// rejectedSpatial + bandMatchesIdentified` instead.
+  /// rejectedSpatial + rejectedTextBand + bandMatchesIdentified`
+  /// instead — every term gates on the same early-exit, so the
+  /// equality is mode-invariant.
   ///
   /// **Note (viewport-relativity skip)**: the band loop pre-filters
   /// candidates whose `isViewportRelative` differs from the fresh
@@ -73,6 +75,25 @@ class BandFallbackStats {
   /// returned `false`.
   int get rejectedSpatial => _rejectedSpatial;
   int _rejectedSpatial = 0;
+
+  /// Number of candidates the band loop rejected because their text
+  /// similarity scores fell below BOTH band floors (Lev <
+  /// `bandLevenshteinFloor` AND Jaccard < `bandJaccardFloor`). These are
+  /// candidates that passed the observation-count floor AND spatial
+  /// confirmation but couldn't clear even the relaxed text band.
+  ///
+  /// With this counter, the band funnel is decomposable:
+  /// `rejectedCandidateFloor + rejectedSpatial + rejectedTextBand +
+  /// bandMatchesIdentified == candidatesConsidered`. Every term gates
+  /// on the same admit-mode early-exit (see [candidatesConsidered]) so
+  /// the equality holds in both `admit` and `observeOnly`. The counter
+  /// stays at 0 when `BandFallbackConfig.mode` is
+  /// [BandFallbackMode.off] (the band loop is short-circuited entirely
+  /// before any band counter ticks) and also for candidates filtered
+  /// out by the viewport-relativity mismatch guard (see same note on
+  /// [candidatesConsidered]).
+  int get rejectedTextBand => _rejectedTextBand;
+  int _rejectedTextBand = 0;
 
   /// Number of candidates that passed every gate (observation floor,
   /// spatial confirm, text band floors). In `admit` mode this also ticks
@@ -102,6 +123,7 @@ class BandFallbackStats {
     _candidatesConsidered = 0;
     _rejectedCandidateFloor = 0;
     _rejectedSpatial = 0;
+    _rejectedTextBand = 0;
     _bandMatchesIdentified = 0;
     _matchesAdmitted = 0;
   }
@@ -136,6 +158,9 @@ class BandFallbackStatsInternal extends BandFallbackStats {
 
   /// Increment [BandFallbackStats.rejectedSpatial].
   void recordRejectedSpatial() => _rejectedSpatial++;
+
+  /// Increment [BandFallbackStats.rejectedTextBand].
+  void recordRejectedTextBand() => _rejectedTextBand++;
 
   /// Increment [BandFallbackStats.bandMatchesIdentified].
   void recordBandMatchIdentified() => _bandMatchesIdentified++;

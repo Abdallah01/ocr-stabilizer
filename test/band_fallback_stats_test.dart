@@ -14,6 +14,7 @@ void main() {
       expect(stats.candidatesConsidered, 0);
       expect(stats.rejectedCandidateFloor, 0);
       expect(stats.rejectedSpatial, 0);
+      expect(stats.rejectedTextBand, 0);
       expect(stats.bandMatchesIdentified, 0);
       expect(stats.matchesAdmitted, 0);
     });
@@ -25,6 +26,7 @@ void main() {
       stats.recordCandidateConsidered();
       stats.recordRejectedCandidateFloor();
       stats.recordRejectedSpatial();
+      stats.recordRejectedTextBand();
       stats.recordBandMatchIdentified();
       stats.recordMatchAdmitted();
 
@@ -33,6 +35,7 @@ void main() {
       expect(stats.candidatesConsidered, 1);
       expect(stats.rejectedCandidateFloor, 1);
       expect(stats.rejectedSpatial, 1);
+      expect(stats.rejectedTextBand, 1);
       expect(stats.bandMatchesIdentified, 1);
       expect(stats.matchesAdmitted, 1);
     });
@@ -41,6 +44,7 @@ void main() {
       final stats = BandFallbackStatsInternal();
       stats.recordPrimaryMatchAdmitted();
       stats.recordPrimaryMatchAdmitted();
+      stats.recordRejectedTextBand();
       for (var i = 0; i < 5; i++) {
         stats.recordCandidateConsidered();
       }
@@ -50,6 +54,7 @@ void main() {
       expect(stats.candidatesConsidered, 0);
       expect(stats.rejectedCandidateFloor, 0);
       expect(stats.rejectedSpatial, 0);
+      expect(stats.rejectedTextBand, 0);
       expect(stats.bandMatchesIdentified, 0);
       expect(stats.matchesAdmitted, 0);
     });
