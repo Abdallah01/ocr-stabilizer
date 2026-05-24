@@ -203,7 +203,7 @@ Closes #27
 `_findMatch` at [stabilization_engine.dart:293-312](../../lib/src/stabilization_engine.dart#L293-L312)
 rejects any candidate whose text similarity (`isTextSimilarWithScores`)
 is below the **primary path floors of Lev ≥ 0.70 / Jaccard ≥ 0.80** —
-matching the downstream consumer's [`TextDedupUtils.isTextSimilar`](../../lib/src/text_dedup_utils.dart#L162)
+matching the package's [`TextDedupUtils.isTextSimilar`](../../lib/src/text_dedup_utils.dart#L162)
 defaults. On real captures, OCR jitter (one character flipped, one
 ligature mis-segmented) reliably drops a stable block below those floors
 for one frame, even when the spatial position is unambiguous. The block
@@ -342,8 +342,8 @@ class BandFallbackConfig {
   /// `isProvisional` implies `provisionalCapturesRemaining > 0`).
   ///
   /// Default: `3`. Provenance: matches the downstream consumer's deployed
-  /// value in their overlay cache layer (PR-05a baseline) — cited as
-  /// proven app-side choice; the package owns the default thereafter.
+  /// value in their overlay cache layer — cited as proven app-side
+  /// choice; the package owns the default thereafter.
   final int provisionalCaptures;
 
   /// Spatial confirmation predicate. `null` means the engine substitutes a

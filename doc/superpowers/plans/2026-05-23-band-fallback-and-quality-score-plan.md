@@ -1075,8 +1075,8 @@ class BandFallbackConfig {
   /// `isProvisional` implies `provisionalCapturesRemaining > 0`).
   ///
   /// Default: `3`. Provenance: matches the downstream consumer's deployed
-  /// value in their overlay cache layer (PR-05a baseline) — cited as
-  /// proven app-side choice; the package owns the default thereafter.
+  /// value in their overlay cache layer — cited as proven app-side
+  /// choice; the package owns the default thereafter.
   final int provisionalCaptures;
 
   /// Spatial confirmation predicate. `null` means the engine substitutes a
