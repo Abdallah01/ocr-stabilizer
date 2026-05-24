@@ -21,8 +21,8 @@ import 'types/sticky_fallback.dart';
 // coordinates.
 //
 // Platform-agnostic: accepts ClassificationInput (not CaptureSnapshot),
-// uses callback for position lookup (not OverlayCacheService), and returns
-// ClassificationResult without dedup or translation cache logic.
+// uses callback for position lookup (not the overlay cache layer), and
+// returns ClassificationResult without dedup or translation cache logic.
 // =============================================================================
 
 /// Pure-computation service for OCR block classification.

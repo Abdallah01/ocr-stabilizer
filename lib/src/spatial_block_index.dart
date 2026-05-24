@@ -13,8 +13,8 @@
 // IC blocks are dual-indexed in both page-absolute and scroller-relative
 // cells to support both IC↔normal and IC↔IC comparisons.
 //
-// Extracted from OverlayCacheService to make spatial indexing independently
-// testable and replaceable.
+// Extracted from the overlay cache layer to make spatial indexing
+// independently testable and replaceable.
 // =============================================================================
 
 import 'dart:ui' show Rect;
@@ -153,8 +153,9 @@ class SpatialBlockIndex<T extends TrackedBlock> {
   /// Yield all non-VR blocks whose page-absolute grid cells overlap [region].
   ///
   /// Enumerates every cell the region spans plus a 1-cell margin, collecting
-  /// unique blocks.  Used by [OverlayCacheService.invalidateRegion] to find
-  /// stale blocks that should be evicted when in-place DOM content changes.
+  /// unique blocks.  Used by the overlay cache layer's region-invalidation
+  /// logic to find stale blocks that should be evicted when in-place DOM
+  /// content changes.
   ///
   /// VR (viewport-relative) blocks live in a separate cell namespace ("vr:")
   /// and are not returned — they are unaffected by page-content mutations.

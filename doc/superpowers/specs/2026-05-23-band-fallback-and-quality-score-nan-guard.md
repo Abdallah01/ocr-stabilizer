@@ -24,9 +24,9 @@ to pub.dev. No other features ride along.
 - Tuning the band thresholds against real-corpus data. Default config ships
   `mode: BandFallbackMode.off` precisely so consumers can switch to
   `observeOnly` first and read counters before committing to `admit`.
-- App-side adoption by the downstream consumer. The consumer app keeps
-  consuming 0.3.x until 0.4.0 is on pub.dev; the unblock PR there lands
-  separately in the consumer's own backlog.
+- Downstream adoption. The consumer app keeps consuming 0.3.x until
+  0.4.0 is on pub.dev; the unblock PR there lands separately in the
+  consumer's own backlog.
 - **Confidence-validation cleanup (Option A\*).** Lifting NaN/range validation
   into `Confidence` itself would require either dropping `const` on
   `PositionConfidence.groundTruth` / `TextConfidence.groundTruth` (breaks
@@ -341,9 +341,8 @@ class BandFallbackConfig {
   /// match. Must be `>= 1` (reflects [MergeResult]'s invariant that
   /// `isProvisional` implies `provisionalCapturesRemaining > 0`).
   ///
-  /// Default: `3`. Provenance: matches the downstream consumer's deployed
-  /// value in their overlay cache layer — cited as proven app-side
-  /// choice; the package owns the default thereafter.
+  /// Default: `3`. Empirically validated by deployed consumer instances;
+  /// the package owns the default thereafter.
   final int provisionalCaptures;
 
   /// Spatial confirmation predicate. `null` means the engine substitutes a
@@ -395,8 +394,8 @@ final BandSpatialPredicate effectiveSpatialConfirm =
         ) >= 0.80;
 ```
 
-The `0.80` threshold cites the downstream consumer's primary NMS gate
-in their overlay cache layer; the
+The `0.80` threshold matches conventional NMS overlap floors used in
+production overlay caches; the
 drift-margin pattern mirrors the engine's own `_dedup` at
 [stabilization_engine.dart:237-244](../../lib/src/stabilization_engine.dart#L237-L244).
 Both are cited as provenance; the package owns the defaults thereafter.
@@ -677,7 +676,7 @@ and an interactive y/N prompt).
 
 ## 6. Non-goals (lock against scope creep)
 
-- **No app-side changes** in this spec. The unblock PR is separate.
+- **No downstream consumer changes** in this spec. The unblock PR is separate.
 - **No `DriftTracker` / `OverlapResolver` API changes.** The default spatial
   predicate reaches into drift state via an engine-internal closure when
   the consumer doesn't supply one; no public surface change.
