@@ -6,6 +6,7 @@ import 'band_fallback_stats.dart';
 import 'block_key.dart';
 import 'drift_tracker.dart';
 import 'hierarchy_weight.dart';
+import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
 import 'observable_block.dart';
 import 'overlap_resolver.dart';
@@ -193,27 +194,18 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// `TextConfidence(double)` primary constructors documented at
   /// [confidence_types.dart:14-22].
   void _assertValidConfidence(T block, {int? index, String? role}) {
-    final pos = block.positionConfidence.raw;
-    final context = role != null
-        ? '$role: '
-        : index != null
-            ? 'observation at index $index: '
-            : '';
-    if (!pos.isFinite || pos < 0.0 || pos > 1.0) {
-      throw ArgumentError.value(
-        pos,
-        'positionConfidence',
-        '${context}must be a finite double in [0.0, 1.0]',
-      );
-    }
-    final txt = block.textConfidence.raw;
-    if (!txt.isFinite || txt < 0.0 || txt > 1.0) {
-      throw ArgumentError.value(
-        txt,
-        'textConfidence',
-        '${context}must be a finite double in [0.0, 1.0]',
-      );
-    }
+    final prefix =
+        role ?? (index != null ? 'observation at index $index' : null);
+    assertConfidenceRange(
+      'positionConfidence',
+      block.positionConfidence.raw,
+      prefix: prefix,
+    );
+    assertConfidenceRange(
+      'textConfidence',
+      block.textConfidence.raw,
+      prefix: prefix,
+    );
   }
 
   /// Core entry point: stabilize a batch of fresh blocks against the model.

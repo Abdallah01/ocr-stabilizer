@@ -1,5 +1,6 @@
 import 'dart:ui' show Offset;
 
+import 'internal/confidence_validation.dart';
 import 'text_vote.dart';
 import 'types/absolute_rect.dart';
 import 'types/confidence_types.dart';
@@ -104,23 +105,7 @@ class MergeResult {
         'must be >= 1',
       );
     }
-    if (positionConfidence.raw.isNaN ||
-        positionConfidence.raw < 0 ||
-        positionConfidence.raw > 1.0) {
-      throw ArgumentError.value(
-        positionConfidence.raw,
-        'positionConfidence',
-        'must be in [0.0, 1.0]',
-      );
-    }
-    if (textConfidence.raw.isNaN ||
-        textConfidence.raw < 0 ||
-        textConfidence.raw > 1.0) {
-      throw ArgumentError.value(
-        textConfidence.raw,
-        'textConfidence',
-        'must be in [0.0, 1.0]',
-      );
-    }
+    assertConfidenceRange('positionConfidence', positionConfidence.raw);
+    assertConfidenceRange('textConfidence', textConfidence.raw);
   }
 }
