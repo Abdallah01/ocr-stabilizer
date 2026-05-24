@@ -522,8 +522,13 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       _internalStats.recordBandMatchIdentified();
       if (bandFallback.mode == BandFallbackMode.admit) {
         bandAdmitted = candidate;
-        _internalStats.recordMatchAdmitted();
-        // Continue scanning remaining candidates for primary checks.
+        // recordMatchAdmitted() is deferred to the resolution block below
+        // so it reflects "match actually returned" rather than
+        // "candidate locked for band admission". This matters when a
+        // later primary candidate in the same scan supersedes a band
+        // candidate locked earlier (#34 T2): without the deferral,
+        // matchesAdmitted would overcount and disagree with the
+        // function's return value.
       }
       // observeOnly: keep scanning so all candidates contribute to counters.
     }
@@ -547,6 +552,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       return (match: null, wasBandFallback: false);
     }
     if (bandAdmitted != null) {
+      _internalStats.recordMatchAdmitted();
       return (match: bandAdmitted, wasBandFallback: true);
     }
     return (match: null, wasBandFallback: false);

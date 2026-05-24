@@ -36,57 +36,69 @@ DefaultTrackedBlock<Object> _block(
 void main() {
   group('#34 T2 — primary-beats-band resolution in single-pass _findMatch', () {
     test(
-        'a band candidate locked first is superseded by a later primary match in the same scan',
+        'a band candidate locked first is superseded by a later primary match in the same scan; matchesAdmitted stays 0',
         () {
-      // Two seeded blocks, both with observationCount well above the band
-      // candidate floor:
-      //   - "hello world" at (0, 0)        — band-similar to fresh
-      //   - "the quick brown fox" at (200, 0) — primary-identical to fresh
+      // Seed two well-observed blocks at NEARBY rects so the spatial index
+      // surfaces both as candidates for one fresh observation:
+      //   - "hxlxo wxrxd" at (0, 0)   — band-similar to "hello world"
+      //                                 (used throughout the band test suite;
+      //                                 Lev ~0.55, Jaccard >= 0.60).
+      //   - "hello world" at (60, 0)  — primary-identical to fresh.
       //
-      // Fresh: "the quick brown fox" at (200, 0). The spatial index may
-      // surface BOTH seeds as candidates. Whichever order it returns:
-      //   - The "hello world" seed is band-similar to fresh via Lev/Jacc band
-      //     floors (after sufficient overlap, would be a band match).
-      //   - The "the quick brown fox" seed is primary-identical (Lev = 1.0).
-      // The PR2 single-pass design must ensure primary always wins regardless
-      // of order — and bandStats.matchesAdmitted must be 0 because the primary
-      // match supersedes any locked band candidate.
+      // Custom spatialConfirm always returns true so the band candidate
+      // would be admitted if the engine didn't prefer primary; this isolates
+      // the precedence test from the default drift-aware spatial gate.
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: const BandFallbackConfig(
+        bandFallback: BandFallbackConfig(
           mode: BandFallbackMode.admit,
           candidateObservationFloor: 1,
-          // Custom spatialConfirm accepts everything so the band-similar
-          // candidate would be admitted if the engine didn't prefer primary.
-          // (The default closure requires spatial overlap; using a permissive
-          // predicate isolates the precedence test from the spatial-index
-          // cell filter.)
+          spatialConfirm: (fresh, candidate) => true,
         ),
       );
 
-      // Seed both blocks with well-observed counts.
+      // Seed BOTH blocks in one stabilize call. During this call the
+      // engine processes them sequentially against an empty spatialIndex
+      // (the index is rebuilt AFTER the per-frame loop, not between
+      // iterations), so neither merges with the other — both end up in
+      // stableBlocks. After the call's terminal rebuild, the index holds
+      // BOTH seeds.
+      //
+      // Cell math (bucket=200, key=round((left+w/2)/200), probe is ±1):
+      //   - seed1 at x=0,   w=50 → cell 0 ((0+25)/200 = 0.125 → 0)
+      //   - seed2 at x=400, w=50 → cell 2 ((400+25)/200 = 2.125 → 2)
+      //   - fresh at x=200, w=50 → cell 1 ((200+25)/200 = 1.125 → 1)
+      // Fresh in cell 1 probes cells 0..2 → sees BOTH seeds simultaneously.
       engine.stabilize([
-        _block('hello world', left: 0, top: 0, observationCount: 5),
-        _block('the quick brown fox',
-            left: 0, top: 0, width: 200, observationCount: 5),
+        _block('hxlxo wxrxd', left: 0, top: 0, observationCount: 5),
+        _block('hello world', left: 400, top: 0, observationCount: 5),
       ]);
 
-      // Fresh observation: primary-identical to the second seed at the
-      // SAME rect — the spatial index surfaces it as a primary candidate.
-      // (Choosing same-rect avoids any cell-filter complication.)
-      engine.stabilize([
-        _block('the quick brown fox', left: 0, top: 0, width: 200),
-      ]);
+      // Reset stats so we only count counters that tick during the actual
+      // precedence test.
+      engine.bandStats.reset();
 
-      // Primary always wins → no band admission, regardless of scan order.
+      // Fresh "hello world" at x=200 — cell 1 surfaces both seeds as
+      // candidates.
+      engine.stabilize([_block('hello world', left: 200, top: 0)]);
+
+      // Primary always wins → no band admission, regardless of which order
+      // the spatial index surfaces candidates.
       expect(engine.bandStats.matchesAdmitted, 0,
           reason: 'primary match must supersede any band candidate locked '
-              'earlier in the same single-pass scan');
+              'earlier in the same single-pass scan — matchesAdmitted ticks '
+              'only when the band path actually returns the match.');
 
-      // The primary match is recorded in primaryMatchesAdmitted.
+      // bandMatchesIdentified MAY be 1 (the band candidate was scanned and
+      // qualified) — that's the locked-but-superseded state we explicitly
+      // expect.
+      expect(engine.bandStats.bandMatchesIdentified, greaterThanOrEqualTo(1),
+          reason: 'the band-similar candidate qualified during scan (lock), '
+              'but matchesAdmitted should NOT tick — that\'s the precedence '
+              'rule under test');
+
       expect(engine.bandStats.primaryMatchesAdmitted, greaterThanOrEqualTo(1),
-          reason: 'a primary-identical candidate should at least register '
-              'one primary admission');
+          reason: 'primary-identical candidate must drive primary admission');
     });
   });
 
@@ -119,10 +131,15 @@ void main() {
       expect(after1.provisionalCapturesRemaining, 3);
 
       // Step 3: a SECOND band-similar observation arrives while the block
-      // is still provisional. The merge path's freeze-path early-return at
-      // _mergeImpl handles this — the band wrap is NOT re-applied, and the
-      // captures counter is decremented (not reset).
-      final r2 = engine.stabilize([_block('hxlxo wyrld', left: 0, top: 0)]);
+      // is still provisional. Re-using 'hxlxo wxrxd' (proven band-similar
+      // to 'hello world' across the band test suite — Lev ~0.55, below
+      // primary's 0.70 floor but above band's 0.50 floor). The cached
+      // block's text-vote winner is 'hello world' (seed seeded first;
+      // ties to first), so this second observation goes through the band
+      // path AGAIN, not the primary path. The merge logic's freeze-path
+      // early-return must absorb this without re-wrapping or resetting
+      // captures.
+      final r2 = engine.stabilize([_block('hxlxo wxrxd', left: 0, top: 0)]);
       final after2 =
           r2.stableBlocks.firstWhere((b) => b.absoluteRect.raw.left == 0);
       expect(after2.isProvisional, isTrue,

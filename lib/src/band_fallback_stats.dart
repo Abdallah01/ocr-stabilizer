@@ -53,7 +53,9 @@ class BandFallbackStats {
   /// scanned for THIS primary miss", not "total candidates the engine
   /// considered for THIS primary miss". For accounting that's invariant
   /// to admit-mode early-exit, sum `rejectedCandidateFloor +
-  /// rejectedSpatial + bandMatchesIdentified` instead.
+  /// rejectedSpatial + rejectedTextBand + bandMatchesIdentified`
+  /// instead — every term gates on the same early-exit, so the
+  /// equality is mode-invariant.
   ///
   /// **Note (viewport-relativity skip)**: the band loop pre-filters
   /// candidates whose `isViewportRelative` differs from the fresh
@@ -82,8 +84,13 @@ class BandFallbackStats {
   ///
   /// With this counter, the band funnel is decomposable:
   /// `rejectedCandidateFloor + rejectedSpatial + rejectedTextBand +
-  /// bandMatchesIdentified == candidatesConsidered` (subject to the
-  /// admit-mode early-exit semantics documented on
+  /// bandMatchesIdentified == candidatesConsidered`. Every term gates
+  /// on the same admit-mode early-exit (see [candidatesConsidered]) so
+  /// the equality holds in both `admit` and `observeOnly`. The counter
+  /// stays at 0 when `BandFallbackConfig.mode` is
+  /// [BandFallbackMode.off] (the band loop is short-circuited entirely
+  /// before any band counter ticks) and also for candidates filtered
+  /// out by the viewport-relativity mismatch guard (see same note on
   /// [candidatesConsidered]).
   int get rejectedTextBand => _rejectedTextBand;
   int _rejectedTextBand = 0;
