@@ -93,7 +93,7 @@ void main() {
     });
 
     test(
-        'throwing predicate is wrapped in BandPredicateException and surfaced (#35 S1)',
+        'throwing predicate is wrapped in BandPredicateException and surfaced — admit mode (#35 S1)',
         () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
@@ -111,9 +111,41 @@ void main() {
         () => engine.stabilize([_block('hxlxo wxrxd', left: 0, top: 0)]),
         throwsA(isA<BandPredicateException>()
             .having((e) => e.cause, 'cause', isA<StateError>())
+            .having((e) => e.predicateStackTrace, 'predicateStackTrace',
+                isNot(same(StackTrace.empty)))
+            .having(
+                (e) => e.message, 'message', contains('BandPredicateException'))
             .having((e) => e.toString(), 'toString',
-                contains('BandPredicateException'))),
-        reason: 'engine must rewrap predicate throw, never swallow it',
+                contains('Predicate stack trace:'))),
+        reason: 'engine must rewrap predicate throw, never swallow it; '
+            'predicateStackTrace + message must carry through for logging',
+      );
+    });
+
+    test(
+        'throwing predicate is wrapped in BandPredicateException — observeOnly mode (#35 S1)',
+        () {
+      // observeOnly runs the band loop including spatialConfirm; if the
+      // predicate throws, the engine must wrap and rethrow exactly as in
+      // admit mode (the catch is mode-agnostic by construction).
+      final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
+        merger: (existing, fresh, m) => existing.applyMerge(m),
+        bandFallback: BandFallbackConfig(
+          mode: BandFallbackMode.observeOnly,
+          candidateObservationFloor: 1,
+          spatialConfirm: (TrackedBlock fresh, TrackedBlock candidate) {
+            throw FormatException('predicate boom (observeOnly)');
+          },
+        ),
+      );
+      engine.stabilize(
+          [_block('hello world', left: 0, top: 0, observationCount: 5)]);
+      expect(
+        () => engine.stabilize([_block('hxlxo wxrxd', left: 0, top: 0)]),
+        throwsA(isA<BandPredicateException>()
+            .having((e) => e.cause, 'cause', isA<FormatException>())),
+        reason:
+            'observeOnly must surface predicate throws the same way admit does',
       );
     });
   });

@@ -6,8 +6,10 @@
 /// **Core invariant**:
 /// `primaryMatchesAdmitted + primaryMatchesRejected ==` total fresh
 /// observations that reached `_findMatch` (i.e. every observation that the
-/// engine evaluated for matching). The two counters partition the primary
-/// path outcome, regardless of whether the band-fallback path is enabled.
+/// engine evaluated for matching) **since the last [reset] call, or since
+/// construction if [reset] was never called**. The two counters partition
+/// the primary-path outcome, regardless of whether the band-fallback
+/// path is enabled.
 ///
 /// **Reset ownership**: all counters are cumulative until [reset] is
 /// called. **The engine never calls [reset] automatically**; consumers own
@@ -44,8 +46,10 @@ class BandFallbackStats {
   ///
   /// **Note (admit-mode early-exit semantics)**: in `admit` mode, once a
   /// band candidate has been locked for the current fresh observation,
-  /// subsequent candidates skip the band loop entirely and do NOT tick
-  /// this counter. So this reflects "candidates the band loop actually
+  /// subsequent candidates skip band evaluation (observation floor +
+  /// spatial confirm + text band floors) and do NOT tick this counter
+  /// — but they STILL participate in the primary-path check in the same
+  /// iteration. So this reflects "candidates the band loop actually
   /// scanned for THIS primary miss", not "total candidates the engine
   /// considered for THIS primary miss". For accounting that's invariant
   /// to admit-mode early-exit, sum `rejectedCandidateFloor +

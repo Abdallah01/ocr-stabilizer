@@ -4,14 +4,17 @@
 /// **Headline types**
 /// - [StabilizationEngine] — the orchestration entry point. Holds the
 ///   spatial index, drift tracker, optional contextual-invalidation hook,
-///   and band-fallback configuration. `stabilize(fresh, captureRect)`
-///   produces the merged stable block set for one capture.
+///   and band-fallback configuration. `stabilize(freshBlocks)` produces
+///   the merged stable block set for one capture.
 /// - [BandFallbackConfig] / [BandFallbackMode] — opt-in band-relaxed
 ///   matching for blocks that miss the primary text-similarity floor but
 ///   are spatially unambiguous. Default is [BandFallbackMode.off].
 /// - [BandFallbackStats] — read-only per-capture telemetry exposed via
 ///   `engine.bandStats`. The engine writes; consumers read and (optionally)
 ///   reset between captures.
+/// - [BandPredicateException] — typed wrapper for throws raised by a
+///   consumer-supplied [BandSpatialPredicate]. Catch this to distinguish
+///   predicate failures from engine-internal errors.
 /// - [TrackedBlock] / [ObservableBlock] / [DefaultTrackedBlock] — the
 ///   typed block hierarchy. Consumers either supply a custom
 ///   `ObservableBlock<P>` or use the default implementation.

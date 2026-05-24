@@ -74,22 +74,43 @@ typedef BandSpatialPredicate = bool Function(
 /// }
 /// ```
 ///
-/// [cause] preserves the original exception; [stackTrace] preserves the
-/// original stack so debugging is not lost.
+/// [cause] preserves the original exception; [predicateStackTrace]
+/// preserves the original predicate call-site stack so debugging is
+/// not lost when this gets rethrown.
+// `implements` (not `extends Error`) is intentional: extending Error would
+// capture a new stack at construction time, discarding the predicate's
+// original call-site trace that we want to surface.
 class BandPredicateException implements Exception {
   /// The exception the consumer's predicate raised.
   final Object cause;
 
-  /// Stack trace captured at the predicate call site.
-  final StackTrace stackTrace;
+  /// Stack trace captured at the predicate call site. Named
+  /// `predicateStackTrace` (not just `stackTrace`) so it doesn't shadow
+  /// the `e.stackTrace` convention from `on X catch (e, s)` — the `s`
+  /// parameter there is the rethrow-site stack provided by the runtime,
+  /// which is a different (and complementary) trace.
+  final StackTrace predicateStackTrace;
 
-  /// Construct from the captured cause + stack.
-  const BandPredicateException(this.cause, this.stackTrace);
+  /// Construct from the captured cause + predicate stack. Asserts the
+  /// recursive-wrapping invariant: if a `BandPredicateException` ends up
+  /// as someone else's cause, that's an engine bug or a re-entrant
+  /// predicate call — fail loud in debug rather than nest silently.
+  BandPredicateException(this.cause, this.predicateStackTrace)
+      : assert(
+            cause is! BandPredicateException,
+            'cause must not itself be a BandPredicateException — '
+            'double-wrapping indicates a re-entrant predicate or engine bug');
+
+  /// Human-readable message. Mirrors [toString] so logging frameworks
+  /// that probe `.message` (Sentry, FlutterError.reportError, etc.) get
+  /// the same text as `print(e)`.
+  String get message => toString();
 
   @override
   String toString() =>
       'BandPredicateException: consumer-supplied BandSpatialPredicate '
-      'threw during band evaluation. Cause: $cause';
+      'threw during band evaluation. Cause: $cause\n'
+      'Predicate stack trace:\n$predicateStackTrace';
 }
 
 /// Configuration for the band-relaxed fallback path inside
