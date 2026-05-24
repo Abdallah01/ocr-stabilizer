@@ -24,7 +24,7 @@
 
 The current `_findMatch` at [stabilization_engine.dart:293-312](../../lib/src/stabilization_engine.dart#L293-L312) uses `TextDedupUtils.normalizedLevenshtein` only — Jaccard is **not** checked on the primary path today. The spec's pseudocode in §4 frames primary as `isTextSimilarWithScores ≥ Lev 0.70 OR Jacc 0.80`. This plan implements the spec literally: PR #2 changes primary-path matching from "Lev only" to "Lev OR Jaccard" using the existing `isTextSimilarWithScores` utility, keeping the 0.70 / 0.80 floors unchanged.
 
-Net behavioral effect: blocks that fail Lev 0.70 but pass Jacc 0.80 (character-reordered text with the same significant-character set) now match on the primary path where they previously fell through to "no match." This is consistent with the app's `overlay_cache_service.dart:1513` pattern and the spec's framing. If you want primary to stay Lev-only and band to use `isTextSimilarWithScores`, edit Task PR2-T7 (the `_findMatch` primary rewrite) and skip the corresponding regression-lock test in Task PR2-T8.
+Net behavioral effect: blocks that fail Lev 0.70 but pass Jacc 0.80 (character-reordered text with the same significant-character set) now match on the primary path where they previously fell through to "no match." This is consistent with the downstream consumer's primary NMS pattern and the spec's framing. If you want primary to stay Lev-only and band to use `isTextSimilarWithScores`, edit Task PR2-T7 (the `_findMatch` primary rewrite) and skip the corresponding regression-lock test in Task PR2-T8.
 
 ---
 
@@ -1074,9 +1074,9 @@ class BandFallbackConfig {
   /// match. Must be `>= 1` (reflects `MergeResult`'s invariant that
   /// `isProvisional` implies `provisionalCapturesRemaining > 0`).
   ///
-  /// Default: `3`. Provenance: matches `ocr_translate_demo`'s value at
-  /// `lib/overlay/services/overlay_cache_service.dart:1603-1604` — cited
-  /// as proven app-side choice; the package owns the default thereafter.
+  /// Default: `3`. Provenance: matches the downstream consumer's deployed
+  /// value in their overlay cache layer (PR-05a baseline) — cited as
+  /// proven app-side choice; the package owns the default thereafter.
   final int provisionalCaptures;
 
   /// Spatial confirmation predicate. `null` means the engine substitutes a
@@ -2742,4 +2742,4 @@ Notify the maintainer that the release commit + tag are in place. The interactiv
 - [ ] **pana score 160/160** — every new public symbol has dartdoc that holds the documentation score.
 - [ ] `git tag v0.4.0` pushed.
 - [ ] Maintainer runs `flutter pub publish` (out-of-band).
-- [ ] Issue `Abdallah01/ocr_translate_demo#1084` is now unblockable in a separate PR (not part of this plan).
+- [ ] Downstream consumer's adoption issue is now unblockable in a separate PR (not part of this plan).

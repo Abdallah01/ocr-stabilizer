@@ -1,7 +1,7 @@
 // ============================================================================
 // DRIFT TRACKER
 // ============================================================================
-// Extracted from overlay_cache_service.dart in PR05a. Implements the
+// Extracted from a coordinate-space-aware overlay cache layer. Implements the
 // coordinate-space-aware submap model from SLAM adaptation plan §2.1:
 // tracks scroll-region-keyed drift observations (normal vs inner-scroller
 // coordinate spaces) for OCR position correction.
