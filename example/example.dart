@@ -12,6 +12,9 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 /// [BandFallbackStats], but never returns a band candidate. This is the
 /// recommended starting point: read the counters in production captures,
 /// then flip to [BandFallbackMode.admit] once the ratios justify it.
+/// Note that [BandFallbackStats.matchesAdmitted] stays at zero in
+/// observeOnly by construction — the counter only ticks when a band
+/// match is actually returned, which requires [BandFallbackMode.admit].
 void main() {
   final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
     merger: (existing, fresh, merge) => existing.applyMerge(merge),
@@ -26,7 +29,7 @@ void main() {
   final result1 = engine.stabilize(batch1);
   print('Capture 1: ${result1.stableBlocks.length} stable blocks');
 
-  // stabilize() rebuilds engine.spatialIndex internally (#13) — the second
+  // stabilize() rebuilds engine.spatialIndex internally — the second
   // capture matches against batch1 with no caller-side index management.
 
   // Second capture: same text at slightly different positions (OCR jitter).
@@ -47,14 +50,23 @@ void main() {
   }
 
   // Band-fallback telemetry — read in production to decide whether to
-  // flip the engine into BandFallbackMode.admit. See BandFallbackStats
-  // for the per-counter semantics.
+  // flip the engine into BandFallbackMode.admit. With this minimal
+  // example's clean synthetic data, the primary path matches every
+  // observation so the band counters stay at or near zero. In real OCR
+  // captures, single-character jitter will tick `bandMatchesIdentified`
+  // and the `rejected*` counters; only those non-zero ratios justify a
+  // flip to admit mode. See `BandFallbackStats` for per-counter
+  // semantics and the decomposability invariant.
   final s = engine.bandStats;
-  print('Band stats — primary admits=${s.primaryMatchesAdmitted}, '
-      'primary misses=${s.primaryMatchesRejected}, '
-      'band would-admit=${s.bandMatchesIdentified}, '
-      'rejected text-band=${s.rejectedTextBand}, '
-      'rejected obs-floor=${s.rejectedCandidateFloor}');
+  print('Band stats —\n'
+      '  primary admits=${s.primaryMatchesAdmitted}\n'
+      '  primary misses=${s.primaryMatchesRejected}\n'
+      '  candidates considered=${s.candidatesConsidered}\n'
+      '  band would-admit=${s.bandMatchesIdentified}\n'
+      '  rejected obs-floor=${s.rejectedCandidateFloor}\n'
+      '  rejected spatial=${s.rejectedSpatial}\n'
+      '  rejected text-band=${s.rejectedTextBand}\n'
+      '  matches admitted=${s.matchesAdmitted}');
 }
 
 DefaultTrackedBlock<void> _block({

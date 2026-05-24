@@ -34,8 +34,7 @@ dependencies:
 > the `PositionConfidence.from` / `TextConfidence.from` factories.
 >
 > **0.4.0 introduced the band-fallback path** — see
-> [`BandFallbackConfig`](#bandfallback-the-band-relaxed-matching-path) below
-> (the heading uses `:` instead of em-dash so the anchor slug stays simple).
+> [`BandFallbackConfig`](#bandfallback-the-band-relaxed-matching-path) below.
 > Default `BandFallbackMode.off` keeps the upgrade backwards-compatible.
 >
 > **0.4.0 also tightened Confidence validation** — `stabilize()`, `merge()`,
@@ -91,20 +90,29 @@ final engine = StabilizationEngine<DefaultTrackedBlock<MyPayload>, MyPayload>(
 );
 
 // After a few captures, inspect the counters before flipping to admit.
-// Note: in observeOnly mode the band loop scans EVERY qualifying
-// candidate per fresh observation; admit mode early-exits on first
-// match, so observeOnly counters are an upper bound on what admit
-// will produce, not an exact estimate.
+// Note: in admit mode, once a band candidate is locked for a fresh
+// observation, subsequent candidates skip band evaluation — so
+// candidatesConsidered is mode-variant (observeOnly will show a higher
+// figure). The funnel terms (rejectedCandidateFloor + rejectedSpatial
+// + rejectedTextBand + bandMatchesIdentified == candidatesConsidered)
+// are themselves mode-invariant — every term ticks before the
+// early-exit fires.
 final s = engine.bandStats;
 print('primary admits=${s.primaryMatchesAdmitted}, '
       'primary misses=${s.primaryMatchesRejected}, '
+      'candidates considered=${s.candidatesConsidered}, '
       'band would-admit=${s.bandMatchesIdentified}, '
+      'rejected obs-floor=${s.rejectedCandidateFloor}, '
+      'rejected spatial=${s.rejectedSpatial}, '
       'rejected text-band=${s.rejectedTextBand}, '
-      'rejected obs-floor=${s.rejectedCandidateFloor}');
+      'matches admitted=${s.matchesAdmitted}');
 ```
 
-Recommended adoption flow: `off` → `observeOnly` (read counters) →
-`admit`. The default is `off` so a `^0.5.0` upgrade is a no-op.
+Recommended adoption flow for callers that want band coverage: ship with
+`off` (the default — a `^0.5.0` upgrade is a no-op), switch to
+`observeOnly` to read the counters in production, then flip to `admit`
+once the ratios justify it. Staying on `off` permanently is also valid —
+it disables the band path entirely and pays no extra cost.
 
 ## Core Components
 
@@ -261,7 +269,7 @@ A block's identity is a six-dimensional signature:
 | `BandFallbackMode` | `off` (no band loop) / `observeOnly` (counters only) / `admit` (production). |
 | `BandFallbackStats` | Read-only per-capture telemetry exposed via `engine.bandStats`. |
 | `BandSpatialPredicate` | Optional `bool Function(TrackedBlock fresh, TrackedBlock candidate)` injection. `null` → engine substitutes a drift-aware `overlapRatio >= 0.80` closure. |
-| `BandPredicateException` | Typed wrapper for consumer-predicate throws (v0.5.0+) — caught and rethrown by the engine so failures surface, never swallowed. |
+| `BandPredicateException` | Typed wrapper for consumer-predicate throws (v0.5.0+) — caught and rewrapped by the engine so failures surface with a typed shape, never swallowed. Original predicate stack lives on `predicateStackTrace`. |
 
 ### Reference Implementations
 

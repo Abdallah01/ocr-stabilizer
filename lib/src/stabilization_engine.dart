@@ -15,6 +15,7 @@ import 'stabilization_result.dart';
 import 'submap_membership.dart';
 import 'text_dedup_utils.dart';
 import 'text_vote.dart';
+import 'tracked_block.dart';
 import 'types/absolute_rect.dart';
 import 'types/confidence_types.dart';
 import 'types/space_key.dart';
@@ -77,15 +78,26 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// a drift-aware closure that uses [_resolver] and [driftTracker] to compute
   /// `overlapRatio >= 0.80` against the candidate's space-keyed drift margin.
   late final BandSpatialPredicate _effectiveSpatialConfirm =
-      bandFallback.spatialConfirm ??
-          (fresh, candidate) =>
-              _resolver.overlapRatio(
-                fresh,
-                candidate,
-                driftTracker
-                    .driftMarginForKey(driftTracker.spaceKeyFor(candidate)),
-              ) >=
-              0.80;
+      bandFallback.spatialConfirm ?? _defaultSpatialConfirm;
+
+  /// True iff the engine is running the consumer-supplied
+  /// [BandFallbackConfig.spatialConfirm]. Captured at construction so the
+  /// _findMatch loop can scope its predicate try/catch to consumer code only —
+  /// engine-internal default-closure errors must propagate with their real
+  /// type instead of being misattributed as [BandPredicateException].
+  late final bool _consumerSpatialConfirmInUse =
+      bandFallback.spatialConfirm != null;
+
+  // Engine-owned default predicate. Lives as a separate method so the
+  // _findMatch try/catch can scope itself to consumer code only (engine
+  // bugs in this default closure must surface with their real type).
+  bool _defaultSpatialConfirm(TrackedBlock fresh, TrackedBlock candidate) =>
+      _resolver.overlapRatio(
+        fresh,
+        candidate,
+        driftTracker.driftMarginForKey(driftTracker.spaceKeyFor(candidate)),
+      ) >=
+      0.80;
 
   /// Creates a stabilization engine. The [merger] callback constructs an
   /// updated block from engine-computed merge data.
@@ -494,15 +506,25 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         continue;
       }
       bool spatialOk;
-      try {
+      if (_consumerSpatialConfirmInUse) {
+        try {
+          spatialOk = _effectiveSpatialConfirm(fresh, candidate);
+        } catch (error, stack) {
+          // Consumer-supplied predicate threw. Per BandSpatialPredicate's
+          // documented contract, predicates must not throw — but if one
+          // does, surface it as a typed BandPredicateException so the
+          // consumer can distinguish predicate failures from
+          // engine-internal errors. No silent swallow.
+          //
+          // The catch is intentionally scoped to consumer code only: any
+          // throw from _defaultSpatialConfirm (engine-internal default
+          // closure that calls _resolver.overlapRatio + driftTracker
+          // helpers) must propagate with its real type so engine
+          // regressions are not misattributed as predicate failures.
+          throw BandPredicateException(error, stack);
+        }
+      } else {
         spatialOk = _effectiveSpatialConfirm(fresh, candidate);
-      } catch (error, stack) {
-        // Consumer-supplied predicate threw. Per BandSpatialPredicate's
-        // documented contract, predicates must not throw — but if one
-        // does, surface it as a typed BandPredicateException so the
-        // consumer can distinguish predicate failures from
-        // engine-internal errors. No silent swallow.
-        throw BandPredicateException(error, stack);
       }
       if (!spatialOk) {
         _internalStats.recordRejectedSpatial();
