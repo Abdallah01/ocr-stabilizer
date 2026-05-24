@@ -149,6 +149,11 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
         'drift corrections.',
       );
     }
+    // Confidence-range guard: throws ArgumentError if either value is not
+    // a finite double in [0.0, 1.0]. Uses `throw` (not `assert`) so it
+    // holds in release builds — the unchecked primary `extension type`
+    // constructors on PositionConfidence/TextConfidence don't validate,
+    // so this is the storage-boundary check.
     assertConfidenceRange('positionConfidence', positionConfidence.raw);
     assertConfidenceRange('textConfidence', textConfidence.raw);
   }

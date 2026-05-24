@@ -3,17 +3,20 @@
 
 /// Throw [ArgumentError] if [raw] is not a finite double in `[0.0, 1.0]`.
 ///
-/// Used by every state-owning boundary that owns a Confidence-typed
-/// field — `DefaultTrackedBlock` ctor, `StabilizationEngine.stabilize` /
-/// `StabilizationEngine.merge` entry guards, `MergeResult` ctor — so the
-/// predicate and message template live in one place. Future tightening
-/// (banning subnormals, changing the upper bound, etc.) happens here
-/// instead of three call sites.
+/// Centralises the confidence-range predicate used at every state-owning
+/// boundary that holds a Confidence-typed field — `DefaultTrackedBlock`
+/// ctor, `StabilizationEngine._assertValidConfidence` (called by both
+/// `stabilize` and `merge` entry guards), `MergeResult` ctor, and the
+/// `PositionConfidence.from` / `TextConfidence.from` validated factories.
+/// Future tightening (banning subnormals, changing the upper bound,
+/// etc.) happens here instead of five call sites.
 ///
-/// **Throws rather than asserts** per project policy
-/// (`feedback_assert_vs_throw_in_storage`): asserts strip in release,
-/// and production-critical invariants on state-owning types must hold
-/// in release builds too.
+/// **Throws rather than asserts**: asserts strip in release, and
+/// production-critical invariants on state-owning types must hold in
+/// release builds too. The MergeResult ctor + engine entry guard +
+/// DefaultTrackedBlock ctor are storage / state-owning boundaries where
+/// silently admitting NaN or out-of-range values could corrupt drift
+/// correction or quality scoring downstream.
 ///
 /// [field] is the parameter name passed to [ArgumentError.value]
 /// (e.g. `'positionConfidence'`).
