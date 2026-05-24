@@ -6,9 +6,16 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
 /// Minimal example: stabilize two batches of OCR observations using
 /// [DefaultTrackedBlock] as the block implementation.
+///
+/// The engine is constructed with `BandFallbackMode.observeOnly` — the
+/// band-relaxed second-pass match path runs and populates
+/// [BandFallbackStats], but never returns a band candidate. This is the
+/// recommended starting point: read the counters in production captures,
+/// then flip to [BandFallbackMode.admit] once the ratios justify it.
 void main() {
   final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
     merger: (existing, fresh, merge) => existing.applyMerge(merge),
+    bandFallback: const BandFallbackConfig(mode: BandFallbackMode.observeOnly),
   );
 
   // First capture: two text blocks observed.
@@ -38,6 +45,16 @@ void main() {
       'observations=${block.observationCount}',
     );
   }
+
+  // Band-fallback telemetry — read in production to decide whether to
+  // flip the engine into BandFallbackMode.admit. See BandFallbackStats
+  // for the per-counter semantics.
+  final s = engine.bandStats;
+  print('Band stats — primary admits=${s.primaryMatchesAdmitted}, '
+      'primary misses=${s.primaryMatchesRejected}, '
+      'band would-admit=${s.bandMatchesIdentified}, '
+      'rejected text-band=${s.rejectedTextBand}, '
+      'rejected obs-floor=${s.rejectedCandidateFloor}');
 }
 
 DefaultTrackedBlock<void> _block({

@@ -1,3 +1,72 @@
+## 0.5.0 - 2026-05-24
+
+Quality-polish release. Additive public-API additions plus a latent
+engine bug fix in the band-fallback counter accounting. No breaking
+changes from 0.4.x — `^0.5.0` is a safe upgrade.
+
+### Added
+- `BandPredicateException` — typed wrapper class for throws raised by a
+  consumer-supplied `BandSpatialPredicate`. The engine catches the
+  predicate's error inside `_findMatch` and rewraps it as
+  `BandPredicateException(cause, predicateStackTrace)`. Predicate
+  failures now surface with a typed shape; no silent swallow. Exposes
+  `cause`, `predicateStackTrace`, `message`, and an asserting ctor that
+  rejects double-wrapping (#35).
+- `BandFallbackStats.rejectedTextBand` counter ticks at the
+  text-band-miss site inside `_findMatch`. Makes the band funnel
+  decomposable: `rejectedCandidateFloor + rejectedSpatial +
+  rejectedTextBand + bandMatchesIdentified == candidatesConsidered`,
+  invariant to admit-mode early-exit (#34).
+- Library-level dartdoc in `lib/ocr_stabilizer.dart` now enumerates the
+  headline types (`StabilizationEngine`, `BandFallbackConfig`,
+  `BandFallbackStats`, `BandPredicateException`, block hierarchy,
+  confidence types) plus the recommended adoption flow (off →
+  observeOnly → admit) (#35).
+- Internal `assertConfidenceRange(field, raw, {prefix})` utility at
+  `lib/src/internal/confidence_validation.dart` centralises the
+  `[0.0, 1.0]` finite-double predicate. Adopted at five sites:
+  `DefaultTrackedBlock` ctor, `MergeResult` ctor,
+  `StabilizationEngine._assertValidConfidence` (called by `stabilize`
+  and `merge`), `PositionConfidence.from`, `TextConfidence.from`. Future
+  tightening happens in one place (#31).
+
+### Changed
+- `BandFallbackStats.matchesAdmitted` is now incremented at the
+  resolution-time site (where `_findMatch` actually returns a band
+  match), not at scan-time. Before this release, the counter ticked as
+  soon as a candidate was locked as `bandAdmitted` — so when a later
+  primary candidate in the same scan superseded it, the counter
+  overcounted and disagreed with the function's return value. New
+  semantics: `matchesAdmitted` is exactly "band matches returned by
+  `_findMatch`", and the documented invariant
+  `matchesAdmitted <= bandMatchesIdentified` is strengthened by the
+  precedence rule "primary always wins, even if a band candidate was
+  locked first" (#34).
+- `MergeResult` ctor's confidence-range error message wording upgraded
+  from `'must be in [0.0, 1.0]'` to
+  `'must be a finite double in [0.0, 1.0]'` to match the message at the
+  engine entry guard and `DefaultTrackedBlock` ctor — a consumer
+  catching `ArgumentError` no longer sees two slightly different
+  stories about the same invariant (#31).
+
+### Fixed
+- Library dartdoc no longer references a non-existent
+  `stabilize(fresh, captureRect)` signature — the actual signature is
+  `stabilize(List<T> freshBlocks)`. Caught by the comment-analyzer
+  pass on PR #42 (#35).
+- Privacy scrub: removed 17 references to the downstream consumer's
+  internal project name / file:line paths from spec/plan docs and one
+  source comment (#33).
+
+### Internal
+- New CI job: pana scoring on ubuntu-latest with
+  `--exit-code-threshold 0` pinned to pana `0.23.12`. Authoritative
+  pre-publish score check — Windows local pana hits 150/160 due to
+  upstream `dart-lang/dartdoc` issue #4180 (CRLF offsets in Flutter
+  SDK `@docImport` files), but Linux scoring is 160/160 (#36).
+- Renamed `docs/` → `doc/` for the Pub layout-convention hint (#37).
+- Test count: 277 (was 270 in v0.4.0).
+
 ## 0.4.0 - 2026-05-23
 
 ### Added
