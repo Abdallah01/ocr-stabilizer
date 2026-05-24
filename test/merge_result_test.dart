@@ -40,7 +40,14 @@ void main() {
       // MergeResult must catch the bypass at the engine-output boundary.
       expect(
         () => _validResult(positionConfidence: const PositionConfidence(-0.1)),
-        throwsA(isA<ArgumentError>()),
+        throwsA(isA<ArgumentError>().having(
+          (e) => e.message,
+          'message',
+          contains('must be a finite double in [0.0, 1.0]'),
+        )),
+        reason: 'MergeResult must surface the canonical assertConfidenceRange '
+            'message wording; a silent message drift would make ArgumentError '
+            'matching across the codebase inconsistent.',
       );
       expect(
         () => _validResult(positionConfidence: const PositionConfidence(1.1)),

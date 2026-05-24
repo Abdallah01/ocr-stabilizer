@@ -1,3 +1,4 @@
+import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
 import 'observable_block.dart';
 import 'text_vote.dart';
@@ -148,22 +149,13 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
         'drift corrections.',
       );
     }
-    _validateConfidence('positionConfidence', positionConfidence.raw);
-    _validateConfidence('textConfidence', textConfidence.raw);
-  }
-
-  // Private helper — DRY across the two confidence fields. Uses `throw` rather
-  // than `assert` per project policy (feedback_assert_vs_throw_in_storage):
-  // asserts strip in release; production-critical invariants on a state-owning
-  // type must hold in release builds too.
-  static void _validateConfidence(String name, double raw) {
-    if (!raw.isFinite || raw < 0.0 || raw > 1.0) {
-      throw ArgumentError.value(
-        raw,
-        name,
-        'must be a finite double in [0.0, 1.0]',
-      );
-    }
+    // Confidence-range guard: throws ArgumentError if either value is not
+    // a finite double in [0.0, 1.0]. Uses `throw` (not `assert`) so it
+    // holds in release builds — the unchecked primary `extension type`
+    // constructors on PositionConfidence/TextConfidence don't validate,
+    // so this is the storage-boundary check.
+    assertConfidenceRange('positionConfidence', positionConfidence.raw);
+    assertConfidenceRange('textConfidence', textConfidence.raw);
   }
 
   /// Per-field immutable update. Pass only the fields that change.
