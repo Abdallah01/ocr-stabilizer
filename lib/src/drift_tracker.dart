@@ -42,7 +42,7 @@ class DriftTracker {
 
   /// Create a new drift tracker with optional custom submap membership strategy.
   DriftTracker({SubmapMembership? submapMembership})
-    : submapMembership = submapMembership ?? const CssSubmapMembership();
+      : submapMembership = submapMembership ?? const CssSubmapMembership();
 
   /// Maximum observations per region (rolling window).
   static const int _maxPerRegion = 20;

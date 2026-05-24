@@ -67,11 +67,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// `overlapRatio >= 0.80` against the candidate's space-keyed drift margin.
   late final BandSpatialPredicate _effectiveSpatialConfirm =
       bandFallback.spatialConfirm ??
-      (fresh, candidate) => _resolver.overlapRatio(
-            fresh,
-            candidate,
-            driftTracker.driftMarginForKey(driftTracker.spaceKeyFor(candidate)),
-          ) >= 0.80;
+          (fresh, candidate) =>
+              _resolver.overlapRatio(
+                fresh,
+                candidate,
+                driftTracker
+                    .driftMarginForKey(driftTracker.spaceKeyFor(candidate)),
+              ) >=
+              0.80;
 
   /// Creates a stabilization engine. The [merger] callback constructs an
   /// updated block from engine-computed merge data.
@@ -89,11 +92,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     SubmapMembership? submapMembership,
     bool Function(T fresh, T existing)? contextualCheck,
     this.bandFallback = const BandFallbackConfig(),
-  }) : _merger = merger,
-       driftTracker =
-           driftTracker ?? DriftTracker(submapMembership: submapMembership),
-       spatialIndex = spatialIndex ?? SpatialBlockIndex<T>(),
-       _contextualCheck = contextualCheck {
+  })  : _merger = merger,
+        driftTracker =
+            driftTracker ?? DriftTracker(submapMembership: submapMembership),
+        spatialIndex = spatialIndex ?? SpatialBlockIndex<T>(),
+        _contextualCheck = contextualCheck {
     _validateBandFallbackConfig(bandFallback);
   }
 
@@ -478,8 +481,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       // admit mode: once a band candidate is locked, later candidates still
       // need their primary check (done above via continue), but we skip
       // redundant band evaluation — the first qualifying admit wins.
-      if (bandFallback.mode == BandFallbackMode.admit &&
-          bandAdmitted != null) {
+      if (bandFallback.mode == BandFallbackMode.admit && bandAdmitted != null) {
         continue;
       }
 
@@ -499,7 +501,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       // jaccardThreshold: bandJacc (OR logic mirrors the primary check).
       final bandMatches =
           scores.levenshtein >= bandFallback.bandLevenshteinFloor ||
-          scores.jaccard >= bandFallback.bandJaccardFloor;
+              scores.jaccard >= bandFallback.bandJaccardFloor;
       if (!bandMatches) {
         // Text-band miss isn't bucketed — would-have-matched is not the
         // same as rejected, and a counter would skew the ratios.
@@ -578,7 +580,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     List<String> wellObservedTexts, {
     bool wasBandFallback = false,
   }) {
-    final output = _mergeImpl(fresh, existing, wasBandFallback: wasBandFallback);
+    final output =
+        _mergeImpl(fresh, existing, wasBandFallback: wasBandFallback);
     if (output.textWasPromoted && output.promotedFromText != null) {
       invalidatedTexts.add(output.promotedFromText!);
     }
@@ -660,9 +663,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final classVotes = Map<int, int>.from(existing.classificationVotes);
     classVotes[fresh.hierarchyWeight] =
         (classVotes[fresh.hierarchyWeight] ?? 0) + 1;
-    final bestWeight = classVotes.entries
-        .reduce((a, b) => a.value >= b.value ? a : b)
-        .key;
+    final bestWeight =
+        classVotes.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
     final needsReclass = bestWeight != existing.hierarchyWeight;
 
     // 4b. Carousel ID vote accumulation
@@ -698,8 +700,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       TextDedupUtils.significantCharList(freshText),
     );
     final existingVote = updatedTextVotes[normalizedKey];
-    final bestRaw =
-        (existingVote == null ||
+    final bestRaw = (existingVote == null ||
             fresh.textConfidence.raw > existingVote.bestConfidence)
         ? freshText
         : existingVote.rawText;
@@ -734,8 +735,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       final freshTC = fresh.textConfidence.raw;
       final totalTextConf = existingTC + freshTC;
       final tw = totalTextConf > 0 ? freshTC / totalTextConf : 0.5;
-      mergedTextConf =
-          (existingTC * (1 - tw) + freshTC * tw).clamp(0.0, 1.0);
+      mergedTextConf = (existingTC * (1 - tw) + freshTC * tw).clamp(0.0, 1.0);
     } else {
       mergedTextConf = existing.textConfidence.raw;
     }
@@ -762,7 +762,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // guaranteed non-provisional here. Lock that invariant with an
     // executable assert so a refactor of the freeze path can't silently
     // double-wrap a still-provisional block.
-    assert(!existing.isProvisional,
+    assert(
+        !existing.isProvisional,
         'provisional freeze path should have returned before reaching '
         'band-admit wrap');
     final bool admitAsProvisional = wasBandFallback;
@@ -789,8 +790,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final merged = _merger(existing, fresh, result);
 
     // Compute signals
-    final contextInvalidated =
-        !textWasPromoted &&
+    final contextInvalidated = !textWasPromoted &&
         _contextualCheck != null &&
         _contextualCheck(fresh, existing);
 

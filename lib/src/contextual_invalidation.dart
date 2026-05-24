@@ -24,5 +24,5 @@ import 'tracked_block.dart';
 ///   return false;
 /// }
 /// ```
-typedef ContextualInvalidationCheck =
-    bool Function(TrackedBlock fresh, TrackedBlock existing);
+typedef ContextualInvalidationCheck = bool Function(
+    TrackedBlock fresh, TrackedBlock existing);

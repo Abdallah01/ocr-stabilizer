@@ -182,8 +182,12 @@ class OverlapResolver {
     final pos = block.positionConfidence.raw;
     final txt = block.textConfidence.raw;
     assert(
-      pos.isFinite && pos >= 0.0 && pos <= 1.0 &&
-          txt.isFinite && txt >= 0.0 && txt <= 1.0,
+      pos.isFinite &&
+          pos >= 0.0 &&
+          pos <= 1.0 &&
+          txt.isFinite &&
+          txt >= 0.0 &&
+          txt <= 1.0,
       'qualityScore reached with invalid confidence '
       '(pos=$pos, txt=$txt) — engine-entry validation should have caught this.',
     );
@@ -222,7 +226,7 @@ class OverlapResolver {
     if (incomingArea > 0 && incomingQuality >= existingQuality) {
       final isGiant =
           (giantAreaFence != null && existingArea > giantAreaFence) ||
-          existingArea > incomingArea * kGiantAreaRatioFallback;
+              existingArea > incomingArea * kGiantAreaRatioFallback;
       if (isGiant) return OverlapResult.evict;
     }
 

@@ -77,14 +77,13 @@ class BlockClassifierService {
     final avgBlockHeightCss = allOcrBlocks.isEmpty
         ? null
         : allOcrBlocks
-                  .map((b) => b.boundingBox.height * cssPerPx)
-                  .fold(0.0, (double a, double b) => a + b) /
-              allOcrBlocks.length;
+                .map((b) => b.boundingBox.height * cssPerPx)
+                .fold(0.0, (double a, double b) => a + b) /
+            allOcrBlocks.length;
 
     // IQR upper fence for viewport guard
-    final allCssHeights = allOcrBlocks
-        .map((b) => b.boundingBox.height * cssPerPx)
-        .toList();
+    final allCssHeights =
+        allOcrBlocks.map((b) => b.boundingBox.height * cssPerPx).toList();
     final heightFence = IqrOutlier.upperFence(allCssHeights);
 
     final classified = <ClassifiedGroup>[];
@@ -104,17 +103,15 @@ class BlockClassifierService {
       // ── Group bounding rect in CSS px ──
       final gL =
           group.map((b) => b.boundingBox.left).reduce((a, b) => a < b ? a : b) *
-          cssPerPx;
+              cssPerPx;
       final gT =
           group.map((b) => b.boundingBox.top).reduce((a, b) => a < b ? a : b) *
-          cssPerPx;
-      final gR =
-          group
+              cssPerPx;
+      final gR = group
               .map((b) => b.boundingBox.right)
               .reduce((a, b) => a > b ? a : b) *
           cssPerPx;
-      final gB =
-          group
+      final gB = group
               .map((b) => b.boundingBox.bottom)
               .reduce((a, b) => a > b ? a : b) *
           cssPerPx;
@@ -226,23 +223,19 @@ class BlockClassifierService {
       }
 
       // Fallback scroll for sticky demotion
-      final double fallbackScrollY = fallbackIsIc
-          ? input.scrollY
-          : input.viewportPageTop;
+      final double fallbackScrollY =
+          fallbackIsIc ? input.scrollY : input.viewportPageTop;
       final double fallbackScrollX = matchedHzIndex >= 0
           ? input.carousels[matchedHzIndex].scrollLeft
           : input.scrollX;
 
       // ── Absolute rect (coordinate transformation) ──
-      final leftPx = group
-          .map((b) => b.boundingBox.left)
-          .reduce((a, b) => a < b ? a : b);
-      final topPx = group
-          .map((b) => b.boundingBox.top)
-          .reduce((a, b) => a < b ? a : b);
-      final rightPx = group
-          .map((b) => b.boundingBox.right)
-          .reduce((a, b) => a > b ? a : b);
+      final leftPx =
+          group.map((b) => b.boundingBox.left).reduce((a, b) => a < b ? a : b);
+      final topPx =
+          group.map((b) => b.boundingBox.top).reduce((a, b) => a < b ? a : b);
+      final rightPx =
+          group.map((b) => b.boundingBox.right).reduce((a, b) => a > b ? a : b);
       final bottomPx = group
           .map((b) => b.boundingBox.bottom)
           .reduce((a, b) => a > b ? a : b);

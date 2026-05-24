@@ -31,7 +31,8 @@ void main() {
       );
 
       // Seed a candidate with observationCount >= floor.
-      engine.stabilize([_block('hello world', left: 0, top: 0, observationCount: 5)]);
+      engine.stabilize(
+          [_block('hello world', left: 0, top: 0, observationCount: 5)]);
 
       // Fresh observation: text similar in band (text-band match), identical rect.
       // 'hxlxo wxrxd' shares many chars with 'hello world' but diverges enough
@@ -68,7 +69,7 @@ void main() {
       engine.stabilize([
         _block('alpha one hello', left: 0, top: 0, observationCount: 5),
         _block('alpha two hello', left: 0, top: 30, observationCount: 5),
-        _block('alpha three hi',  left: 0, top: 60, observationCount: 5),
+        _block('alpha three hi', left: 0, top: 60, observationCount: 5),
       ]);
       // Fresh observation at the same column — should be in the spatial
       // candidates set with all three seeded blocks.
@@ -77,7 +78,8 @@ void main() {
       // not just the first match.
       // The exact count depends on spatial-index behavior; assert > 1.
       expect(engine.bandStats.candidatesConsidered, greaterThan(1),
-          reason: 'observeOnly continues scanning after first identified match');
+          reason:
+              'observeOnly continues scanning after first identified match');
     });
   });
 }

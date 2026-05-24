@@ -20,8 +20,10 @@ DefaultTrackedBlock<Object> _block(String text,
     );
 
 void main() {
-  group('StabilizationEngine band — provisional decay after admission (#20)', () {
-    test('band admit → 3 confirming captures → block becomes non-provisional', () {
+  group('StabilizationEngine band — provisional decay after admission (#20)',
+      () {
+    test('band admit → 3 confirming captures → block becomes non-provisional',
+        () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
         bandFallback: const BandFallbackConfig(
@@ -32,7 +34,8 @@ void main() {
       );
 
       // Step A: seed an existing block with high observationCount.
-      engine.stabilize([_block('hello world', left: 0, top: 0, observationCount: 5)]);
+      engine.stabilize(
+          [_block('hello world', left: 0, top: 0, observationCount: 5)]);
 
       // Step B: band-admit a fresh observation at the same rect.
       // After this capture the merged block is provisional with captures=3.

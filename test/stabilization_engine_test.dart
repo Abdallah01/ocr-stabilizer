@@ -91,18 +91,18 @@ class _TestBlock implements ObservableBlock<Never> {
 
   @override
   ScrollContext get scrollContext => ScrollContext(
-    scrollY: captureScrollY,
-    scrollX: captureScrollX,
-    hzScrollerIndex: hzScrollerIndex,
-  );
+        scrollY: captureScrollY,
+        scrollX: captureScrollX,
+        hzScrollerIndex: hzScrollerIndex,
+      );
 
   @override
   StickyFallback get stickyFallback => StickyFallback(
-    scrollY: stickyFallbackScrollY,
-    scrollX: stickyFallbackScrollX,
-    isIc: stickyFallbackIsIc,
-    hzScrollerIndex: stickyFallbackHzIndex,
-  );
+        scrollY: stickyFallbackScrollY,
+        scrollX: stickyFallbackScrollX,
+        isIc: stickyFallbackIsIc,
+        hzScrollerIndex: stickyFallbackHzIndex,
+      );
 
   _TestBlock copyWith({
     AbsoluteRect? absoluteRect,
