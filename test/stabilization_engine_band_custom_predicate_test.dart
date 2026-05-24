@@ -91,5 +91,30 @@ void main() {
       // surface the candidate.
       expect(engine.bandStats.matchesAdmitted, 0);
     });
+
+    test(
+        'throwing predicate is wrapped in BandPredicateException and surfaced (#35 S1)',
+        () {
+      final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
+        merger: (existing, fresh, m) => existing.applyMerge(m),
+        bandFallback: BandFallbackConfig(
+          mode: BandFallbackMode.admit,
+          candidateObservationFloor: 1,
+          spatialConfirm: (TrackedBlock fresh, TrackedBlock candidate) {
+            throw StateError('consumer-supplied predicate failed');
+          },
+        ),
+      );
+      engine.stabilize(
+          [_block('hello world', left: 0, top: 0, observationCount: 5)]);
+      expect(
+        () => engine.stabilize([_block('hxlxo wxrxd', left: 0, top: 0)]),
+        throwsA(isA<BandPredicateException>()
+            .having((e) => e.cause, 'cause', isA<StateError>())
+            .having((e) => e.toString(), 'toString',
+                contains('BandPredicateException'))),
+        reason: 'engine must rewrap predicate throw, never swallow it',
+      );
+    });
   });
 }
