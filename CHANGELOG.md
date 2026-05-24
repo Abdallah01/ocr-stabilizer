@@ -4,7 +4,7 @@
 - `BandFallbackMode` enum (`off` | `observeOnly` | `admit`) configures the
   band-relaxed fallback path inside `StabilizationEngine._findMatch`.
   Default is `off`; switch to `observeOnly` to read `BandFallbackStats`
-  before committing to `admit`. See `docs/superpowers/specs/` for the
+  before committing to `admit`. See `doc/superpowers/specs/` for the
   full design and default provenance (#20).
 - `BandFallbackConfig` value type wraps the band thresholds, candidate
   observation floor, provisional-capture grant, and spatial confirmation

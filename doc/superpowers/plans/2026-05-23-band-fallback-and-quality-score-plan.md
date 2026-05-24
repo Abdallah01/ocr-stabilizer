@@ -8,7 +8,7 @@
 
 **Tech Stack:** Dart `^3.3.0`, Flutter `>=3.19.0`, `flutter_test`, `flutter_lints ^5.0.0`. No new dependencies in any PR.
 
-**Source spec:** [docs/superpowers/specs/2026-05-23-band-fallback-and-quality-score-nan-guard.md](../specs/2026-05-23-band-fallback-and-quality-score-nan-guard.md). Every code default, threshold, and TDD step in this plan traces back to a numbered section there.
+**Source spec:** [doc/superpowers/specs/2026-05-23-band-fallback-and-quality-score-nan-guard.md](../specs/2026-05-23-band-fallback-and-quality-score-nan-guard.md). Every code default, threshold, and TDD step in this plan traces back to a numbered section there.
 
 ---
 
@@ -772,8 +772,8 @@ Engine-entry Confidence validation closes the documented unchecked-\`const\` gap
 - \`DefaultTrackedBlock\` constructor throws on NaN/out-of-range Confidence for clearer stack traces.
 - \`qualityScore\` collapses to a debug assert; release builds skip (production defended by entry validation).
 
-Spec: \`docs/superpowers/specs/2026-05-23-band-fallback-and-quality-score-nan-guard.md\` §3.
-Plan: \`docs/superpowers/plans/2026-05-23-band-fallback-and-quality-score-plan.md\` PR1 section."
+Spec: \`doc/superpowers/specs/2026-05-23-band-fallback-and-quality-score-nan-guard.md\` §3.
+Plan: \`doc/superpowers/plans/2026-05-23-band-fallback-and-quality-score-plan.md\` PR1 section."
 ```
 
 - [ ] **Step 5: Wait for bot reviews + agent fan-out per project conventions, then merge**
@@ -2498,8 +2498,8 @@ Adds an opt-in band-relaxed fallback inside \`StabilizationEngine._findMatch\` t
 3. read \`bandStats.bandMatchesIdentified / primaryMatchesRejected\` ratio
 4. commit to \`mode: admit\` once the ratio justifies the relaxation
 
-Spec: \`docs/superpowers/specs/2026-05-23-band-fallback-and-quality-score-nan-guard.md\` §4.
-Plan: \`docs/superpowers/plans/2026-05-23-band-fallback-and-quality-score-plan.md\` PR2 section."
+Spec: \`doc/superpowers/specs/2026-05-23-band-fallback-and-quality-score-nan-guard.md\` §4.
+Plan: \`doc/superpowers/plans/2026-05-23-band-fallback-and-quality-score-plan.md\` PR2 section."
 ```
 
 - [ ] **Step 5: Bot reviews + agent fan-out + merge**
@@ -2595,7 +2595,7 @@ At the top of `CHANGELOG.md` (above `## 0.3.0`), insert:
 - `BandFallbackMode` enum (`off` | `observeOnly` | `admit`) configures the
   band-relaxed fallback path inside `StabilizationEngine._findMatch`.
   Default is `off`; switch to `observeOnly` to read `BandFallbackStats`
-  before committing to `admit`. See `docs/superpowers/specs/` for the
+  before committing to `admit`. See `doc/superpowers/specs/` for the
   full design and default provenance (#20).
 - `BandFallbackConfig` value type wraps the band thresholds, candidate
   observation floor, provisional-capture grant, and spatial confirmation
@@ -2704,8 +2704,8 @@ gh pr create --base main --head chore/release-0.4.0 \
 
 After merge, the maintainer runs \`flutter pub publish\` interactively out-of-band.
 
-Spec: \`docs/superpowers/specs/2026-05-23-band-fallback-and-quality-score-nan-guard.md\`.
-Plan: \`docs/superpowers/plans/2026-05-23-band-fallback-and-quality-score-plan.md\`."
+Spec: \`doc/superpowers/specs/2026-05-23-band-fallback-and-quality-score-nan-guard.md\`.
+Plan: \`doc/superpowers/plans/2026-05-23-band-fallback-and-quality-score-plan.md\`."
 ```
 
 - [ ] **Step 6: Wait for bots + merge**
