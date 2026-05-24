@@ -516,8 +516,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
           scores.levenshtein >= bandFallback.bandLevenshteinFloor ||
               scores.jaccard >= bandFallback.bandJaccardFloor;
       if (!bandMatches) {
-        // Text-band miss isn't bucketed — would-have-matched is not the
-        // same as rejected, and a counter would skew the ratios.
+        _internalStats.recordRejectedTextBand();
         continue;
       }
       _internalStats.recordBandMatchIdentified();

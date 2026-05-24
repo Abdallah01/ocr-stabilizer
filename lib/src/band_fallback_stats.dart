@@ -74,6 +74,20 @@ class BandFallbackStats {
   int get rejectedSpatial => _rejectedSpatial;
   int _rejectedSpatial = 0;
 
+  /// Number of candidates the band loop rejected because their text
+  /// similarity scores fell below BOTH band floors (Lev <
+  /// `bandLevenshteinFloor` AND Jaccard < `bandJaccardFloor`). These are
+  /// candidates that passed the observation-count floor AND spatial
+  /// confirmation but couldn't clear even the relaxed text band.
+  ///
+  /// With this counter, the band funnel is decomposable:
+  /// `rejectedCandidateFloor + rejectedSpatial + rejectedTextBand +
+  /// bandMatchesIdentified == candidatesConsidered` (subject to the
+  /// admit-mode early-exit semantics documented on
+  /// [candidatesConsidered]).
+  int get rejectedTextBand => _rejectedTextBand;
+  int _rejectedTextBand = 0;
+
   /// Number of candidates that passed every gate (observation floor,
   /// spatial confirm, text band floors). In `admit` mode this also ticks
   /// [matchesAdmitted]; in `observeOnly` mode it ticks alone.
@@ -102,6 +116,7 @@ class BandFallbackStats {
     _candidatesConsidered = 0;
     _rejectedCandidateFloor = 0;
     _rejectedSpatial = 0;
+    _rejectedTextBand = 0;
     _bandMatchesIdentified = 0;
     _matchesAdmitted = 0;
   }
@@ -136,6 +151,9 @@ class BandFallbackStatsInternal extends BandFallbackStats {
 
   /// Increment [BandFallbackStats.rejectedSpatial].
   void recordRejectedSpatial() => _rejectedSpatial++;
+
+  /// Increment [BandFallbackStats.rejectedTextBand].
+  void recordRejectedTextBand() => _rejectedTextBand++;
 
   /// Increment [BandFallbackStats.bandMatchesIdentified].
   void recordBandMatchIdentified() => _bandMatchesIdentified++;
