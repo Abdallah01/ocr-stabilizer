@@ -2,8 +2,9 @@
 // OVERLAP RESOLVER
 // ============================================================================
 // Pure spatial overlap detection and NMS (non-maximum suppression) resolution
-// for the block deduplication pipeline.  Extracted from OverlayCacheService
-// for independent testability and swappability.
+// for the block deduplication pipeline.  Extracted from a
+// coordinate-space-aware overlay cache layer for independent testability
+// and swappability.
 //
 // All methods are pure: they take blocks and parameters, return results,
 // and have zero side effects.

@@ -1,7 +1,7 @@
 // ============================================================================
 // DRIFT TRACKER
 // ============================================================================
-// Extracted from overlay_cache_service.dart in PR05a. Implements the
+// Extracted from a coordinate-space-aware overlay cache layer. Implements the
 // coordinate-space-aware submap model from SLAM adaptation plan §2.1:
 // tracks scroll-region-keyed drift observations (normal vs inner-scroller
 // coordinate spaces) for OCR position correction.
@@ -55,7 +55,8 @@ class DriftTracker {
 
   /// Per-key propagation count (number of times `_propagateRegionalDrift`
   /// has fired for this space key). Populated by an external call from
-  /// `OverlayCacheService` — [recordPropagation] — not by the tracker itself.
+  /// the overlay cache layer via [recordPropagation] — not by the tracker
+  /// itself.
   final Map<SpaceKey, int> _propagationCounts = {};
 
   /// All space keys that have recorded observations.
@@ -263,7 +264,7 @@ class DriftTracker {
   }
 
   /// Record that a regional drift propagation occurred for this space key.
-  /// Called by OverlayCacheService._propagateRegionalDrift after propagation.
+  /// Called by the overlay cache layer after each regional drift propagation.
   void recordPropagation(SpaceKey spaceKey) {
     _propagationCounts[spaceKey] = (_propagationCounts[spaceKey] ?? 0) + 1;
   }

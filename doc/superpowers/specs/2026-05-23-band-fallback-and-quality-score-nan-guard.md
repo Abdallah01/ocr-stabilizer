@@ -24,9 +24,9 @@ to pub.dev. No other features ride along.
 - Tuning the band thresholds against real-corpus data. Default config ships
   `mode: BandFallbackMode.off` precisely so consumers can switch to
   `observeOnly` first and read counters before committing to `admit`.
-- App-side adoption (`ocr_translate_demo`). The app keeps consuming 0.3.x
-  until 0.4.0 is on pub.dev; the unblock PR there lands separately under
-  [Abdallah01/ocr_translate_demo#1084](https://github.com/Abdallah01/ocr_translate_demo/issues/1084).
+- Downstream adoption. The consumer app keeps consuming 0.3.x until
+  0.4.0 is on pub.dev; the unblock PR there lands separately in the
+  consumer's own backlog.
 - **Confidence-validation cleanup (Option A\*).** Lifting NaN/range validation
   into `Confidence` itself would require either dropping `const` on
   `PositionConfidence.groundTruth` / `TextConfidence.groundTruth` (breaks
@@ -203,7 +203,7 @@ Closes #27
 `_findMatch` at [stabilization_engine.dart:293-312](../../lib/src/stabilization_engine.dart#L293-L312)
 rejects any candidate whose text similarity (`isTextSimilarWithScores`)
 is below the **primary path floors of Lev ≥ 0.70 / Jaccard ≥ 0.80** —
-matching `ocr_translate_demo`'s [`TextDedupUtils.isTextSimilar`](../../lib/src/text_dedup_utils.dart#L162)
+matching the package's [`TextDedupUtils.isTextSimilar`](../../lib/src/text_dedup_utils.dart#L162)
 defaults. On real captures, OCR jitter (one character flipped, one
 ligature mis-segmented) reliably drops a stable block below those floors
 for one frame, even when the spatial position is unambiguous. The block
@@ -341,9 +341,8 @@ class BandFallbackConfig {
   /// match. Must be `>= 1` (reflects [MergeResult]'s invariant that
   /// `isProvisional` implies `provisionalCapturesRemaining > 0`).
   ///
-  /// Default: `3`. Provenance: matches `ocr_translate_demo`'s value at
-  /// `lib/overlay/services/overlay_cache_service.dart:1603-1604` — cited
-  /// as proven app-side choice; the package owns the default thereafter.
+  /// Default: `3`. Empirically validated by deployed consumer instances;
+  /// the package owns the default thereafter.
   final int provisionalCaptures;
 
   /// Spatial confirmation predicate. `null` means the engine substitutes a
@@ -395,8 +394,8 @@ final BandSpatialPredicate effectiveSpatialConfirm =
         ) >= 0.80;
 ```
 
-The `0.80` threshold cites `ocr_translate_demo`'s primary NMS gate at
-`lib/overlay/services/overlay_cache_service.dart:1573-1574`; the
+The `0.80` threshold matches conventional NMS overlap floors used in
+production overlay caches; the
 drift-margin pattern mirrors the engine's own `_dedup` at
 [stabilization_engine.dart:237-244](../../lib/src/stabilization_engine.dart#L237-L244).
 Both are cited as provenance; the package owns the defaults thereafter.
@@ -519,13 +518,13 @@ parameterized by `bandFallback.provisionalCaptures`.
 | Knob                          | Default                          | Source                                                                                                       |
 |-------------------------------|----------------------------------|--------------------------------------------------------------------------------------------------------------|
 | `mode`                        | `BandFallbackMode.off`           | Package convention for permissive matchers; instrumentation before opt-in.                                  |
-| Primary path Lev floor        | `0.70` (engine-owned, non-config) | Existing `TextDedupUtils.isTextSimilar` default; matches app's primary NMS at overlay_cache_service.dart:1513. |
+| Primary path Lev floor        | `0.70` (engine-owned, non-config) | Existing `TextDedupUtils.isTextSimilar` default; matches the consumer's primary NMS default. |
 | Primary path Jaccard floor    | `0.80` (engine-owned, non-config) | Same.                                                                                                       |
 | `bandLevenshteinFloor`        | `0.50`                           | Mid-band between primary `0.70` and total-mismatch. Conservative without corpus data; consumers tune from stats. |
 | `bandJaccardFloor`            | `0.60`                           | Same logic vs primary `0.80`.                                                                                |
 | `candidateObservationFloor`   | `provisionalCaptures + 1` (= 4)  | "Candidate has cleared its own provisional window." Lower to enable provisional-on-provisional admission.   |
-| `provisionalCaptures`         | `3`                              | Cited from app's `overlay_cache_service.dart:1603-1604` as proven value; package owns the default.          |
-| Default `spatialConfirm`      | drift-aware `overlapRatio >= 0.80` (engine-internal closure when config is `null`) | `0.80` cited from app's primary NMS at `overlay_cache_service.dart:1573-1574`; drift-margin pattern from engine's own `_dedup`. |
+| `provisionalCaptures`         | `3`                              | Cited from the consumer's deployed value as proven; package owns the default.                                |
+| Default `spatialConfirm`      | drift-aware `overlapRatio >= 0.80` (engine-internal closure when config is `null`) | `0.80` cited from the consumer's primary NMS gate; drift-margin pattern from engine's own `_dedup`. |
 
 ### TDD sequence
 
@@ -665,9 +664,9 @@ and an interactive y/N prompt).
 
 ### Post-release follow-up (not in this spec)
 
-- Bump `ocr_translate_demo`'s `ocr_stabilizer` constraint to `^0.4.0` in
-  the same PR that wires `resetDriftPropagation()` (the unblock of
-  `Abdallah01/ocr_translate_demo#1084`).
+- Bump the downstream consumer's `ocr_stabilizer` constraint to `^0.4.0`
+  in the same PR that wires `resetDriftPropagation()` (the consumer's
+  adoption unblock).
 - Open follow-up issue for corpus-data-driven band-threshold tuning,
   once `observeOnly` mode has produced counter data. (Option A\*
   Confidence-validation cleanup is *not* pre-tracked — see §1; a tracking
@@ -677,7 +676,7 @@ and an interactive y/N prompt).
 
 ## 6. Non-goals (lock against scope creep)
 
-- **No app-side changes** in this spec. The unblock PR is separate.
+- **No downstream consumer changes** in this spec. The unblock PR is separate.
 - **No `DriftTracker` / `OverlapResolver` API changes.** The default spatial
   predicate reaches into drift state via an engine-internal closure when
   the consumer doesn't supply one; no public surface change.
@@ -722,7 +721,7 @@ and an interactive y/N prompt).
       coverage that holds the documentation score.
 - [ ] `git tag v0.4.0` pushed.
 - [ ] Maintainer runs `flutter pub publish` (out-of-band).
-- [ ] Issue `Abdallah01/ocr_translate_demo#1084` unblocked (separate PR).
+- [ ] Downstream consumer's adoption issue unblocked (separate PR).
 
 ---
 

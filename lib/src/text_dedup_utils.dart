@@ -2,7 +2,7 @@
 // TEXT DEDUPLICATION UTILITIES
 // ============================================================================
 // Pure static text-processing functions used by the overlay dedup pipeline.
-// Extracted from OverlayCacheService for independent testability.
+// Extracted from the overlay cache layer for independent testability.
 // ============================================================================
 
 import 'dart:math' show min, max;
