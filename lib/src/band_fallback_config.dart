@@ -32,8 +32,86 @@ enum BandFallbackMode {
 /// the engine's existing predicate-injection seam — two [TrackedBlock]
 /// arguments, no engine-internal types (`SpaceKey`, `DriftTracker`)
 /// leaked into public signatures.
+///
+/// **Null-sentinel contract**: passing `null` for
+/// [BandFallbackConfig.spatialConfirm] tells the engine to substitute its
+/// built-in drift-aware default at construction time
+/// (`overlapRatio >= 0.80` against the candidate's space-keyed drift
+/// margin). A non-null value is used as-is.
+///
+/// **Type-vs-capability note**: the parameters are typed [TrackedBlock]
+/// for symmetry with the engine's other public predicates, but consumers
+/// who need `observationCount` (or other [ObservableBlock] fields) can
+/// downcast safely — every block reaching this predicate flows through
+/// the engine's typed pipeline and is an `ObservableBlock<P>` at runtime.
+/// The downcast idiom:
+/// ```dart
+/// (fresh, candidate) {
+///   final freshObs = fresh as ObservableBlock<MyPos>;
+///   final candObs = candidate as ObservableBlock<MyPos>;
+///   return candObs.observationCount > 5 && myOverlap(freshObs, candObs);
+/// }
+/// ```
+///
+/// **Throwing contract**: predicates must not throw. If a consumer
+/// predicate does throw, the engine wraps the error in a
+/// [BandPredicateException] and rethrows out of `stabilize()` — predicate
+/// failures are surfaced, not swallowed.
 typedef BandSpatialPredicate = bool Function(
     TrackedBlock fresh, TrackedBlock candidate);
+
+/// Thrown when a consumer-supplied [BandSpatialPredicate] raises an
+/// exception during band-relaxed candidate evaluation inside
+/// `StabilizationEngine.stabilize`. The engine catches the predicate's
+/// error and rewraps it so consumers can distinguish predicate failures
+/// from engine-internal errors:
+///
+/// ```dart
+/// try {
+///   engine.stabilize(...);
+/// } on BandPredicateException catch (e) {
+///   // your predicate threw — fix it
+/// }
+/// ```
+///
+/// [cause] preserves the original exception; [predicateStackTrace]
+/// preserves the original predicate call-site stack so debugging is
+/// not lost when this gets rethrown.
+// `implements` (not `extends Error`) is intentional: extending Error would
+// capture a new stack at construction time, discarding the predicate's
+// original call-site trace that we want to surface.
+class BandPredicateException implements Exception {
+  /// The exception the consumer's predicate raised.
+  final Object cause;
+
+  /// Stack trace captured at the predicate call site. Named
+  /// `predicateStackTrace` (not just `stackTrace`) so it doesn't shadow
+  /// the `e.stackTrace` convention from `on X catch (e, s)` — the `s`
+  /// parameter there is the rethrow-site stack provided by the runtime,
+  /// which is a different (and complementary) trace.
+  final StackTrace predicateStackTrace;
+
+  /// Construct from the captured cause + predicate stack. Asserts the
+  /// recursive-wrapping invariant: if a `BandPredicateException` ends up
+  /// as someone else's cause, that's an engine bug or a re-entrant
+  /// predicate call — fail loud in debug rather than nest silently.
+  BandPredicateException(this.cause, this.predicateStackTrace)
+      : assert(
+            cause is! BandPredicateException,
+            'cause must not itself be a BandPredicateException — '
+            'double-wrapping indicates a re-entrant predicate or engine bug');
+
+  /// Human-readable message. Mirrors [toString] so logging frameworks
+  /// that probe `.message` (Sentry, FlutterError.reportError, etc.) get
+  /// the same text as `print(e)`.
+  String get message => toString();
+
+  @override
+  String toString() =>
+      'BandPredicateException: consumer-supplied BandSpatialPredicate '
+      'threw during band evaluation. Cause: $cause\n'
+      'Predicate stack trace:\n$predicateStackTrace';
+}
 
 /// Configuration for the band-relaxed fallback path inside
 /// `StabilizationEngine._findMatch`.

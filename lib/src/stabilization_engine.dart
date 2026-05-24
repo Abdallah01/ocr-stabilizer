@@ -42,6 +42,16 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
 
   /// Spatial index rebuilt by the engine on each [stabilize] call; the app
   /// may query it between calls for rendering lookups.
+  ///
+  /// **Known seam**: this is a public field, so a consumer can call
+  /// `spatialIndex.add(...)` directly with arbitrary [TrackedBlock]
+  /// instances. The confidence-validation guards on
+  /// [stabilize] and [merge] do NOT cover this path — a consumer who
+  /// constructs a block via the unchecked `PositionConfidence(double)` /
+  /// `TextConfidence(double)` primary constructors and inserts it
+  /// directly can place an invariant-violating block into the engine's
+  /// view. Use the named `.from()` constructors on those types (or
+  /// [DefaultTrackedBlock]'s ctor) for guarded construction.
   final SpatialBlockIndex<T> spatialIndex;
 
   /// Optional context-change detector. When non-null, the engine calls this
@@ -491,7 +501,18 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         _internalStats.recordRejectedCandidateFloor();
         continue;
       }
-      if (!_effectiveSpatialConfirm(fresh, candidate)) {
+      bool spatialOk;
+      try {
+        spatialOk = _effectiveSpatialConfirm(fresh, candidate);
+      } catch (error, stack) {
+        // Consumer-supplied predicate threw. Per BandSpatialPredicate's
+        // documented contract, predicates must not throw — but if one
+        // does, surface it as a typed BandPredicateException so the
+        // consumer can distinguish predicate failures from
+        // engine-internal errors. No silent swallow.
+        throw BandPredicateException(error, stack);
+      }
+      if (!spatialOk) {
         _internalStats.recordRejectedSpatial();
         continue;
       }

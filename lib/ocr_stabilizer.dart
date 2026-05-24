@@ -1,8 +1,38 @@
-/// Real-time OCR overlay stabilization engine.
+/// Real-time OCR overlay stabilization engine — drift correction, spatial
+/// indexing, and block tracking for translation-overlay pipelines.
+///
+/// **Headline types**
+/// - [StabilizationEngine] — the orchestration entry point. Holds the
+///   spatial index, drift tracker, optional contextual-invalidation hook,
+///   and band-fallback configuration. `stabilize(freshBlocks)` produces
+///   the merged stable block set for one capture.
+/// - [BandFallbackConfig] / [BandFallbackMode] — opt-in band-relaxed
+///   matching for blocks that miss the primary text-similarity floor but
+///   are spatially unambiguous. Default is [BandFallbackMode.off].
+/// - [BandFallbackStats] — read-only per-capture telemetry exposed via
+///   `engine.bandStats`. The engine writes; consumers read and (optionally)
+///   reset between captures.
+/// - [BandPredicateException] — typed wrapper for throws raised by a
+///   consumer-supplied [BandSpatialPredicate]. Catch this to distinguish
+///   predicate failures from engine-internal errors.
+/// - [TrackedBlock] / [ObservableBlock] / [DefaultTrackedBlock] — the
+///   typed block hierarchy. Consumers either supply a custom
+///   `ObservableBlock<P>` or use the default implementation.
+/// - [PositionConfidence] / [TextConfidence] — `extension type`-wrapped
+///   confidences with construction-time invariant guards.
+///
+/// **Recommended adoption flow**: ship with band fallback `off`, flip to
+/// [BandFallbackMode.observeOnly] to read counters in production, then
+/// commit to [BandFallbackMode.admit] once the ratios in
+/// [BandFallbackStats] justify it.
 library;
 
 export 'src/band_fallback_config.dart'
-    show BandFallbackMode, BandFallbackConfig, BandSpatialPredicate;
+    show
+        BandFallbackMode,
+        BandFallbackConfig,
+        BandSpatialPredicate,
+        BandPredicateException;
 export 'src/band_fallback_stats.dart' show BandFallbackStats;
 export 'src/block_classifier.dart';
 export 'src/block_key.dart';

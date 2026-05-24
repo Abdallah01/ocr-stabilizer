@@ -3,19 +3,30 @@
 
 /// Per-capture telemetry for the matching path inside `StabilizationEngine`.
 ///
-/// All counters are cumulative until [reset] is called. The engine never
-/// calls [reset] automatically; consumers reset between captures if they
-/// want per-capture buckets.
+/// **Core invariant**:
+/// `primaryMatchesAdmitted + primaryMatchesRejected ==` total fresh
+/// observations that reached `_findMatch` (i.e. every observation that the
+/// engine evaluated for matching) **since the last [reset] call, or since
+/// construction if [reset] was never called**. The two counters partition
+/// the primary-path outcome, regardless of whether the band-fallback
+/// path is enabled.
+///
+/// **Reset ownership**: all counters are cumulative until [reset] is
+/// called. **The engine never calls [reset] automatically**; consumers own
+/// per-capture bucketing — call `bandStats.reset()` between captures if
+/// you want per-capture counter values, or leave it alone for cumulative
+/// session totals.
 ///
 /// Primary counters tick whether or not the band-fallback path is enabled —
 /// they reflect the primary path's outcome. Band counters only tick when
 /// `BandFallbackConfig.mode` is `BandFallbackMode.observeOnly` or
 /// `BandFallbackMode.admit`.
 ///
-/// Read-only public surface: consumers see this type via
-/// `StabilizationEngine.bandStats`. The engine writes via
-/// [BandFallbackStatsInternal], which lives in the same library and
-/// reaches the underscore-private fields.
+/// **Do not downcast to a mutating subtype.** This package exposes a
+/// concrete [BandFallbackStatsInternal] in the same library so the engine
+/// can write counters; the supertype is the consumer-facing read-only
+/// view. Reaching into `Internal` from consumer code is unsupported and
+/// will be tightened in a future release.
 class BandFallbackStats {
   BandFallbackStats._();
 
@@ -32,6 +43,24 @@ class BandFallbackStats {
   /// Number of candidates the band loop scanned. Only ticks when
   /// `mode != off`. Compare against [primaryMatchesRejected] to compute
   /// "candidates considered per primary miss."
+  ///
+  /// **Note (admit-mode early-exit semantics)**: in `admit` mode, once a
+  /// band candidate has been locked for the current fresh observation,
+  /// subsequent candidates skip band evaluation (observation floor +
+  /// spatial confirm + text band floors) and do NOT tick this counter
+  /// — but they STILL participate in the primary-path check in the same
+  /// iteration. So this reflects "candidates the band loop actually
+  /// scanned for THIS primary miss", not "total candidates the engine
+  /// considered for THIS primary miss". For accounting that's invariant
+  /// to admit-mode early-exit, sum `rejectedCandidateFloor +
+  /// rejectedSpatial + bandMatchesIdentified` instead.
+  ///
+  /// **Note (viewport-relativity skip)**: the band loop pre-filters
+  /// candidates whose `isViewportRelative` differs from the fresh
+  /// observation's; those candidates never enter the band loop and so
+  /// do not tick any band counter. Rare in typical use, but worth knowing
+  /// when interpreting low counter totals on visible-but-mismatched
+  /// pages.
   int get candidatesConsidered => _candidatesConsidered;
   int _candidatesConsidered = 0;
 
@@ -48,6 +77,15 @@ class BandFallbackStats {
   /// Number of candidates that passed every gate (observation floor,
   /// spatial confirm, text band floors). In `admit` mode this also ticks
   /// [matchesAdmitted]; in `observeOnly` mode it ticks alone.
+  ///
+  /// **NaN-score invariant**: the band-floor check
+  /// `levenshtein >= floor || jaccard >= floor` would treat NaN scores
+  /// as misses (NaN never compares ≥ anything). The engine's score
+  /// source (`TextDedupUtils.isTextSimilarWithScores`) cannot return NaN
+  /// today — both metrics are bounded integer-DP / Jaccard with
+  /// empty-string guards — so this is documented as an invariant rather
+  /// than a runtime check. A future score source that can NaN must be
+  /// guarded at its boundary, not here.
   int get bandMatchesIdentified => _bandMatchesIdentified;
   int _bandMatchesIdentified = 0;
 
@@ -72,10 +110,14 @@ class BandFallbackStats {
 /// Engine-side mutation surface. Lives in the same library as
 /// [BandFallbackStats] so the underscore-private fields are accessible.
 ///
-/// Public to the package — consumers see only the [BandFallbackStats]
-/// supertype via `StabilizationEngine.bandStats`. The `Internal` suffix
-/// signals "package-internal API"; a determined consumer can downcast and
-/// mutate, but the convention is enforced socially, not by the language.
+/// **Not part of the consumer API.** Consumers see only the
+/// [BandFallbackStats] supertype via `StabilizationEngine.bandStats`. The
+/// `Internal` suffix signals "package-internal API"; Dart has no
+/// `internal` access modifier, so a determined consumer can downcast and
+/// mutate — but this is unsupported and will break without notice. The
+/// engine is the only intended writer. (`@visibleForTesting` was
+/// considered, but the engine itself is the primary writer outside of
+/// tests, which would trip the analyzer.)
 class BandFallbackStatsInternal extends BandFallbackStats {
   /// Construct a fresh stats sink with every counter at zero.
   BandFallbackStatsInternal() : super._();
