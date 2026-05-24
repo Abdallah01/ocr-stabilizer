@@ -31,7 +31,9 @@ void main() {
     });
   });
 
-  group('BandFallbackConfig invariants (#20) — assert in const ctor fires AssertionError in debug', () {
+  group(
+      'BandFallbackConfig invariants (#20) — assert in const ctor fires AssertionError in debug',
+      () {
     test('throws when bandLevenshteinFloor is at upper bound 0.70', () {
       expect(() => BandFallbackConfig(bandLevenshteinFloor: 0.70),
           throwsA(isA<AssertionError>()));

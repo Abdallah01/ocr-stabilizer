@@ -83,8 +83,7 @@ DefaultTrackedBlock<Object> _validBlock({String text = 'hi'}) {
 void main() {
   group('StabilizationEngine.stabilize entry validation (#27)', () {
     test('throws when bare-impl observation has NaN positionConfidence', () {
-      final bareEngine =
-          StabilizationEngine<ObservableBlock<Object>, Object>(
+      final bareEngine = StabilizationEngine<ObservableBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing,
       );
       final bad = _BareTrackedBlock(
@@ -94,14 +93,14 @@ void main() {
       expect(
         () => bareEngine.stabilize([bad]),
         throwsA(isA<ArgumentError>()
-            .having((e) => e.toString(), 'message', contains('positionConfidence'))
+            .having(
+                (e) => e.toString(), 'message', contains('positionConfidence'))
             .having((e) => e.toString(), 'message', contains('index 0'))),
       );
     });
 
     test('throws when bare-impl observation has NaN textConfidence', () {
-      final bareEngine =
-          StabilizationEngine<ObservableBlock<Object>, Object>(
+      final bareEngine = StabilizationEngine<ObservableBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing,
       );
       final bad = _BareTrackedBlock(
@@ -110,14 +109,13 @@ void main() {
       );
       expect(
         () => bareEngine.stabilize([bad]),
-        throwsA(isA<ArgumentError>()
-            .having((e) => e.toString(), 'message', contains('textConfidence'))),
+        throwsA(isA<ArgumentError>().having(
+            (e) => e.toString(), 'message', contains('textConfidence'))),
       );
     });
 
     test('throws when bare-impl observation has out-of-range confidence', () {
-      final bareEngine =
-          StabilizationEngine<ObservableBlock<Object>, Object>(
+      final bareEngine = StabilizationEngine<ObservableBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing,
       );
       final bad = _BareTrackedBlock(
@@ -131,8 +129,7 @@ void main() {
     });
 
     test('throws when bare-impl observation has infinite confidence', () {
-      final bareEngine =
-          StabilizationEngine<ObservableBlock<Object>, Object>(
+      final bareEngine = StabilizationEngine<ObservableBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing,
       );
       // +Infinity > 1.0 -> caught by upper-bound check;
@@ -142,20 +139,19 @@ void main() {
         positionConfidence: PositionConfidence(double.infinity),
         textConfidence: const TextConfidence(0.5),
       );
-      expect(() => bareEngine.stabilize([posInf]),
-          throwsA(isA<ArgumentError>()));
+      expect(
+          () => bareEngine.stabilize([posInf]), throwsA(isA<ArgumentError>()));
 
       final negInf = _BareTrackedBlock(
         positionConfidence: PositionConfidence(double.negativeInfinity),
         textConfidence: const TextConfidence(0.5),
       );
-      expect(() => bareEngine.stabilize([negInf]),
-          throwsA(isA<ArgumentError>()));
+      expect(
+          () => bareEngine.stabilize([negInf]), throwsA(isA<ArgumentError>()));
     });
 
     test('throw message names the offending observation index', () {
-      final bareEngine =
-          StabilizationEngine<ObservableBlock<Object>, Object>(
+      final bareEngine = StabilizationEngine<ObservableBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing,
       );
       final good = _BareTrackedBlock(
@@ -206,8 +202,8 @@ void main() {
         () => engine.merge(bad, good),
         throwsA(isA<ArgumentError>()
             .having((e) => e.toString(), 'message', contains('fresh:'))
-            .having(
-                (e) => e.toString(), 'message', contains('positionConfidence'))),
+            .having((e) => e.toString(), 'message',
+                contains('positionConfidence'))),
       );
     });
 
@@ -230,7 +226,9 @@ void main() {
       );
     });
 
-    test('throws when merge() receives existing with out-of-range positionConfidence', () {
+    test(
+        'throws when merge() receives existing with out-of-range positionConfidence',
+        () {
       final engine = bareEngine();
       final goodFresh = _BareTrackedBlock(
         positionConfidence: const PositionConfidence(0.5),

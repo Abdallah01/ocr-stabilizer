@@ -35,9 +35,11 @@ void main() {
       );
     });
 
-    test('admits a band-matched candidate as provisional with config captures', () {
+    test('admits a band-matched candidate as provisional with config captures',
+        () {
       // Seed an existing block with observationCount: 5 (well past floor).
-      engine.stabilize([_block('hello world', left: 0, top: 0, observationCount: 5)]);
+      engine.stabilize(
+          [_block('hello world', left: 0, top: 0, observationCount: 5)]);
 
       // Fresh observation: band-similar text at identical rect (overlap = 1.0).
       // Text choice: 'hxlxo wxrxd' — 7 of 11 sig chars differ, falls in band

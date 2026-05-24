@@ -80,9 +80,8 @@ class BlockKeyGenerator {
     final r = block.absoluteRect;
     final kLeft = (r.left / bucketWidth).round();
     // IC blocks: use scroller-relative Y to eliminate vvPageTop drift.
-    final dedupTop = block.isInnerScrollerChild
-        ? (r.top - block.innerScrollerTop)
-        : r.top;
+    final dedupTop =
+        block.isInnerScrollerChild ? (r.top - block.innerScrollerTop) : r.top;
     final kTop = (dedupTop / bucketHeight).round();
     final normalizedText = TextDedupUtils.normalizeWhitespace(
       block.originalText,
@@ -107,9 +106,8 @@ class BlockKeyGenerator {
 
     final r = block.absoluteRect;
     final kLeft = (r.left / bucketWidth).round();
-    final dedupTop = block.isInnerScrollerChild
-        ? (r.top - block.innerScrollerTop)
-        : r.top;
+    final dedupTop =
+        block.isInnerScrollerChild ? (r.top - block.innerScrollerTop) : r.top;
     final kTop = (dedupTop / bucketHeight).round();
     final prefix = _prefixFor(block);
     final normalizedText = TextDedupUtils.normalizeWhitespace(

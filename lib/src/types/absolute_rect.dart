@@ -8,11 +8,11 @@ import 'dart:ui' show Offset, Rect, Size;
 extension type const AbsoluteRect(Rect raw) {
   /// Creates from left, top, right, bottom coordinates.
   AbsoluteRect.fromLTRB(double l, double t, double r, double b)
-    : raw = Rect.fromLTRB(l, t, r, b);
+      : raw = Rect.fromLTRB(l, t, r, b);
 
   /// Creates from left, top, width, height.
   AbsoluteRect.fromLTWH(double l, double t, double w, double h)
-    : raw = Rect.fromLTWH(l, t, w, h);
+      : raw = Rect.fromLTWH(l, t, w, h);
 
   /// A zero-sized rect at the origin.
   static const zero = AbsoluteRect(Rect.zero);

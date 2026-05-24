@@ -15,7 +15,10 @@ import 'package:ocr_stabilizer/src/types/confidence_types.dart';
 /// `textConfidence` — so we use `noSuchMethod` to stub the rest of the
 /// `TrackedBlock` surface without writing 20+ getter overrides.
 class _NaNConfBlock implements TrackedBlock {
-  _NaNConfBlock({this.posIsNan = false, this.txtIsNan = false, this.posOutOfRange = false});
+  _NaNConfBlock(
+      {this.posIsNan = false,
+      this.txtIsNan = false,
+      this.posOutOfRange = false});
   final bool posIsNan;
   final bool txtIsNan;
   final bool posOutOfRange;
@@ -62,7 +65,9 @@ void main() {
       );
     });
 
-    test('fires AssertionError on out-of-range positionConfidence (1.5) via bare impl', () {
+    test(
+        'fires AssertionError on out-of-range positionConfidence (1.5) via bare impl',
+        () {
       final bad = _NaNConfBlock(posOutOfRange: true);
       expect(
         () => OverlapResolver.qualityScore(bad),

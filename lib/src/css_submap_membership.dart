@@ -20,7 +20,7 @@ class CssSubmapMembership implements SubmapMembership {
 
   /// Creates a CSS-topology submap membership strategy.
   const CssSubmapMembership({this.regionSize = 500})
-    : assert(regionSize > 0, 'regionSize must be positive');
+      : assert(regionSize > 0, 'regionSize must be positive');
 
   @override
   SpaceKey spaceKeyFor(TrackedBlock block) {

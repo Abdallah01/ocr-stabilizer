@@ -65,7 +65,9 @@ void main() {
       // §7 risks as a convention-only protection.)
     });
 
-    test('BandFallbackStats has private constructor; only Internal can construct', () {
+    test(
+        'BandFallbackStats has private constructor; only Internal can construct',
+        () {
       // Compile-time test: BandFallbackStats() (the public ctor) does not exist —
       // BandFallbackStats has only a private constructor `._()`. The only public
       // construction path is via BandFallbackStatsInternal() which calls super._().

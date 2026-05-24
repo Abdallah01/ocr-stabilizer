@@ -23,7 +23,9 @@ DefaultTrackedBlock<Object> _block(String text,
     );
 
 void main() {
-  group('StabilizationEngine band — predicate injection + default closure (#20)', () {
+  group(
+      'StabilizationEngine band — predicate injection + default closure (#20)',
+      () {
     test('custom spatialConfirm is invoked with (fresh, candidate)', () {
       final calls = <(String, String)>[];
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
@@ -37,7 +39,8 @@ void main() {
           },
         ),
       );
-      engine.stabilize([_block('hello world', left: 0, top: 0, observationCount: 5)]);
+      engine.stabilize(
+          [_block('hello world', left: 0, top: 0, observationCount: 5)]);
       engine.stabilize([_block('hxlxo wxrxd', left: 0, top: 0)]);
 
       expect(calls, isNotEmpty);
@@ -46,7 +49,9 @@ void main() {
       expect(calls.first.$2, 'hello world');
     });
 
-    test('default closure: identical rect → predicate passes (overlapRatio = 1.0)', () {
+    test(
+        'default closure: identical rect → predicate passes (overlapRatio = 1.0)',
+        () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
         bandFallback: const BandFallbackConfig(
@@ -55,14 +60,18 @@ void main() {
           // spatialConfirm: null → engine uses default drift-aware closure
         ),
       );
-      engine.stabilize([_block('hello world', left: 0, top: 0, observationCount: 5)]);
+      engine.stabilize(
+          [_block('hello world', left: 0, top: 0, observationCount: 5)]);
       engine.stabilize([_block('hxlxo wxrxd', left: 0, top: 0)]);
 
       expect(engine.bandStats.matchesAdmitted, 1,
-          reason: 'default closure accepts identical-rect overlap (1.0 >= 0.80)');
+          reason:
+              'default closure accepts identical-rect overlap (1.0 >= 0.80)');
     });
 
-    test('default closure: non-overlapping rects → predicate rejects (or candidate filtered)', () {
+    test(
+        'default closure: non-overlapping rects → predicate rejects (or candidate filtered)',
+        () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
         bandFallback: const BandFallbackConfig(
@@ -70,7 +79,8 @@ void main() {
           candidateObservationFloor: 1,
         ),
       );
-      engine.stabilize([_block('hello world', left: 0, top: 0, observationCount: 5)]);
+      engine.stabilize(
+          [_block('hello world', left: 0, top: 0, observationCount: 5)]);
       // Fresh at far-away position — overlapRatio = 0.0. The spatial index
       // may filter the seed out before the band loop sees it (different cell);
       // if so, candidatesConsidered stays at 0. Either way, no admission.

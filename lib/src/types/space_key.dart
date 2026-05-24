@@ -10,7 +10,7 @@ extension type const SpaceKey(String _raw) {
 
   /// Key for an inner-scroller container region.
   SpaceKey.ic(ContainerId containerId, int regionIndex)
-    : _raw = 'ic:${containerId.hash}:$regionIndex';
+      : _raw = 'ic:${containerId.hash}:$regionIndex';
 
   /// Sentinel for blocks whose coordinate space is indeterminate.
   SpaceKey.unknown() : _raw = 'unknown:0';

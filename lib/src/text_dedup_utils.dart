@@ -184,7 +184,7 @@ class TextDedupUtils {
   /// Useful when you need both the decision and the metrics for logging
   /// without recomputation.
   static ({bool match, double levenshtein, double jaccard})
-  isTextSimilarWithScores(
+      isTextSimilarWithScores(
     String a,
     String b, {
     double levenshteinThreshold = 0.70,
@@ -195,8 +195,7 @@ class TextDedupUtils {
       return (match: false, levenshtein: 0.0, jaccard: 0.0);
     }
     final scores = computeTextSimilarity(a, b);
-    final match =
-        scores.levenshtein >= levenshteinThreshold ||
+    final match = scores.levenshtein >= levenshteinThreshold ||
         scores.jaccard >= jaccardThreshold;
     return (
       match: match,

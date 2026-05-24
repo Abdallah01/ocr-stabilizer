@@ -27,7 +27,8 @@ void main() {
       );
     });
 
-    test('primaryMatchesAdmitted ticks when fresh matches an existing block', () {
+    test('primaryMatchesAdmitted ticks when fresh matches an existing block',
+        () {
       // Seed an existing block. The seed call reaches _findMatch with an
       // empty spatial index — no candidates, no match — so primaryRejected
       // ticks per the spec invariant
@@ -40,7 +41,8 @@ void main() {
 
       expect(engine.bandStats.primaryMatchesAdmitted, 1);
       expect(engine.bandStats.primaryMatchesRejected, 1,
-          reason: 'seed call had no candidates → rejected; second call admitted');
+          reason:
+              'seed call had no candidates → rejected; second call admitted');
       expect(engine.bandStats.candidatesConsidered, 0,
           reason: 'off mode does zero band work');
     });
@@ -61,7 +63,8 @@ void main() {
       expect(engine.bandStats.candidatesConsidered, 0);
     });
 
-    test('bandStats getter returns BandFallbackStats supertype (not Internal)', () {
+    test('bandStats getter returns BandFallbackStats supertype (not Internal)',
+        () {
       // Compile-time check that the getter's return type is the supertype
       // and not the Internal subclass — consumers can't see mutators.
       final stats = engine.bandStats;

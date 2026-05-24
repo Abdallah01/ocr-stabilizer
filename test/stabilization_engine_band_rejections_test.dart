@@ -31,7 +31,8 @@ void main() {
         ),
       );
       // Seed candidate with observationCount: 1 — below floor 2.
-      engine.stabilize([_block('hello world', left: 0, top: 0, observationCount: 1)]);
+      engine.stabilize(
+          [_block('hello world', left: 0, top: 0, observationCount: 1)]);
       // Fresh band-similar observation at identical rect.
       engine.stabilize([_block('hxlxo wxrxd', left: 0, top: 0)]);
 
@@ -40,7 +41,8 @@ void main() {
       expect(engine.bandStats.matchesAdmitted, 0);
     });
 
-    test('rejected by spatialConfirm (custom predicate always returns false)', () {
+    test('rejected by spatialConfirm (custom predicate always returns false)',
+        () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
         bandFallback: BandFallbackConfig(
@@ -49,7 +51,8 @@ void main() {
           spatialConfirm: (TrackedBlock a, TrackedBlock b) => false,
         ),
       );
-      engine.stabilize([_block('hello world', left: 0, top: 0, observationCount: 5)]);
+      engine.stabilize(
+          [_block('hello world', left: 0, top: 0, observationCount: 5)]);
       engine.stabilize([_block('hxlxo wxrxd', left: 0, top: 0)]);
 
       expect(engine.bandStats.rejectedSpatial, 1);
@@ -65,7 +68,8 @@ void main() {
           candidateObservationFloor: 1,
         ),
       );
-      engine.stabilize([_block('hello world', left: 0, top: 0, observationCount: 5)]);
+      engine.stabilize(
+          [_block('hello world', left: 0, top: 0, observationCount: 5)]);
       // Fresh text totally different — fails both primary AND band text floors.
       // Use a 10-char string with zero significant-char overlap with 'hello world'.
       engine.stabilize([_block('XXXXXXXXXX', left: 0, top: 0)]);

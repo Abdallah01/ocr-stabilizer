@@ -32,8 +32,8 @@ enum BandFallbackMode {
 /// the engine's existing predicate-injection seam — two [TrackedBlock]
 /// arguments, no engine-internal types (`SpaceKey`, `DriftTracker`)
 /// leaked into public signatures.
-typedef BandSpatialPredicate =
-    bool Function(TrackedBlock fresh, TrackedBlock candidate);
+typedef BandSpatialPredicate = bool Function(
+    TrackedBlock fresh, TrackedBlock candidate);
 
 /// Configuration for the band-relaxed fallback path inside
 /// `StabilizationEngine._findMatch`.
@@ -111,11 +111,9 @@ class BandFallbackConfig {
     this.spatialConfirm,
   })  : candidateObservationFloor =
             candidateObservationFloor ?? (provisionalCaptures + 1),
-        assert(
-            bandLevenshteinFloor >= 0.0 && bandLevenshteinFloor < 0.70,
+        assert(bandLevenshteinFloor >= 0.0 && bandLevenshteinFloor < 0.70,
             'bandLevenshteinFloor must be in [0.0, 0.70)'),
-        assert(
-            bandJaccardFloor >= 0.0 && bandJaccardFloor < 0.80,
+        assert(bandJaccardFloor >= 0.0 && bandJaccardFloor < 0.80,
             'bandJaccardFloor must be in [0.0, 0.80)'),
         assert(
             // `??` is required: in this init-list position
@@ -125,6 +123,5 @@ class BandFallbackConfig {
             // error under null safety.
             (candidateObservationFloor ?? (provisionalCaptures + 1)) >= 0,
             'candidateObservationFloor must be >= 0'),
-        assert(provisionalCaptures >= 1,
-            'provisionalCaptures must be >= 1');
+        assert(provisionalCaptures >= 1, 'provisionalCaptures must be >= 1');
 }

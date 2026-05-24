@@ -24,8 +24,8 @@ import 'observable_block.dart';
 /// - `sourceQuality` → consumer-specific (e.g. map to enum)
 ///
 /// Omitting fields causes state drift between engine and consumer.
-typedef BlockMerger<T extends ObservableBlock<P>, P> =
-    T Function(T existing, T fresh, MergeResult merge);
+typedef BlockMerger<T extends ObservableBlock<P>, P> = T Function(
+    T existing, T fresh, MergeResult merge);
 
 /// Type of contradiction detected between fresh and cached blocks.
 enum ContradictionType {
@@ -62,9 +62,9 @@ class ContradictionEvent<T> {
     required this.target,
     required this.evidence,
   }) : assert(
-         evidence.length >= 2,
-         'contradiction requires >= 2 evidence blocks',
-       );
+          evidence.length >= 2,
+          'contradiction requires >= 2 evidence blocks',
+        );
 }
 
 /// Output of a single [StabilizationEngine.merge] call.
