@@ -34,14 +34,15 @@ dependencies:
 > the `PositionConfidence.from` / `TextConfidence.from` factories.
 >
 > **0.4.0 introduced the band-fallback path** — see
-> [`BandFallbackConfig`](#bandfallback-the-band-relaxed-matching-path) below.
+> [`BandFallbackConfig`](#bandfallback-the-band-relaxed-matching-path) below
+> (the heading uses `:` instead of em-dash so the anchor slug stays simple).
 > Default `BandFallbackMode.off` keeps the upgrade backwards-compatible.
 >
 > **0.4.0 also tightened Confidence validation** — `stabilize()`, `merge()`,
 > and `DefaultTrackedBlock`'s ctor now throw `ArgumentError` on NaN or
 > out-of-`[0.0, 1.0]` confidences. Consumers going through `.from()`
-> factories were already covered. See the [CHANGELOG](CHANGELOG.md#040)
-> for migration details.
+> factories were already covered. See the
+> [CHANGELOG](CHANGELOG.md#040---2026-05-23) for migration details.
 
 ## Getting Started
 
@@ -75,7 +76,7 @@ See [`example/example.dart`](example/example.dart) for a runnable version.
 For app-specific block types not covered by `DefaultTrackedBlock`, implement
 `TrackedBlock<T>` directly — see the next section.
 
-### BandFallback — the band-relaxed matching path
+### BandFallback: the band-relaxed matching path
 
 OCR jitter — one character flipped or one ligature mis-segmented — can drop a
 stable block below the primary text-similarity floor for a single frame.
@@ -89,12 +90,17 @@ final engine = StabilizationEngine<DefaultTrackedBlock<MyPayload>, MyPayload>(
   bandFallback: const BandFallbackConfig(mode: BandFallbackMode.observeOnly),
 );
 
-// After a few captures, inspect the counters before flipping to admit:
+// After a few captures, inspect the counters before flipping to admit.
+// Note: in observeOnly mode the band loop scans EVERY qualifying
+// candidate per fresh observation; admit mode early-exits on first
+// match, so observeOnly counters are an upper bound on what admit
+// will produce, not an exact estimate.
 final s = engine.bandStats;
-print('primary admits: ${s.primaryMatchesAdmitted}, '
-      'primary misses: ${s.primaryMatchesRejected}, '
-      'band would-admit ratio: '
-      '${s.bandMatchesIdentified / (s.primaryMatchesRejected.clamp(1, 1 << 30))}');
+print('primary admits=${s.primaryMatchesAdmitted}, '
+      'primary misses=${s.primaryMatchesRejected}, '
+      'band would-admit=${s.bandMatchesIdentified}, '
+      'rejected text-band=${s.rejectedTextBand}, '
+      'rejected obs-floor=${s.rejectedCandidateFloor}');
 ```
 
 Recommended adoption flow: `off` → `observeOnly` (read counters) →
