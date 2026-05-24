@@ -54,9 +54,12 @@ enum BandFallbackMode {
 /// ```
 ///
 /// **Throwing contract**: predicates must not throw. If a consumer
-/// predicate does throw, the engine wraps the error in a
-/// [BandPredicateException] and rethrows out of `stabilize()` — predicate
-/// failures are surfaced, not swallowed.
+/// predicate does throw, the engine catches the error, wraps it in a
+/// new [BandPredicateException], and throws that out of `stabilize()` —
+/// predicate failures are surfaced, not swallowed. Note this is a
+/// rewrap (a fresh throw), not a `rethrow`: the original predicate
+/// call-site stack lives on the exception's [BandPredicateException.predicateStackTrace]
+/// field, not on the catch's `StackTrace` parameter.
 typedef BandSpatialPredicate = bool Function(
     TrackedBlock fresh, TrackedBlock candidate);
 
@@ -75,8 +78,11 @@ typedef BandSpatialPredicate = bool Function(
 /// ```
 ///
 /// [cause] preserves the original exception; [predicateStackTrace]
-/// preserves the original predicate call-site stack so debugging is
-/// not lost when this gets rethrown.
+/// preserves the original predicate call-site stack so debugging
+/// information is not lost when the engine rewraps the throw. The
+/// outer catch's `StackTrace` parameter reflects the
+/// `throw BandPredicateException(...)` site inside `_findMatch`, not
+/// the predicate call site — use [predicateStackTrace] for that.
 // `implements` (not `extends Error`) is intentional: extending Error would
 // capture a new stack at construction time, discarding the predicate's
 // original call-site trace that we want to surface.

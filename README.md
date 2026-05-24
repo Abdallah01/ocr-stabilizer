@@ -22,14 +22,26 @@ adapts SLAM techniques to the OCR domain.
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^0.3.0
+  ocr_stabilizer: ^0.5.0
 ```
 
-> **0.3.0 is a breaking change** from 0.2.x — `ObservableBlock` dropped the
-> inert `exclusionHitCount` member, and `PositionConfidence.from` /
-> `TextConfidence.from` now throw `ArgumentError` (previously `assert`-only,
-> stripped in release). See the [CHANGELOG](CHANGELOG.md#030) for the full
-> migration.
+> **What's new in 0.5.0** — additive surface only; safe upgrade from 0.4.x:
+> a typed `BandPredicateException` surfaces consumer-supplied predicate
+> throws instead of swallowing them, a new `rejectedTextBand` counter
+> makes the band funnel decomposable, and an internal
+> `assertConfidenceRange` utility centralises the `[0.0, 1.0]` check
+> across `DefaultTrackedBlock`, `MergeResult`, the engine guards, and
+> the `PositionConfidence.from` / `TextConfidence.from` factories.
+>
+> **0.4.0 introduced the band-fallback path** — see
+> [`BandFallbackConfig`](#bandfallback-the-band-relaxed-matching-path) below.
+> Default `BandFallbackMode.off` keeps the upgrade backwards-compatible.
+>
+> **0.4.0 also tightened Confidence validation** — `stabilize()`, `merge()`,
+> and `DefaultTrackedBlock`'s ctor now throw `ArgumentError` on NaN or
+> out-of-`[0.0, 1.0]` confidences. Consumers going through `.from()`
+> factories were already covered. See the
+> [CHANGELOG](CHANGELOG.md#040---2026-05-23) for migration details.
 
 ## Getting Started
 
@@ -62,6 +74,45 @@ See [`example/example.dart`](example/example.dart) for a runnable version.
 
 For app-specific block types not covered by `DefaultTrackedBlock`, implement
 `TrackedBlock<T>` directly — see the next section.
+
+### BandFallback: the band-relaxed matching path
+
+OCR jitter — one character flipped or one ligature mis-segmented — can drop a
+stable block below the primary text-similarity floor for a single frame.
+`BandFallbackConfig` opens a relaxed second-pass match path so spatially-
+unambiguous blocks don't "blink off and back on."
+
+```dart
+final engine = StabilizationEngine<DefaultTrackedBlock<MyPayload>, MyPayload>(
+  merger: (existing, fresh, merge) => existing.applyMerge(merge),
+  // Opt in: start in observeOnly to read counters, then flip to admit.
+  bandFallback: const BandFallbackConfig(mode: BandFallbackMode.observeOnly),
+);
+
+// After a few captures, inspect the counters before flipping to admit.
+// Note: in admit mode, once a band candidate is locked for a fresh
+// observation, subsequent candidates skip band evaluation — so
+// candidatesConsidered is mode-variant (observeOnly will show a higher
+// figure). The funnel terms (rejectedCandidateFloor + rejectedSpatial
+// + rejectedTextBand + bandMatchesIdentified == candidatesConsidered)
+// are themselves mode-invariant — every term ticks before the
+// early-exit fires.
+final s = engine.bandStats;
+print('primary admits=${s.primaryMatchesAdmitted}, '
+      'primary misses=${s.primaryMatchesRejected}, '
+      'candidates considered=${s.candidatesConsidered}, '
+      'band would-admit=${s.bandMatchesIdentified}, '
+      'rejected obs-floor=${s.rejectedCandidateFloor}, '
+      'rejected spatial=${s.rejectedSpatial}, '
+      'rejected text-band=${s.rejectedTextBand}, '
+      'matches admitted=${s.matchesAdmitted}');
+```
+
+Recommended adoption flow for callers that want band coverage: ship with
+`off` (the default — a `^0.5.0` upgrade is a no-op), switch to
+`observeOnly` to read the counters in production, then flip to `admit`
+once the ratios justify it. Staying on `off` permanently is also valid —
+it disables the band path entirely and pays no extra cost.
 
 ## Core Components
 
@@ -209,6 +260,16 @@ A block's identity is a six-dimensional signature:
 | `RobustStats` | Robust statistics (median, MAD, IQR) |
 | `IqrOutlier` | Tukey-fence outlier detection |
 | `TextDedupUtils` | Levenshtein, Jaccard, CJK detection helpers |
+
+### BandFallback (v0.4.0+)
+
+| Type | Purpose |
+|------|---------|
+| `BandFallbackConfig` | Configures the band-relaxed matching path. Default `mode: off`. |
+| `BandFallbackMode` | `off` (no band loop) / `observeOnly` (counters only) / `admit` (production). |
+| `BandFallbackStats` | Read-only per-capture telemetry exposed via `engine.bandStats`. |
+| `BandSpatialPredicate` | Optional `bool Function(TrackedBlock fresh, TrackedBlock candidate)` injection. `null` → engine substitutes a drift-aware `overlapRatio >= 0.80` closure. |
+| `BandPredicateException` | Typed wrapper for consumer-predicate throws (v0.5.0+) — caught and rewrapped by the engine so failures surface with a typed shape, never swallowed. Original predicate stack lives on `predicateStackTrace`. |
 
 ### Reference Implementations
 
