@@ -507,5 +507,46 @@ void main() {
       final block = _makeBlock(left: 100, top: 100);
       expect(() => index.remove(block), returnsNormally);
     });
+
+    // ┌─────────────────────────────────────────────────────────────────────┐
+    // │ Candidate De-duplication (v0.5.1)                                   │
+    // └─────────────────────────────────────────────────────────────────────┘
+
+    test('dual-indexed IC block is yielded exactly once for an IC query', () {
+      final index = SpatialBlockIndex<_TestBlock>();
+      index.updateBucketSizes(viewportWidth: 1000, viewportHeight: 1000);
+
+      // IC block with innerScrollerTop 0: reachable from both its
+      // page-absolute cell and its "ic:" cell for an IC query block.
+      final cached = _makeBlock(
+        left: 100,
+        top: 100,
+        isInnerScrollerChild: true,
+        containerId: const ContainerId('c1'),
+      );
+      index.add(cached);
+
+      final fresh = _makeBlock(
+        left: 102,
+        top: 101,
+        isInnerScrollerChild: true,
+        containerId: const ContainerId('c1'),
+      );
+
+      final hits = index.candidates(fresh).where((b) => identical(b, cached));
+      expect(hits, hasLength(1));
+    });
+
+    test('normal blocks are yielded exactly once', () {
+      final index = SpatialBlockIndex<_TestBlock>();
+      index.updateBucketSizes(viewportWidth: 1000, viewportHeight: 1000);
+
+      final cached = _makeBlock(left: 100, top: 100);
+      index.add(cached);
+
+      final fresh = _makeBlock(left: 105, top: 102);
+      final hits = index.candidates(fresh).where((b) => identical(b, cached));
+      expect(hits, hasLength(1));
+    });
   });
 }

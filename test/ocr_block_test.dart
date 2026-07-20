@@ -102,5 +102,35 @@ void main() {
       );
       expect(block.lines, isEmpty);
     });
+
+    test('NaN confidence is stored as null, not NaN (v0.5.1)', () {
+      // nan.clamp(0.0, 1.0) returns NaN in Dart, so the pre-0.5.1 clamp
+      // let NaN through despite the documented "clamped" contract.
+      final block = OcrBlock(
+        boundingBox: const Rect.fromLTRB(0, 0, 100, 50),
+        text: 'abc',
+        lines: const [],
+        confidence: double.nan,
+      );
+      expect(block.confidence, isNull);
+    });
+
+    test('infinite confidences still clamp to the range bounds', () {
+      final posInf = OcrBlock(
+        boundingBox: const Rect.fromLTRB(0, 0, 100, 50),
+        text: 'abc',
+        lines: const [],
+        confidence: double.infinity,
+      );
+      expect(posInf.confidence, 1.0);
+
+      final negInf = OcrBlock(
+        boundingBox: const Rect.fromLTRB(0, 0, 100, 50),
+        text: 'abc',
+        lines: const [],
+        confidence: double.negativeInfinity,
+      );
+      expect(negInf.confidence, 0.0);
+    });
   });
 }

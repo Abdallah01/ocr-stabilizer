@@ -1,5 +1,6 @@
 import 'dart:ui' show Rect;
 
+import 'internal/cjk_ideographs.dart';
 import 'ocr_block.dart';
 
 // =============================================================================
@@ -160,8 +161,8 @@ double computeTextConfidenceRaw(
 /// - CJK Extension A (U+3400–U+4DBF)
 /// - CJK Compatibility Ideographs (U+F900–U+FAFF)
 /// - CJK Extension B (U+20000–U+2A6DF)
-bool isCjkIdeograph(int rune) =>
-    (rune >= 0x4e00 && rune <= 0x9fff) ||
-    (rune >= 0x3400 && rune <= 0x4dbf) ||
-    (rune >= 0xf900 && rune <= 0xfaff) ||
-    (rune >= 0x20000 && rune <= 0x2a6df);
+///
+/// Delegates to the shared internal predicate also used by
+/// `TextDedupUtils`, so confidence scoring and dedup agree on what
+/// counts as CJK.
+bool isCjkIdeograph(int rune) => isCjkIdeographRune(rune);

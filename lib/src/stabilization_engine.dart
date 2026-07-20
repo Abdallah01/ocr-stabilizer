@@ -236,6 +236,15 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// before this method returns — callers no longer rebuild it after each
   /// [stabilize] call (#13).
   ///
+  /// **Known limitation:** the rebuild replaces the index with *only* this
+  /// call's `stableBlocks`. A tracked block that is not re-observed in a
+  /// capture (OCR miss, glare, occlusion) leaves the index and, if it
+  /// reappears later, is treated as new — its observation history is not
+  /// recovered. Blocks the app inserts into [spatialIndex] between calls
+  /// are likewise dropped at the next [stabilize]. Preserving identity
+  /// across missed frames requires an engine-level cache-merge redesign,
+  /// tracked for 0.6.0 (see `doc/audit/2026-07-20-package-audit.md`, §1.1).
+  ///
   /// Throws [ArgumentError] if any observation carries an invalid (NaN or
   /// out-of-range) [PositionConfidence] or [TextConfidence] value (#27).
   StabilizationResult<T> stabilize(List<T> freshBlocks) {
@@ -462,7 +471,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final shouldRunBand = bandFallback.mode != BandFallbackMode.off;
 
     T? primaryMatch;
-    double bestPrimarySim = 0.0;
+    // Seeded below any reachable score so a candidate admitted purely via
+    // the Jaccard arm with Levenshtein 0.0 (e.g. short reordered CJK,
+    // "北京" vs "京北") still registers as the primary match instead of
+    // being silently dropped by the strict `>` comparison.
+    double bestPrimarySim = -1.0;
     T? bandAdmitted;
 
     for (final candidate in candidates) {

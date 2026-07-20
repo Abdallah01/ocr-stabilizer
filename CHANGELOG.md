@@ -1,3 +1,68 @@
+## 0.5.1 - 2026-07-20
+
+Bug-fix release driven by the v0.5.0 package audit
+(`doc/audit/2026-07-20-package-audit.md` in the repository). No API
+changes — `^0.5.0` consumers resolve `0.5.1` automatically.
+
+### Fixed
+- `SpatialBlockIndex.candidates()` now deduplicates yielded blocks by
+  object identity, matching `allBlocks` / `blocksInRegion`. Previously a
+  dual-indexed IC block reachable from both its page-absolute cell and
+  its `ic:` cell was yielded twice to an IC query — running the full
+  Levenshtein comparison twice per duplicate and double-ticking the
+  `BandFallbackStats` funnel counters (`candidatesConsidered`,
+  `rejectedSpatial`, `rejectedTextBand`, and in observeOnly
+  `bandMatchesIdentified`) that consumers are told to read before
+  flipping to `admit`.
+- `StabilizationEngine` primary matching no longer drops a candidate
+  admitted purely through the Jaccard arm with a Levenshtein score of
+  0.0 (full character reordering, e.g. a two-character OCR segment swap
+  like `北京` → `京北`). The best-candidate scan seeded its comparison
+  at 0.0 with a strict `>`, so such a match never registered and the
+  observation spawned a duplicate block instead of merging.
+- `OcrBlock` now stores a NaN `confidence` as `null` (unavailable). The
+  documented clamp could not contain NaN — in IEEE-754,
+  `nan.clamp(0.0, 1.0)` returns NaN — so NaN leaked to any consumer
+  reading `confidence` directly. Infinite values still clamp to the
+  range bounds.
+- Unified the package's two divergent CJK-ideograph definitions into one
+  shared predicate (`lib/src/internal/cjk_ideographs.dart`). The dedup
+  utilities (`cjkOnly`, `cjkFraction`, significant-char extraction)
+  omitted CJK Extension B (U+20000–U+2A6DF) while the confidence
+  heuristic included it, so text consisting only of Extension-B
+  ideographs produced an empty significant-char list and could never
+  text-dedup. `TextDedupUtils` and `isCjkIdeograph` now agree.
+
+### Documentation
+- `StabilizationEngine.stabilize` documents the index-rebuild
+  limitation: blocks not re-observed in a capture leave the spatial
+  index and re-enter as new; app-inserted blocks are dropped at the next
+  call. The cache-merge redesign is tracked for 0.6.0.
+- `classifyGroups` documents its silent fallbacks (degenerate
+  `imageToLayoutScale` → identity CSS-per-px; near-singular container
+  transform → untransformed rect) and the actual `positionLookup` throw
+  contract (caught, neutral stability — previously documented as "must
+  not throw").
+- `SpatialBlockIndex.blocksInRegion` documents the center-cell +
+  1-cell-margin lookup limit for oversized blocks; `remove()` documents
+  that cell keys are recomputed from the current rect, so removal after
+  mutation silently no-ops.
+- `TextDedupUtils.containmentRatio` documents the 5,000-rune LCS
+  truncation on the public API (was only on the private helper) and
+  drops a stale internal-caller claim.
+- `RobustStats.madOrFallback` scopes its "never zero or negative"
+  guarantee to positive `minSpread`.
+- `MergeResult.observationCount` documents the provisional-freeze
+  exception (count passes through unchanged while frozen).
+
+### Internal
+- `.pubignore` added: internal process docs (`doc/superpowers/`,
+  `doc/audit/`) no longer ship in the published package archive.
+- Full package audit report at `doc/audit/2026-07-20-package-audit.md`
+  (repository only).
+- First dedicated test file for `TextDedupUtils`
+  (`test/text_dedup_utils_test.dart`). Test count: 297 (was 277).
+
 ## 0.5.0 - 2026-05-24
 
 Quality-polish release. Additive public-API additions plus a latent

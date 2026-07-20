@@ -22,9 +22,15 @@ adapts SLAM techniques to the OCR domain.
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^0.5.0
+  ocr_stabilizer: ^0.5.1
 ```
 
+> **What's new in 0.5.1** — bug-fix release, no API changes: spatial-index
+> candidate de-duplication (band counters no longer double-tick for IC
+> blocks), Jaccard-only primary matches are no longer dropped, `OcrBlock`
+> NaN confidence is stored as null, and the CJK predicate now includes
+> Extension B everywhere. See the [CHANGELOG](CHANGELOG.md#051---2026-07-20).
+>
 > **What's new in 0.5.0** — additive surface only; safe upgrade from 0.4.x:
 > a typed `BandPredicateException` surfaces consumer-supplied predicate
 > throws instead of swallowing them, a new `rejectedTextBand` counter

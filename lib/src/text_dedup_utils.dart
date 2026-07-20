@@ -7,6 +7,8 @@
 
 import 'dart:math' show min, max;
 
+import 'internal/cjk_ideographs.dart';
+
 /// Pure text utilities for the block deduplication pipeline.
 ///
 /// All methods are static and side-effect-free.
@@ -26,26 +28,20 @@ class TextDedupUtils {
 
   /// Extract only CJK Unified Ideograph characters, stripping punctuation,
   /// Latin letters, digits, and whitespace.
+  ///
+  /// Uses the same CJK ranges as [cjkFraction] and `isCjkIdeograph`
+  /// (including Extension B, which lives outside the BMP — hence a rune
+  /// filter rather than a regex character class).
   static String cjkOnly(String s) {
-    return s.replaceAll(
-      RegExp(r'[^\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]'),
-      '',
-    );
+    return String.fromCharCodes(s.runes.where(isCjkIdeographRune));
   }
 
   /// Fraction of [s]'s runes that are CJK Unified Ideographs (0.0–1.0).
   static double cjkFraction(String s) {
     if (s.isEmpty) return 0.0;
     final runes = s.runes;
-    final cjkCount = runes.where(_isCjk).length;
+    final cjkCount = runes.where(isCjkIdeographRune).length;
     return cjkCount / runes.length;
-  }
-
-  /// Check if a rune is a CJK Unified Ideograph.
-  static bool _isCjk(int c) {
-    return (c >= 0x4e00 && c <= 0x9fff) || // CJK Unified Ideographs
-        (c >= 0x3400 && c <= 0x4dbf) || // CJK Unified Ideographs Extension A
-        (c >= 0xf900 && c <= 0xfaff); // CJK Compatibility Ideographs
   }
 
   /// Significant characters as an ordered list (preserves sequence and
@@ -73,9 +69,7 @@ class TextDedupUtils {
 
   /// Check if a rune is CJK, digit, or ASCII letter.
   static bool _isSignificantChar(int c) {
-    return (c >= 0x4e00 && c <= 0x9fff) || // CJK Unified Ideographs
-        (c >= 0x3400 && c <= 0x4dbf) || // CJK Unified Ideographs Extension A
-        (c >= 0xf900 && c <= 0xfaff) || // CJK Compatibility Ideographs
+    return isCjkIdeographRune(c) ||
         (c >= 0x30 && c <= 0x39) || // 0-9
         (c >= 0x41 && c <= 0x5a) || // A-Z
         (c >= 0x61 && c <= 0x7a); // a-z
@@ -213,8 +207,9 @@ class TextDedupUtils {
   /// Returns `lcsLength / inner.runes.length` (0.0–1.0).
   /// A ratio ≥ 0.80 indicates a subset relationship.
   ///
-  /// O(n×m) but only called during provisional cluster expiry on 2–3
-  /// blocks with 50–200 character strings. Negligible cost.
+  /// O(n×m) time, O(min(n,m)) space. Inputs beyond 5,000 runes are
+  /// truncated before the LCS computation (an OOM guard against corrupted
+  /// OCR text), so the ratio is approximate for longer strings.
   static double containmentRatio(String inner, String outer) {
     if (inner.isEmpty || outer.isEmpty) return 0.0;
     final a = inner.runes.toList();
