@@ -55,4 +55,33 @@ void main() {
       expect(r2.stableBlocks.single.observationCount, 2);
     });
   });
+
+  group('band Levenshtein floor is inclusive', () {
+    test('a candidate at EXACTLY bandLevenshteinFloor is band-admitted', () {
+      // 'ab' vs 'ax': Levenshtein 1 - 1/2 = 0.5 == the default band
+      // floor, Jaccard 1/3 (below both the primary 0.8 and band 0.6
+      // floors). Primary misses (0.5 < 0.70); only the inclusive `>=`
+      // on the band Levenshtein arm admits. Kills the `>=` → `>`
+      // boundary mutant surviving the post-0.6.0 sweep.
+      final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
+        merger: (existing, fresh, merge) => existing.applyMerge(merge),
+        bandFallback: const BandFallbackConfig(mode: BandFallbackMode.admit),
+      );
+      // Candidate must clear the default candidateObservationFloor (4).
+      engine.spatialIndex.add(DefaultTrackedBlock<void>(
+        absoluteRect: const AbsoluteRect(Rect.fromLTWH(10, 100, 200, 30)),
+        payload: null,
+        originalText: 'ab',
+        observationCount: 4,
+      ));
+
+      final result = engine.stabilize([_block('ax')]);
+
+      expect(engine.bandStats.matchesAdmitted, 1);
+      expect(result.stableBlocks, hasLength(1));
+      expect(result.stableBlocks.single.observationCount, 5);
+      expect(result.stableBlocks.single.isProvisional, isTrue,
+          reason: 'band admissions enter the provisional window');
+    });
+  });
 }

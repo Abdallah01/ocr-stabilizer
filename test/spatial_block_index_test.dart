@@ -537,6 +537,39 @@ void main() {
       expect(hits, hasLength(1));
     });
 
+    test('IC candidate reachable ONLY via the scroller-relative layer', () {
+      // Cached and query IC blocks share the same scroller-RELATIVE Y
+      // (center 35) but live ~500px apart in absolute page space, so
+      // their absolute cells are disjoint — only the "ic:" cell layer
+      // can connect them. Kills mutants that disable or mis-key the IC
+      // second pass in candidates() (post-0.6.0 sweep survivors).
+      final index = SpatialBlockIndex<_TestBlock>();
+      index.updateBucketSizes(viewportWidth: 1000, viewportHeight: 1000);
+
+      final cached = _makeBlock(
+        left: 100,
+        top: 520,
+        isInnerScrollerChild: true,
+        innerScrollerTop: 500,
+        containerId: const ContainerId('c1'),
+      );
+      index.add(cached);
+
+      final query = _makeBlock(
+        left: 100,
+        top: 20,
+        isInnerScrollerChild: true,
+        innerScrollerTop: 0,
+        containerId: const ContainerId('c1'),
+      );
+      expect(index.candidates(query), contains(cached));
+
+      // A non-IC query at the same absolute position must NOT reach it:
+      // the ic: layer is IC-to-IC only.
+      final normalQuery = _makeBlock(left: 100, top: 20);
+      expect(index.candidates(normalQuery), isNot(contains(cached)));
+    });
+
     test('normal blocks are yielded exactly once', () {
       final index = SpatialBlockIndex<_TestBlock>();
       index.updateBucketSizes(viewportWidth: 1000, viewportHeight: 1000);

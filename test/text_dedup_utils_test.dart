@@ -48,9 +48,46 @@ void main() {
       expect(TextDedupUtils.containmentRatio('bcd', 'abcde'), 1.0);
     });
 
+    test('containmentRatio: partial containment uses true LCS length', () {
+      // LCS('abcd', 'abxy') = 'ab' (2) → 2/4 = 0.5. Exercises the DP
+      // recurrence (match and mismatch arms) across multiple rows —
+      // the trivial full-containment case cannot distinguish max from
+      // min in the mismatch arm (mutation survivor, post-0.6.0 sweep).
+      expect(TextDedupUtils.containmentRatio('abcd', 'abxy'), 0.5);
+      // LCS('axbyc', 'abc') = 3, inner has 5 runes → 0.6.
+      expect(
+        TextDedupUtils.containmentRatio('axbyc', 'abc'),
+        closeTo(0.6, 1e-9),
+      );
+    });
+
+    test('containmentRatio: inputs beyond 5000 runes are truncated', () {
+      // 5001 identical runes: the LCS core truncates both sides to
+      // 5000, but the ratio divides by the UNtruncated inner length —
+      // 5000/5001, not 1.0. Pins the documented OOM guard.
+      final long = 'a' * 5001;
+      expect(
+        TextDedupUtils.containmentRatio(long, long),
+        closeTo(5000 / 5001, 1e-12),
+      );
+    });
+
     test('containmentRatio: empty inputs score 0.0', () {
       expect(TextDedupUtils.containmentRatio('', 'abc'), 0.0);
       expect(TextDedupUtils.containmentRatio('abc', ''), 0.0);
+    });
+
+    test('normalizedLevenshtein normalizes by the LONGER length', () {
+      // 'abcd' vs 'ab': distance 2, max length 4 → 1 - 2/4 = 0.5.
+      // Normalizing by the shorter length would give 0.0 (mutation
+      // survivor: max → min in the maxLen computation).
+      expect(TextDedupUtils.normalizedLevenshtein('abcd', 'ab'), 0.5);
+    });
+
+    test('shortHead truncates and passes short strings through', () {
+      expect(TextDedupUtils.shortHead('abcdef', 3), 'abc');
+      expect(TextDedupUtils.shortHead('ab', 3), 'ab');
+      expect(TextDedupUtils.shortHead('abc', 3), 'abc');
     });
   });
 
