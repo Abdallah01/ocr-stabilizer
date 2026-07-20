@@ -85,7 +85,7 @@ class IqrOutlier {
   /// ```dart
   /// final heights = [100.0, 102.0, 105.0, 108.0, 110.0, 112.0, 115.0, 1000.0];
   /// final fence = IqrOutlier.upperFence(heights); // needs ≥4 samples
-  /// // fence ~ 126.5; 1000.0 > fence → is outlier
+  /// // fence = 135.5 (adaptive k = 2.2 at N < 15); 1000.0 > fence → outlier
   /// ```
   static double? upperFence(
     List<double> values, {

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
 // SPDX-License-Identifier: BSD-3-Clause
 
+import 'package:meta/meta.dart' show internal;
+
 /// Per-capture telemetry for the matching path inside `StabilizationEngine`.
 ///
 /// **Core invariant**:
@@ -139,7 +141,9 @@ class BandFallbackStats {
 /// mutate — but this is unsupported and will break without notice. The
 /// engine is the only intended writer. (`@visibleForTesting` was
 /// considered, but the engine itself is the primary writer outside of
-/// tests, which would trip the analyzer.)
+/// tests, which would trip the analyzer.) The `@internal` annotation
+/// makes the analyzer flag any use from outside this package (#53).
+@internal
 class BandFallbackStatsInternal extends BandFallbackStats {
   /// Construct a fresh stats sink with every counter at zero.
   BandFallbackStatsInternal() : super._();

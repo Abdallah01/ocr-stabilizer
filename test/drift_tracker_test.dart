@@ -159,7 +159,7 @@ void main() {
         final block = _makeBlock(top: top, blockHeight: blockHeight);
         tracker.addObservation(block, drift, blockHeight: blockHeight);
       }
-      for (final key in tracker.spaceKeys) {
+      for (final key in tracker.observedKeys) {
         final margin = tracker.driftMarginForKey(key);
         final medianLineHeight = tracker.medianBlockHeightForKey(key);
         expect(margin, lessThanOrEqualTo(medianLineHeight));
@@ -237,7 +237,7 @@ void main() {
       final block = _makeBlock(top: 1000);
       tracker.addObservation(block, const Offset(1, 1));
       tracker.clear();
-      expect(tracker.spaceKeys, isEmpty);
+      expect(tracker.observedKeys, isEmpty);
     });
 
     // ┌─────────────────────────────────────────────────────────────────────┐
@@ -349,7 +349,7 @@ void main() {
 
       tracker.clear();
 
-      expect(tracker.spaceKeys, isEmpty);
+      expect(tracker.observedKeys, isEmpty);
       expect(tracker.medianBlockHeightForKey(key), closeTo(16.0, 0.01));
     });
 
@@ -558,11 +558,11 @@ void main() {
       final block = _makeBlock(top: 100);
       tracker.addObservation(block, const Offset(5, 5));
       final spaceKey = tracker.spaceKeyFor(block);
-      expect(tracker.spaceKeys, contains(spaceKey));
+      expect(tracker.observedKeys, contains(spaceKey));
 
       final removed = tracker.clearKey(spaceKey);
       expect(removed, isTrue);
-      expect(tracker.spaceKeys, isEmpty);
+      expect(tracker.observedKeys, isEmpty);
     });
 
     test('clearKey returns false for non-existent key', () {
@@ -1140,6 +1140,44 @@ void main() {
     test('TrackedBlock<Never> payload throws UnsupportedError', () {
       final block = _makeBlock(top: 100);
       expect(() => block.payload, throwsUnsupportedError);
+    });
+  });
+
+  group('propagation-count lifecycle (#55 / v0.6.0)', () {
+    test('clearKey removes the matching propagation count', () {
+      final tracker = DriftTracker();
+      final key = SpaceKey.normal(0);
+      tracker.recordPropagation(key);
+      tracker.recordPropagation(key);
+      expect(tracker.propagationCountFor(key), 2);
+
+      tracker.clearKey(key);
+      expect(tracker.propagationCountFor(key), 0,
+          reason: 'pre-0.6.0, cleared keys leaked their propagation '
+              'counts for the rest of the session');
+    });
+
+    test('clearSpatialRegion removes counts for intersecting regions', () {
+      final tracker = DriftTracker();
+      final inRange = SpaceKey.normal(1); // region 1 = 500-1000 CSS px
+      final outOfRange = SpaceKey.normal(5);
+      tracker.recordPropagation(inRange);
+      tracker.recordPropagation(outOfRange);
+
+      tracker.clearSpatialRegion(500, 1000);
+      expect(tracker.propagationCountFor(inRange), 0);
+      expect(tracker.propagationCountFor(outOfRange), 1);
+    });
+
+    test('deprecated spaceKeys alias still mirrors observedKeys', () {
+      final tracker = DriftTracker();
+      tracker.addObservation(
+        _makeBlock(top: 100),
+        const Offset(2, 3),
+        blockHeight: 30,
+      );
+      // ignore: deprecated_member_use_from_same_package
+      expect(tracker.spaceKeys.toList(), tracker.observedKeys.toList());
     });
   });
 }

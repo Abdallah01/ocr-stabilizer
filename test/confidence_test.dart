@@ -118,7 +118,9 @@ void main() {
       expect(result, lessThanOrEqualTo(1.0));
     });
 
-    test('mixed confidence (some null) falls back to heuristic', () {
+    test('all-null confidence falls back to heuristic', () {
+      // Renamed in 0.6.0 — this case is ALL-null (the heuristic path);
+      // the genuinely mixed case is covered by the next test (#54).
       final blocks = [
         OcrBlock(
           boundingBox: const Rect.fromLTRB(0, 0, 100, 30),
@@ -135,6 +137,35 @@ void main() {
       ];
       final result = computeTextConfidence(blocks);
       expect(result, greaterThan(0.3));
+    });
+
+    test(
+        'mixed confidence: weighted mean over confident blocks only, '
+        'null-confidence blocks ignored', () {
+      // 4-rune block at 0.8 and 2-rune block at 0.2: weighted mean =
+      // (0.8×4 + 0.2×2) / 6 = 0.6. The null-confidence block contributes
+      // neither weight nor a heuristic component.
+      final blocks = [
+        OcrBlock(
+          boundingBox: const Rect.fromLTRB(0, 0, 100, 30),
+          text: 'abcd',
+          confidence: 0.8,
+          lines: [],
+        ),
+        OcrBlock(
+          boundingBox: const Rect.fromLTRB(0, 30, 100, 60),
+          text: 'ef',
+          confidence: 0.2,
+          lines: [],
+        ),
+        OcrBlock(
+          boundingBox: const Rect.fromLTRB(0, 60, 100, 90),
+          text: 'ignored by the weighted mean',
+          confidence: null,
+          lines: [],
+        ),
+      ];
+      expect(computeTextConfidence(blocks), closeTo(0.6, 1e-9));
     });
   });
 

@@ -23,6 +23,13 @@ enum BandFallbackMode {
   /// Production mode. The full band loop runs and returns the first
   /// candidate that clears every gate. Matches are admitted as
   /// provisional (see [BandFallbackConfig.provisionalCaptures]).
+  ///
+  /// **Ordering caveat:** "first" follows the spatial index's candidate
+  /// iteration order, which derives from hash-map cell ordering and is
+  /// not guaranteed stable across runs. When two candidates in the same
+  /// neighborhood both clear every band gate — rare, since band
+  /// candidates must also pass the spatial confirm against the same
+  /// fresh rect — which one is admitted is unspecified (#53).
   admit,
 }
 

@@ -56,15 +56,26 @@ class ContradictionEvent<T> {
   /// 2+ blocks that prove the contradiction (subdividers or subsumed blocks).
   final List<T> evidence;
 
-  /// Creates a contradiction event. [evidence] must have >= 2 entries.
-  const ContradictionEvent({
+  /// Creates a contradiction event.
+  ///
+  /// Throws [ArgumentError] if [evidence] has fewer than 2 entries — a
+  /// "contradiction" proven by a single block is not a contradiction.
+  /// Uses `throw` (not `assert`) per the package's storage-invariant
+  /// policy (see CONTRIBUTING.md): asserts strip in release builds. This
+  /// cost the constructor its `const`-ability in 0.6.0 (#51).
+  ContradictionEvent({
     required this.type,
     required this.target,
     required this.evidence,
-  }) : assert(
-          evidence.length >= 2,
-          'contradiction requires >= 2 evidence blocks',
-        );
+  }) {
+    if (evidence.length < 2) {
+      throw ArgumentError(
+        'ContradictionEvent invariant: evidence must contain >= 2 blocks '
+        '(got ${evidence.length}). A contradiction is proven by multiple '
+        'agreeing blocks; a single block cannot subdivide or subsume.',
+      );
+    }
+  }
 }
 
 /// Output of a single [StabilizationEngine.merge] call.

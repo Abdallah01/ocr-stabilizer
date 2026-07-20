@@ -21,6 +21,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # @internal annotation on BandFallbackStatsInternal (#53). Constraint
+  # floor matches the meta version pinned by Flutter 3.19.x, the
+  # package's minimum supported Flutter.
+  meta: ^1.11.0
 
 dev_dependencies:
   flutter_test:

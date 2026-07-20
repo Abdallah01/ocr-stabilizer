@@ -80,10 +80,12 @@ class TextDedupUtils {
   /// Returns 1.0 for identical texts, 0.0 for completely different.
   /// Strips punctuation/whitespace before comparison via [significantCharList].
   /// Uses O(min(m,n)) space with single-row DP optimization.
-  static double normalizedLevenshtein(String a, String b) {
-    final seqA = significantCharList(a);
-    final seqB = significantCharList(b);
+  static double normalizedLevenshtein(String a, String b) =>
+      _levenshteinOnLists(significantCharList(a), significantCharList(b));
 
+  /// List-based Levenshtein core, shared so multi-metric callers extract
+  /// significant characters once per string instead of once per metric.
+  static double _levenshteinOnLists(List<int> seqA, List<int> seqB) {
     if (seqA.isEmpty && seqB.isEmpty) return 1.0;
     if (seqA.isEmpty || seqB.isEmpty) return 0.0;
 
@@ -119,9 +121,13 @@ class TextDedupUtils {
   ///
   /// Returns 1.0 for identical character sets, 0.0 for no overlap.
   /// Both empty → 1.0 (vacuously similar).
-  static double jaccardSimilarity(String a, String b) {
-    final setA = significantChars(a);
-    final setB = significantChars(b);
+  static double jaccardSimilarity(String a, String b) =>
+      _jaccardOnLists(significantCharList(a), significantCharList(b));
+
+  /// Set-based Jaccard core over pre-extracted significant-char lists.
+  static double _jaccardOnLists(List<int> listA, List<int> listB) {
+    final setA = listA.toSet();
+    final setB = listB.toSet();
     if (setA.isEmpty && setB.isEmpty) return 1.0;
     if (setA.isEmpty || setB.isEmpty) return 0.0;
     final intersection = setA.intersection(setB).length;
@@ -140,9 +146,13 @@ class TextDedupUtils {
     String a,
     String b,
   ) {
-    final lev = normalizedLevenshtein(a, b);
-    final jac = jaccardSimilarity(a, b);
-    return (levenshtein: lev, jaccard: jac);
+    // Extract once per string and feed both metric cores.
+    final listA = significantCharList(a);
+    final listB = significantCharList(b);
+    return (
+      levenshtein: _levenshteinOnLists(listA, listB),
+      jaccard: _jaccardOnLists(listA, listB),
+    );
   }
 
   /// Unified text similarity check: Levenshtein primary, Jaccard fallback.
@@ -159,14 +169,16 @@ class TextDedupUtils {
     double levenshteinThreshold = 0.70,
     double jaccardThreshold = 0.80,
   }) {
+    // Extract once per string; the empty guard, Levenshtein, and Jaccard
+    // all consume the same lists (pre-0.6.0 each recomputed them).
+    final listA = significantCharList(a);
+    final listB = significantCharList(b);
     // Reject if either string has no significant characters (punctuation-only).
     // Without this guard, two different punctuation-only strings would produce
     // empty sig char lists → normalizedLevenshtein returns 1.0 → false match.
-    if (significantCharList(a).isEmpty || significantCharList(b).isEmpty) {
-      return false;
-    }
-    if (normalizedLevenshtein(a, b) >= levenshteinThreshold) return true;
-    if (jaccardSimilarity(a, b) >= jaccardThreshold) return true;
+    if (listA.isEmpty || listB.isEmpty) return false;
+    if (_levenshteinOnLists(listA, listB) >= levenshteinThreshold) return true;
+    if (_jaccardOnLists(listA, listB) >= jaccardThreshold) return true;
     return false;
   }
 
@@ -184,18 +196,17 @@ class TextDedupUtils {
     double levenshteinThreshold = 0.70,
     double jaccardThreshold = 0.80,
   }) {
+    // Extract once per string; guard and both metrics share the lists.
+    final listA = significantCharList(a);
+    final listB = significantCharList(b);
     // Reject punctuation-only strings (empty sig char lists → false 1.0 match).
-    if (significantCharList(a).isEmpty || significantCharList(b).isEmpty) {
+    if (listA.isEmpty || listB.isEmpty) {
       return (match: false, levenshtein: 0.0, jaccard: 0.0);
     }
-    final scores = computeTextSimilarity(a, b);
-    final match = scores.levenshtein >= levenshteinThreshold ||
-        scores.jaccard >= jaccardThreshold;
-    return (
-      match: match,
-      levenshtein: scores.levenshtein,
-      jaccard: scores.jaccard,
-    );
+    final lev = _levenshteinOnLists(listA, listB);
+    final jac = _jaccardOnLists(listA, listB);
+    final match = lev >= levenshteinThreshold || jac >= jaccardThreshold;
+    return (match: match, levenshtein: lev, jaccard: jac);
   }
 
   /// Measures how much of [inner]'s text appears in [outer] in order.
