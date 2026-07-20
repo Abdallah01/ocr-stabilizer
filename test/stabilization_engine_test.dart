@@ -538,7 +538,7 @@ void main() {
         // The merged rect should NOT be a simple average of (100,50) and (105,55).
         // Drift correction shifts fresh before averaging, so the result should
         // differ from the naive midpoint (102.5, 52.5).
-        final naiveMidTop = (100.0 + 105.0) / 2;
+        const naiveMidTop = (100.0 + 105.0) / 2;
         expect(
           merged.absoluteRect.top != naiveMidTop ||
               merged.absoluteRect.left != (50.0 + 55.0) / 2,

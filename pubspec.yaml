@@ -2,7 +2,7 @@ name: ocr_stabilizer
 description: >-
   Real-time OCR overlay stabilization engine — drift correction,
   spatial indexing, block tracking. Built for Flutter.
-version: 0.5.1
+version: 0.6.0
 homepage: https://github.com/Abdallah01/ocr-stabilizer
 repository: https://github.com/Abdallah01/ocr-stabilizer
 issue_tracker: https://github.com/Abdallah01/ocr-stabilizer/issues
@@ -29,7 +29,9 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  # flutter_lints 6.x requires Dart 3.8; pin to 5.x so dev-deps SDK floor
-  # matches the package SDK floor (^3.3.0) — both downstream users and
-  # contributors on older Flutter channels can `pub get` successfully.
-  flutter_lints: ^5.0.0
+  # Pinned to the newest line that resolves on the package SDK floor
+  # (^3.3.0): flutter_lints 5.x needs Dart 3.5 and 6.x needs 3.8, so
+  # only 4.x lets contributors on Flutter 3.19 run `pub get`. (The 0.6.0
+  # CI floor leg caught the previous ^5.0.0 pin violating exactly this —
+  # its comment claimed 3.3 compatibility it never had, #56.)
+  flutter_lints: ^4.0.0

@@ -16,7 +16,7 @@ void main() {
         () => DefaultTrackedBlock<Object>(
           absoluteRect: rect,
           payload: const Object(),
-          positionConfidence: PositionConfidence(double.nan),
+          positionConfidence: const PositionConfidence(double.nan),
         ),
         throwsA(isA<ArgumentError>()),
       );
@@ -27,7 +27,7 @@ void main() {
         () => DefaultTrackedBlock<Object>(
           absoluteRect: rect,
           payload: const Object(),
-          textConfidence: TextConfidence(double.nan),
+          textConfidence: const TextConfidence(double.nan),
         ),
         throwsA(isA<ArgumentError>()),
       );
@@ -103,7 +103,7 @@ void main() {
         DefaultTrackedBlock<Object>(
           absoluteRect: rect,
           payload: const Object(),
-          positionConfidence: PositionConfidence(double.nan),
+          positionConfidence: const PositionConfidence(double.nan),
         );
         fail('expected ArgumentError');
       } on ArgumentError catch (e) {
@@ -116,7 +116,7 @@ void main() {
         DefaultTrackedBlock<Object>(
           absoluteRect: rect,
           payload: const Object(),
-          textConfidence: TextConfidence(double.nan),
+          textConfidence: const TextConfidence(double.nan),
         );
         fail('expected ArgumentError');
       } on ArgumentError catch (e) {

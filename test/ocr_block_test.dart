@@ -45,16 +45,16 @@ void main() {
   group('OcrBlock', () {
     test('const constructor with all fields', () {
       final block = OcrBlock(
-        boundingBox: Rect.fromLTRB(0, 0, 300, 100),
+        boundingBox: const Rect.fromLTRB(0, 0, 300, 100),
         text: '测试文本',
         confidence: 0.95,
         lines: [
-          OcrLine(
+          const OcrLine(
             boundingBox: Rect.fromLTRB(0, 0, 300, 50),
             text: '测试',
             elements: [],
           ),
-          OcrLine(
+          const OcrLine(
             boundingBox: Rect.fromLTRB(0, 50, 300, 100),
             text: '文本',
             elements: [],
@@ -69,7 +69,7 @@ void main() {
 
     test('confidence defaults to null', () {
       final block = OcrBlock(
-        boundingBox: Rect.fromLTRB(0, 0, 100, 50),
+        boundingBox: const Rect.fromLTRB(0, 0, 100, 50),
         text: 'abc',
         lines: [],
       );
@@ -96,7 +96,7 @@ void main() {
 
     test('empty lines list is valid (flat OCR engines)', () {
       final block = OcrBlock(
-        boundingBox: Rect.fromLTRB(0, 0, 100, 50),
+        boundingBox: const Rect.fromLTRB(0, 0, 100, 50),
         text: 'flat text',
         lines: [],
       );

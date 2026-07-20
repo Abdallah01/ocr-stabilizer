@@ -141,7 +141,7 @@ void main() {
       // Block CSS coords: (50,50)-(100,75), center = (75, 62.5)
       final block = _fakeBlock(const Rect.fromLTRB(100, 100, 200, 150), '测试');
       // Fixed rect covering (0,0)-(200,200) in CSS px
-      final fixedRect = const Rect.fromLTRB(0, 0, 200, 200);
+      const fixedRect = Rect.fromLTRB(0, 0, 200, 200);
 
       final result = classifier.classifyGroups(
         textGroups: [
@@ -159,7 +159,7 @@ void main() {
 
     test('sticky element sets isFromStickyElement', () {
       final block = _fakeBlock(const Rect.fromLTRB(100, 100, 200, 150), '测试');
-      final stickyRect = const Rect.fromLTRB(0, 0, 200, 200);
+      const stickyRect = Rect.fromLTRB(0, 0, 200, 200);
 
       final result = classifier.classifyGroups(
         textGroups: [
@@ -181,7 +181,7 @@ void main() {
       final block = _fakeBlock(const Rect.fromLTRB(100, 100, 300, 200), '测试代码');
       // Exclusion covers right 60%: (90,0)-(200,200)
       // intersection = (90,50)-(150,100) = 60×50 = 3000, overlap = 60%
-      final exclusionRect = const Rect.fromLTRB(90, 0, 200, 200);
+      const exclusionRect = Rect.fromLTRB(90, 0, 200, 200);
 
       final result = classifier.classifyGroups(
         textGroups: [
@@ -199,7 +199,7 @@ void main() {
     test('block <50% inside exclusion rect passes', () {
       final block = _fakeBlock(const Rect.fromLTRB(100, 100, 300, 200), '测试内容');
       // Exclusion covers left 40%: (0,0)-(90,200)
-      final exclusionRect = const Rect.fromLTRB(0, 0, 90, 200);
+      const exclusionRect = Rect.fromLTRB(0, 0, 90, 200);
 
       final result = classifier.classifyGroups(
         textGroups: [
@@ -221,7 +221,7 @@ void main() {
       );
       final block = _fakeBlock(const Rect.fromLTRB(100, 100, 300, 200), '测试代码');
       // 60% overlap — would be dropped at default 0.5 but passes at 0.7
-      final exclusionRect = const Rect.fromLTRB(90, 0, 200, 200);
+      const exclusionRect = Rect.fromLTRB(90, 0, 200, 200);
 
       final result = strictClassifier.classifyGroups(
         textGroups: [
@@ -420,7 +420,7 @@ void main() {
         // center = (50, 62.5)
         final block = _fakeBlock(const Rect.fromLTRB(100, 100, 100, 150), '幻影');
         // Fixed rect covers center
-        final fixedRect = const Rect.fromLTRB(0, 0, 200, 200);
+        const fixedRect = Rect.fromLTRB(0, 0, 200, 200);
 
         final result = classifier.classifyGroups(
           textGroups: [
@@ -488,7 +488,7 @@ void main() {
 
   group('applyInverseTransform', () {
     test('pure translation shifts rect by -tx, -ty', () {
-      final rect = const Rect.fromLTWH(10, 20, 100, 50);
+      const rect = Rect.fromLTWH(10, 20, 100, 50);
       final result = BlockClassifierService.applyInverseTransform(rect, [
         1.0,
         0.0,
@@ -504,7 +504,7 @@ void main() {
     });
 
     test('short matrix returns rect unchanged', () {
-      final rect = const Rect.fromLTWH(10, 20, 100, 50);
+      const rect = Rect.fromLTWH(10, 20, 100, 50);
       final result = BlockClassifierService.applyInverseTransform(rect, [
         1.0,
         0.0,
@@ -513,7 +513,7 @@ void main() {
     });
 
     test('degenerate matrix returns rect unchanged', () {
-      final rect = const Rect.fromLTWH(10, 20, 100, 50);
+      const rect = Rect.fromLTWH(10, 20, 100, 50);
       final result = BlockClassifierService.applyInverseTransform(rect, [
         0.0,
         0.0,
@@ -526,7 +526,7 @@ void main() {
     });
 
     test('2x scale transform produces correct inverse', () {
-      final rect = const Rect.fromLTWH(20, 40, 100, 60);
+      const rect = Rect.fromLTWH(20, 40, 100, 60);
       final result = BlockClassifierService.applyInverseTransform(rect, [
         2.0,
         0.0,

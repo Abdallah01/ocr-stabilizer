@@ -15,7 +15,7 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
 DefaultTrackedBlock<void> _block(String text) {
   return DefaultTrackedBlock<void>(
-    absoluteRect: AbsoluteRect(const Rect.fromLTWH(10, 100, 200, 30)),
+    absoluteRect: const AbsoluteRect(Rect.fromLTWH(10, 100, 200, 30)),
     payload: null,
     originalText: text,
   );

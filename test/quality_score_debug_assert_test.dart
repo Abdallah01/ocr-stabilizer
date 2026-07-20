@@ -25,14 +25,14 @@ class _NaNConfBlock implements TrackedBlock {
 
   @override
   PositionConfidence get positionConfidence {
-    if (posIsNan) return PositionConfidence(double.nan);
+    if (posIsNan) return const PositionConfidence(double.nan);
     if (posOutOfRange) return const PositionConfidence(1.5);
     return const PositionConfidence(0.5);
   }
 
   @override
   TextConfidence get textConfidence =>
-      txtIsNan ? TextConfidence(double.nan) : const TextConfidence(0.5);
+      txtIsNan ? const TextConfidence(double.nan) : const TextConfidence(0.5);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError(

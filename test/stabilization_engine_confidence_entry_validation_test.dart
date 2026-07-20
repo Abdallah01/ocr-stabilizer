@@ -87,7 +87,7 @@ void main() {
         merger: (existing, fresh, m) => existing,
       );
       final bad = _BareTrackedBlock(
-        positionConfidence: PositionConfidence(double.nan),
+        positionConfidence: const PositionConfidence(double.nan),
         textConfidence: const TextConfidence(0.5),
       );
       expect(
@@ -105,7 +105,7 @@ void main() {
       );
       final bad = _BareTrackedBlock(
         positionConfidence: const PositionConfidence(0.5),
-        textConfidence: TextConfidence(double.nan),
+        textConfidence: const TextConfidence(double.nan),
       );
       expect(
         () => bareEngine.stabilize([bad]),
@@ -136,14 +136,14 @@ void main() {
       // -Infinity < 0.0 -> caught by lower-bound check.
       // Locks both branches against accidental removal of the range bounds.
       final posInf = _BareTrackedBlock(
-        positionConfidence: PositionConfidence(double.infinity),
+        positionConfidence: const PositionConfidence(double.infinity),
         textConfidence: const TextConfidence(0.5),
       );
       expect(
           () => bareEngine.stabilize([posInf]), throwsA(isA<ArgumentError>()));
 
       final negInf = _BareTrackedBlock(
-        positionConfidence: PositionConfidence(double.negativeInfinity),
+        positionConfidence: const PositionConfidence(double.negativeInfinity),
         textConfidence: const TextConfidence(0.5),
       );
       expect(
@@ -159,7 +159,7 @@ void main() {
         textConfidence: const TextConfidence(0.5),
       );
       final bad = _BareTrackedBlock(
-        positionConfidence: PositionConfidence(double.nan),
+        positionConfidence: const PositionConfidence(double.nan),
         textConfidence: const TextConfidence(0.5),
       );
       try {
@@ -191,7 +191,7 @@ void main() {
     test('throws when merge() receives fresh with NaN positionConfidence', () {
       final engine = bareEngine();
       final bad = _BareTrackedBlock(
-        positionConfidence: PositionConfidence(double.nan),
+        positionConfidence: const PositionConfidence(double.nan),
         textConfidence: const TextConfidence(0.5),
       );
       final good = _BareTrackedBlock(
@@ -215,7 +215,7 @@ void main() {
       );
       final bad = _BareTrackedBlock(
         positionConfidence: const PositionConfidence(0.5),
-        textConfidence: TextConfidence(double.nan),
+        textConfidence: const TextConfidence(double.nan),
       );
       expect(
         () => engine.merge(good, bad),
@@ -250,7 +250,7 @@ void main() {
     test('throws when merge() receives infinite confidence', () {
       final engine = bareEngine();
       final bad = _BareTrackedBlock(
-        positionConfidence: PositionConfidence(double.infinity),
+        positionConfidence: const PositionConfidence(double.infinity),
         textConfidence: const TextConfidence(0.5),
       );
       final good = _BareTrackedBlock(

@@ -209,7 +209,7 @@ void main() {
       index.add(normalBlock);
       index.add(vrBlock);
 
-      final region = Rect.fromLTWH(0, 0, 500, 500);
+      const region = Rect.fromLTWH(0, 0, 500, 500);
       final blocks = index.blocksInRegion(region).toList();
 
       expect(blocks, contains(normalBlock));
@@ -345,7 +345,7 @@ void main() {
       index.add(block1);
       index.add(block2);
 
-      final region = Rect.fromLTWH(50, 50, 300, 300); // Overlaps block1
+      const region = Rect.fromLTWH(50, 50, 300, 300); // Overlaps block1
       final blocks = index.blocksInRegion(region).toList();
 
       expect(blocks, contains(block1));
@@ -361,7 +361,7 @@ void main() {
       index.add(block1);
       index.add(block2);
 
-      final region = Rect.fromLTWH(50, 50, 200, 200);
+      const region = Rect.fromLTWH(50, 50, 200, 200);
       final blocks = index.blocksInRegion(region).toList();
 
       expect(blocks, contains(block1));
@@ -376,7 +376,7 @@ void main() {
       index.add(block);
 
       // Query a region that spans multiple cells, overlapping the same block
-      final region = Rect.fromLTWH(50, 50, 300, 300);
+      const region = Rect.fromLTWH(50, 50, 300, 300);
       final blocks = index.blocksInRegion(region).toList();
 
       expect(blocks.where((b) => b == block).length, equals(1));

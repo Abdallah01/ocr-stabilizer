@@ -23,7 +23,7 @@ StabilizationEngine<DefaultTrackedBlock<void>, void> _engine({
 }
 
 DefaultTrackedBlock<void> _hello() => DefaultTrackedBlock<void>(
-      absoluteRect: AbsoluteRect(const Rect.fromLTWH(10, 100, 200, 30)),
+      absoluteRect: const AbsoluteRect(Rect.fromLTWH(10, 100, 200, 30)),
       payload: null,
       originalText: 'hello world',
     );

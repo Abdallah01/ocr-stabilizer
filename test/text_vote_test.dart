@@ -10,7 +10,7 @@ void main() {
     test('equal fields compare equal with matching hashCodes', () {
       const a = TextVote(rawText: 'hello', score: 1.5, bestConfidence: 0.9);
       const b = TextVote(rawText: 'hello', score: 1.5, bestConfidence: 0.9);
-      final c = TextVote(
+      const c = TextVote(
         rawText: 'hello',
         score: 0.5 + 1.0,
         bestConfidence: 0.9,
