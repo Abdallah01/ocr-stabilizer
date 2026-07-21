@@ -14,7 +14,7 @@ jobs:
         # leg, a post-3.3 language feature could ship unnoticed (#56).
         flutter-version: ['', '3.19.6']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -35,7 +35,7 @@ jobs:
     # any change to this package. Bump explicitly when retesting.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
