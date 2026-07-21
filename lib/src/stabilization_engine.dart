@@ -248,6 +248,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// [scale] (the visual viewport scale for dedup keys) is only changed
   /// when passed. Throws [ArgumentError] on non-finite or non-positive
   /// arguments; no state is modified when validation fails.
+  ///
+  /// The index's stored blocks are re-keyed under the new bucket
+  /// geometry before this method returns: cell keys are a function of
+  /// bucket size, so changing the size without a rebuild would leave
+  /// every cached block filed under stale cells — unfindable by the
+  /// next [stabilize] at any scroll depth where old and new cell
+  /// coordinates diverge by more than the ±1-neighbor scan
+  /// (PR #61 review).
   void updateViewport({
     required double viewportWidth,
     required double viewportHeight,
@@ -256,10 +264,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     _validatePositiveFinite('viewportWidth', viewportWidth);
     _validatePositiveFinite('viewportHeight', viewportHeight);
     if (scale != null) _validatePositiveFinite('scale', scale);
+    final cached = spatialIndex.allBlocks.toList();
     spatialIndex.updateBucketSizes(
       viewportWidth: viewportWidth,
       viewportHeight: viewportHeight,
     );
+    spatialIndex.rebuild(cached);
     _bucketWidth = spatialIndex.bucketWidth;
     _bucketHeight = spatialIndex.bucketHeight;
     if (scale != null) _scale = scale;
@@ -391,21 +401,28 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // not reset a block's accumulated identity. Matched blocks are
     // consumed (their history lives on in the merged result); expired
     // blocks are dropped along with their miss counter.
+    //
+    // The counter map is REBUILT from the current index contents each
+    // call rather than mutated incrementally: [spatialIndex] is a public
+    // field the app may rebuild, clear, or remove blocks from between
+    // calls, and an incrementally-maintained map would keep strong
+    // references (and stale counts) for every instance that left the
+    // index externally. Rebuilding bounds the map to exactly the
+    // currently-retained set (PR #61 review).
     final retained = <T>[];
     if (missedFrameRetention > 0) {
+      final nextMissCounts = Map<T, int>.identity();
       for (final cached in spatialIndex.allBlocks) {
-        if (matchedExisting.contains(cached)) {
-          _missCounts.remove(cached);
-          continue;
-        }
+        if (matchedExisting.contains(cached)) continue;
         final misses = (_missCounts[cached] ?? 0) + 1;
         if (misses <= missedFrameRetention) {
-          _missCounts[cached] = misses;
+          nextMissCounts[cached] = misses;
           retained.add(cached);
-        } else {
-          _missCounts.remove(cached);
         }
       }
+      _missCounts
+        ..clear()
+        ..addAll(nextMissCounts);
     } else {
       _missCounts.clear();
     }

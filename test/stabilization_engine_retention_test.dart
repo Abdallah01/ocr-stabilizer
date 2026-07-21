@@ -96,5 +96,49 @@ void main() {
       expect(engine.spatialIndex.allBlocks, hasLength(1),
           reason: 'the retained block must remain a match candidate');
     });
+
+    test(
+        'a block removed from the index externally does not keep a stale '
+        'miss count when later re-inserted (PR #61 review)', () {
+      final engine = _engine(retention: 2);
+      final first = engine.stabilize([_hello()]).stableBlocks.single;
+      engine.stabilize(const []); // miss 1 — retained
+
+      // App-side eviction through the public index seam.
+      engine.spatialIndex.remove(first);
+      engine.stabilize(const []); // block absent — its counter must drop
+
+      // App-side re-insertion (e.g. an external cache restoring it).
+      engine.spatialIndex.add(first);
+      engine.stabilize(const []); // must count as miss 1, not miss 3
+      engine.stabilize(const []); // miss 2 — still inside the window
+
+      final r = engine.stabilize([_hello()]);
+      expect(r.stableBlocks.single.observationCount, 2,
+          reason: 'a stale pre-removal miss count would have expired the '
+              'block early and reset its identity');
+    });
+  });
+
+  group('updateViewport re-keys the populated index (PR #61 review)', () {
+    test('cached blocks deep in the page survive a bucket-size change', () {
+      final engine = _engine();
+      // Deep page position: old and new cell coordinates diverge far
+      // beyond the ±1-neighbor scan (y≈3000: cell 15 at 200px buckets
+      // vs cell 25 at 120px buckets).
+      DefaultTrackedBlock<void> deep() => DefaultTrackedBlock<void>(
+            absoluteRect: const AbsoluteRect(Rect.fromLTWH(10, 3000, 200, 30)),
+            payload: null,
+            originalText: 'deep content',
+          );
+      engine.stabilize([deep()]);
+
+      engine.updateViewport(viewportWidth: 1200, viewportHeight: 800);
+
+      final r = engine.stabilize([deep()]);
+      expect(r.stableBlocks.single.observationCount, 2,
+          reason: 'without re-keying, the cached block is filed under '
+              'stale cells and the re-observation spawns a duplicate');
+    });
   });
 }
