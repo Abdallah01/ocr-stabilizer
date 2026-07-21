@@ -132,6 +132,10 @@ class DriftTracker {
   }
 
   /// All space keys with recorded observations.
+  ///
+  /// Identical to [observedKeys]; this older alias is kept for source
+  /// compatibility and will be removed in 1.0 (#53).
+  @Deprecated('Use observedKeys instead — identical value, one name')
   Iterable<SpaceKey> get spaceKeys => _regionDrifts.keys;
 
   /// Debug helper: total observation count across all space keys. For testing only.
@@ -184,12 +188,13 @@ class DriftTracker {
     return margin.clamp(0.0, medianBlockHeightForKey(spaceKey)).toDouble();
   }
 
-  /// Remove a specific space key's observations.
+  /// Remove a specific space key's observations and propagation count.
   ///
   /// Returns true if the key existed and was removed, false if it was a no-op.
   bool clearKey(SpaceKey spaceKey) {
     final hadDrifts = _regionDrifts.remove(spaceKey) != null;
     final hadHeights = _regionBlockHeights.remove(spaceKey) != null;
+    _propagationCounts.remove(spaceKey);
     if (kDebugMode && !hadDrifts && !hadHeights) {
       debugPrint('[DRIFT] clearKey no-op: "$spaceKey" not found');
     }
@@ -213,6 +218,10 @@ class DriftTracker {
       return region >= firstRegion && region <= lastRegion;
     });
     _regionBlockHeights.removeWhere((key, _) {
+      final region = key.regionIndex;
+      return region >= firstRegion && region <= lastRegion;
+    });
+    _propagationCounts.removeWhere((key, _) {
       final region = key.regionIndex;
       return region >= firstRegion && region <= lastRegion;
     });
@@ -262,6 +271,12 @@ class DriftTracker {
     _observationLog.clear();
     _propagationCounts.clear();
   }
+
+  /// Number of drift propagations recorded for [spaceKey] via
+  /// [recordPropagation]. 0 for keys never recorded (or cleared by
+  /// [clearKey] / [clearSpatialRegion] / [clear]).
+  int propagationCountFor(SpaceKey spaceKey) =>
+      _propagationCounts[spaceKey] ?? 0;
 
   /// Record that a regional drift propagation occurred for this space key.
   /// Called by the overlay cache layer after each regional drift propagation.

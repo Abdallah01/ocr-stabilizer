@@ -1,3 +1,152 @@
+## 0.6.0 - 2026-07-20
+
+Audit-driven feature-and-fix release implementing the 0.6.0 roadmap
+(#46–#56). Pre-1.0, behavioral changes take a minor bump: review the
+Breaking section before upgrading from 0.5.x.
+
+### Breaking
+- **`CssSubmapMembership.spaceKeyFor` maps viewport-relative (weight 40)
+  and nested IC+carousel (weight 30) blocks to `SpaceKey.unknown()`**
+  instead of `SpaceKey.normal(...)` (#48). Drift observation and
+  correction are now symmetric: a `position:fixed` header no longer
+  receives the page-scroll submap's median correction it never
+  contributed to. Consumers relying on VR blocks being drift-corrected
+  (unlikely — the correction was categorically wrong) must supply a
+  custom `SubmapMembership`.
+- **`ContradictionEvent`'s constructor is no longer `const` and throws
+  `ArgumentError`** when `evidence` has fewer than 2 entries (#51) —
+  the storage-invariant policy (throw, not assert) now applies here
+  too. Migration: drop `const` from any `ContradictionEvent`
+  constructions (engine-produced events are unaffected).
+- **Contradiction detectors skip the viewport-relative boundary** (#49):
+  `detectGroupingContradictions` ignores VR cached blocks and
+  `detectSplittingContradictions` ignores VR fresh blocks. Near scroll
+  offset 0, healthy sticky headers were reported as "subdivided" by
+  unrelated normal blocks and evicted by consumers.
+- **Batch-NMS key lifecycle** (#50): dedup keys register only for
+  blocks that survive intra-batch NMS, and an evicted block's key
+  retires with it. Dropped blocks no longer fuzzy-suppress later
+  same-neighborhood blocks. Eviction lookup is identity-based —
+  Equatable-style consumer blocks can no longer cause the wrong
+  value-equal element to be replaced.
+- **New direct dependency `meta: ^1.11.0`**; dev-dependency
+  `flutter_lints` moved `^5.0.0` → `^4.0.0` because 5.x requires Dart
+  3.5 and never actually resolved on this package's declared `^3.3.0`
+  floor — caught by the new CI floor leg (#56).
+
+### Added
+- `StabilizationEngine.missedFrameRetention` (#46): opt-in retention
+  window keeping unmatched cached blocks matchable for N further
+  `stabilize()` calls, so a single OCR miss (glare, occlusion) no
+  longer resets a block's accumulated identity. Default `0` preserves
+  0.5.x behavior exactly; retained blocks are never part of
+  `stableBlocks`. The `stabilize()` index-ownership docs now tell one
+  consistent story.
+- `StabilizationEngine.updateViewport(...)` (#52): single validated
+  entry point that recomputes the spatial index's adaptive buckets and
+  adopts the same dimensions for dedup keys. The `bucketWidth` /
+  `bucketHeight` / `scale` setters now throw `ArgumentError` on
+  non-finite or non-positive values.
+- `DriftTracker.propagationCountFor(spaceKey)` — public reader for the
+  counts written via `recordPropagation` (#53).
+- `TextVote` implements `==` / `hashCode` / `toString`, matching the
+  package's other value types (#53).
+- `BandFallbackStatsInternal` is annotated `@internal` — the analyzer
+  now flags downcast-mutation from outside the package (#53).
+
+### Deprecated
+- `DriftTracker.spaceKeys` — use the identical `observedKeys`; removal
+  planned for 1.0 (#53).
+
+### Fixed
+- `DriftTracker.clearKey` / `clearSpatialRegion` now also clear the
+  matching propagation counts, which previously leaked for the rest of
+  the session (#55).
+
+### Performance
+- Text-similarity calls (`isTextSimilar`, `isTextSimilarWithScores`,
+  `computeTextSimilarity`) extract each string's significant-char list
+  once and feed both metric cores — previously up to 6 extractions per
+  comparison (#55).
+
+### Internal
+- CI matrix now tests the declared minimum floor (Flutter 3.19.6)
+  alongside latest stable (#56); Dependabot covers GitHub Actions and
+  pub (#60).
+- Band admission ordering caveat and `String.hashCode` key-stability
+  caveat documented (#53).
+- Test backfill (#54): first dedicated suites for `RobustStats`,
+  `IqrOutlier`, `OverlapResolver`, `BlockKeyGenerator`, `AbsoluteRect`,
+  hierarchy/scroll value types, `CssSubmapMembership`, and `TextVote`;
+  real mixed-confidence coverage for `computeTextConfidence`;
+  regression tests for every fix above. Test count: 504 (was 297),
+  verified on both stable and Flutter 3.19.6.
+
+## 0.5.1 - 2026-07-20
+
+Bug-fix release driven by the v0.5.0 package audit
+(`doc/audit/2026-07-20-package-audit.md` in the repository). No API
+changes — `^0.5.0` consumers resolve `0.5.1` automatically.
+
+### Fixed
+- `SpatialBlockIndex.candidates()` now deduplicates yielded blocks by
+  object identity, matching `allBlocks` / `blocksInRegion`. Previously a
+  dual-indexed IC block reachable from both its page-absolute cell and
+  its `ic:` cell was yielded twice to an IC query — running the full
+  Levenshtein comparison twice per duplicate and double-ticking the
+  `BandFallbackStats` funnel counters (`candidatesConsidered`,
+  `rejectedSpatial`, `rejectedTextBand`, and in observeOnly
+  `bandMatchesIdentified`) that consumers are told to read before
+  flipping to `admit`.
+- `StabilizationEngine` primary matching no longer drops a candidate
+  admitted purely through the Jaccard arm with a Levenshtein score of
+  0.0 (full character reordering, e.g. a two-character OCR segment swap
+  like `北京` → `京北`). The best-candidate scan seeded its comparison
+  at 0.0 with a strict `>`, so such a match never registered and the
+  observation spawned a duplicate block instead of merging.
+- `OcrBlock` now stores a NaN `confidence` as `null` (unavailable). The
+  documented clamp could not contain NaN — in IEEE-754,
+  `nan.clamp(0.0, 1.0)` returns NaN — so NaN leaked to any consumer
+  reading `confidence` directly. Infinite values still clamp to the
+  range bounds.
+- Unified the package's two divergent CJK-ideograph definitions into one
+  shared predicate (`lib/src/internal/cjk_ideographs.dart`). The dedup
+  utilities (`cjkOnly`, `cjkFraction`, significant-char extraction)
+  omitted CJK Extension B (U+20000–U+2A6DF) while the confidence
+  heuristic included it, so text consisting only of Extension-B
+  ideographs produced an empty significant-char list and could never
+  text-dedup. `TextDedupUtils` and `isCjkIdeograph` now agree.
+
+### Documentation
+- `StabilizationEngine.stabilize` documents the index-rebuild
+  limitation: blocks not re-observed in a capture leave the spatial
+  index and re-enter as new; app-inserted blocks are dropped at the next
+  call. The cache-merge redesign is tracked for 0.6.0.
+- `classifyGroups` documents its silent fallbacks (degenerate
+  `imageToLayoutScale` → identity CSS-per-px; near-singular container
+  transform → untransformed rect) and the actual `positionLookup` throw
+  contract (caught, neutral stability — previously documented as "must
+  not throw").
+- `SpatialBlockIndex.blocksInRegion` documents the center-cell +
+  1-cell-margin lookup limit for oversized blocks; `remove()` documents
+  that cell keys are recomputed from the current rect, so removal after
+  mutation silently no-ops.
+- `TextDedupUtils.containmentRatio` documents the 5,000-rune LCS
+  truncation on the public API (was only on the private helper) and
+  drops a stale internal-caller claim.
+- `RobustStats.madOrFallback` scopes its "never zero or negative"
+  guarantee to positive `minSpread`.
+- `MergeResult.observationCount` documents the provisional-freeze
+  exception (count passes through unchanged while frozen).
+
+### Internal
+- `.pubignore` added: internal process docs (`doc/superpowers/`,
+  `doc/audit/`) no longer ship in the published package archive.
+- Full package audit report at `doc/audit/2026-07-20-package-audit.md`
+  (repository only).
+- First dedicated test file for `TextDedupUtils`
+  (`test/text_dedup_utils_test.dart`). Test count: 297 (was 277).
+
 ## 0.5.0 - 2026-05-24
 
 Quality-polish release. Additive public-API additions plus a latent

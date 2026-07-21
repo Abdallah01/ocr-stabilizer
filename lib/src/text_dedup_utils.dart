@@ -7,6 +7,8 @@
 
 import 'dart:math' show min, max;
 
+import 'internal/cjk_ideographs.dart';
+
 /// Pure text utilities for the block deduplication pipeline.
 ///
 /// All methods are static and side-effect-free.
@@ -26,26 +28,20 @@ class TextDedupUtils {
 
   /// Extract only CJK Unified Ideograph characters, stripping punctuation,
   /// Latin letters, digits, and whitespace.
+  ///
+  /// Uses the same CJK ranges as [cjkFraction] and `isCjkIdeograph`
+  /// (including Extension B, which lives outside the BMP — hence a rune
+  /// filter rather than a regex character class).
   static String cjkOnly(String s) {
-    return s.replaceAll(
-      RegExp(r'[^\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]'),
-      '',
-    );
+    return String.fromCharCodes(s.runes.where(isCjkIdeographRune));
   }
 
   /// Fraction of [s]'s runes that are CJK Unified Ideographs (0.0–1.0).
   static double cjkFraction(String s) {
     if (s.isEmpty) return 0.0;
     final runes = s.runes;
-    final cjkCount = runes.where(_isCjk).length;
+    final cjkCount = runes.where(isCjkIdeographRune).length;
     return cjkCount / runes.length;
-  }
-
-  /// Check if a rune is a CJK Unified Ideograph.
-  static bool _isCjk(int c) {
-    return (c >= 0x4e00 && c <= 0x9fff) || // CJK Unified Ideographs
-        (c >= 0x3400 && c <= 0x4dbf) || // CJK Unified Ideographs Extension A
-        (c >= 0xf900 && c <= 0xfaff); // CJK Compatibility Ideographs
   }
 
   /// Significant characters as an ordered list (preserves sequence and
@@ -73,9 +69,7 @@ class TextDedupUtils {
 
   /// Check if a rune is CJK, digit, or ASCII letter.
   static bool _isSignificantChar(int c) {
-    return (c >= 0x4e00 && c <= 0x9fff) || // CJK Unified Ideographs
-        (c >= 0x3400 && c <= 0x4dbf) || // CJK Unified Ideographs Extension A
-        (c >= 0xf900 && c <= 0xfaff) || // CJK Compatibility Ideographs
+    return isCjkIdeographRune(c) ||
         (c >= 0x30 && c <= 0x39) || // 0-9
         (c >= 0x41 && c <= 0x5a) || // A-Z
         (c >= 0x61 && c <= 0x7a); // a-z
@@ -86,10 +80,12 @@ class TextDedupUtils {
   /// Returns 1.0 for identical texts, 0.0 for completely different.
   /// Strips punctuation/whitespace before comparison via [significantCharList].
   /// Uses O(min(m,n)) space with single-row DP optimization.
-  static double normalizedLevenshtein(String a, String b) {
-    final seqA = significantCharList(a);
-    final seqB = significantCharList(b);
+  static double normalizedLevenshtein(String a, String b) =>
+      _levenshteinOnLists(significantCharList(a), significantCharList(b));
 
+  /// List-based Levenshtein core, shared so multi-metric callers extract
+  /// significant characters once per string instead of once per metric.
+  static double _levenshteinOnLists(List<int> seqA, List<int> seqB) {
     if (seqA.isEmpty && seqB.isEmpty) return 1.0;
     if (seqA.isEmpty || seqB.isEmpty) return 0.0;
 
@@ -125,9 +121,13 @@ class TextDedupUtils {
   ///
   /// Returns 1.0 for identical character sets, 0.0 for no overlap.
   /// Both empty → 1.0 (vacuously similar).
-  static double jaccardSimilarity(String a, String b) {
-    final setA = significantChars(a);
-    final setB = significantChars(b);
+  static double jaccardSimilarity(String a, String b) =>
+      _jaccardOnLists(significantCharList(a), significantCharList(b));
+
+  /// Set-based Jaccard core over pre-extracted significant-char lists.
+  static double _jaccardOnLists(List<int> listA, List<int> listB) {
+    final setA = listA.toSet();
+    final setB = listB.toSet();
     if (setA.isEmpty && setB.isEmpty) return 1.0;
     if (setA.isEmpty || setB.isEmpty) return 0.0;
     final intersection = setA.intersection(setB).length;
@@ -146,9 +146,13 @@ class TextDedupUtils {
     String a,
     String b,
   ) {
-    final lev = normalizedLevenshtein(a, b);
-    final jac = jaccardSimilarity(a, b);
-    return (levenshtein: lev, jaccard: jac);
+    // Extract once per string and feed both metric cores.
+    final listA = significantCharList(a);
+    final listB = significantCharList(b);
+    return (
+      levenshtein: _levenshteinOnLists(listA, listB),
+      jaccard: _jaccardOnLists(listA, listB),
+    );
   }
 
   /// Unified text similarity check: Levenshtein primary, Jaccard fallback.
@@ -165,14 +169,16 @@ class TextDedupUtils {
     double levenshteinThreshold = 0.70,
     double jaccardThreshold = 0.80,
   }) {
+    // Extract once per string; the empty guard, Levenshtein, and Jaccard
+    // all consume the same lists (pre-0.6.0 each recomputed them).
+    final listA = significantCharList(a);
+    final listB = significantCharList(b);
     // Reject if either string has no significant characters (punctuation-only).
     // Without this guard, two different punctuation-only strings would produce
     // empty sig char lists → normalizedLevenshtein returns 1.0 → false match.
-    if (significantCharList(a).isEmpty || significantCharList(b).isEmpty) {
-      return false;
-    }
-    if (normalizedLevenshtein(a, b) >= levenshteinThreshold) return true;
-    if (jaccardSimilarity(a, b) >= jaccardThreshold) return true;
+    if (listA.isEmpty || listB.isEmpty) return false;
+    if (_levenshteinOnLists(listA, listB) >= levenshteinThreshold) return true;
+    if (_jaccardOnLists(listA, listB) >= jaccardThreshold) return true;
     return false;
   }
 
@@ -190,18 +196,17 @@ class TextDedupUtils {
     double levenshteinThreshold = 0.70,
     double jaccardThreshold = 0.80,
   }) {
+    // Extract once per string; guard and both metrics share the lists.
+    final listA = significantCharList(a);
+    final listB = significantCharList(b);
     // Reject punctuation-only strings (empty sig char lists → false 1.0 match).
-    if (significantCharList(a).isEmpty || significantCharList(b).isEmpty) {
+    if (listA.isEmpty || listB.isEmpty) {
       return (match: false, levenshtein: 0.0, jaccard: 0.0);
     }
-    final scores = computeTextSimilarity(a, b);
-    final match = scores.levenshtein >= levenshteinThreshold ||
-        scores.jaccard >= jaccardThreshold;
-    return (
-      match: match,
-      levenshtein: scores.levenshtein,
-      jaccard: scores.jaccard,
-    );
+    final lev = _levenshteinOnLists(listA, listB);
+    final jac = _jaccardOnLists(listA, listB);
+    final match = lev >= levenshteinThreshold || jac >= jaccardThreshold;
+    return (match: match, levenshtein: lev, jaccard: jac);
   }
 
   /// Measures how much of [inner]'s text appears in [outer] in order.
@@ -213,8 +218,9 @@ class TextDedupUtils {
   /// Returns `lcsLength / inner.runes.length` (0.0–1.0).
   /// A ratio ≥ 0.80 indicates a subset relationship.
   ///
-  /// O(n×m) but only called during provisional cluster expiry on 2–3
-  /// blocks with 50–200 character strings. Negligible cost.
+  /// O(n×m) time, O(min(n,m)) space. Inputs beyond 5,000 runes are
+  /// truncated before the LCS computation (an OOM guard against corrupted
+  /// OCR text), so the ratio is approximate for longer strings.
   static double containmentRatio(String inner, String outer) {
     if (inner.isEmpty || outer.isEmpty) return 0.0;
     final a = inner.runes.toList();

@@ -159,7 +159,7 @@ void main() {
         final block = _makeBlock(top: top, blockHeight: blockHeight);
         tracker.addObservation(block, drift, blockHeight: blockHeight);
       }
-      for (final key in tracker.spaceKeys) {
+      for (final key in tracker.observedKeys) {
         final margin = tracker.driftMarginForKey(key);
         final medianLineHeight = tracker.medianBlockHeightForKey(key);
         expect(margin, lessThanOrEqualTo(medianLineHeight));
@@ -237,7 +237,7 @@ void main() {
       final block = _makeBlock(top: 1000);
       tracker.addObservation(block, const Offset(1, 1));
       tracker.clear();
-      expect(tracker.spaceKeys, isEmpty);
+      expect(tracker.observedKeys, isEmpty);
     });
 
     // ┌─────────────────────────────────────────────────────────────────────┐
@@ -247,28 +247,28 @@ void main() {
       final tracker = DriftTracker();
       // 0 observations
       expect(
-        tracker.medianDriftForKey(SpaceKey('normal:0')),
+        tracker.medianDriftForKey(const SpaceKey('normal:0')),
         equals(Offset.zero),
       );
       // 1 observation
       var block = _makeBlock(top: 0);
       tracker.addObservation(block, const Offset(5, 10));
       expect(
-        tracker.medianDriftForKey(SpaceKey('normal:0')),
+        tracker.medianDriftForKey(const SpaceKey('normal:0')),
         equals(Offset.zero),
       );
       // 2 observations
       block = _makeBlock(top: 0);
       tracker.addObservation(block, const Offset(5, 10));
       expect(
-        tracker.medianDriftForKey(SpaceKey('normal:0')),
+        tracker.medianDriftForKey(const SpaceKey('normal:0')),
         equals(Offset.zero),
       );
       // 3 observations — now should return non-zero
       block = _makeBlock(top: 0);
       tracker.addObservation(block, const Offset(5, 10));
       expect(
-        tracker.medianDriftForKey(SpaceKey('normal:0')),
+        tracker.medianDriftForKey(const SpaceKey('normal:0')),
         isNot(equals(Offset.zero)),
       );
     });
@@ -349,7 +349,7 @@ void main() {
 
       tracker.clear();
 
-      expect(tracker.spaceKeys, isEmpty);
+      expect(tracker.observedKeys, isEmpty);
       expect(tracker.medianBlockHeightForKey(key), closeTo(16.0, 0.01));
     });
 
@@ -442,7 +442,7 @@ void main() {
       final tracker = DriftTracker();
       final block = _makeBlock(top: 250);
       final key = tracker.spaceKeyFor(block);
-      expect(key, equals(SpaceKey('normal:0')));
+      expect(key, equals(const SpaceKey('normal:0')));
     });
 
     test(
@@ -455,7 +455,7 @@ void main() {
           containerId: const ContainerId('sidebar_scroller'),
         );
         final key = tracker.spaceKeyFor(block);
-        expect(key, equals(SpaceKey('ic:sidebar_scroller:0')));
+        expect(key, equals(const SpaceKey('ic:sidebar_scroller:0')));
       },
     );
 
@@ -472,7 +472,7 @@ void main() {
     });
 
     test('SpaceKey.unknown() creates sentinel key', () {
-      expect(SpaceKey.unknown(), equals(SpaceKey('unknown:0')));
+      expect(SpaceKey.unknown(), equals(const SpaceKey('unknown:0')));
     });
 
     test('medianDriftForKey returns Offset.zero for unknown key', () {
@@ -558,16 +558,16 @@ void main() {
       final block = _makeBlock(top: 100);
       tracker.addObservation(block, const Offset(5, 5));
       final spaceKey = tracker.spaceKeyFor(block);
-      expect(tracker.spaceKeys, contains(spaceKey));
+      expect(tracker.observedKeys, contains(spaceKey));
 
       final removed = tracker.clearKey(spaceKey);
       expect(removed, isTrue);
-      expect(tracker.spaceKeys, isEmpty);
+      expect(tracker.observedKeys, isEmpty);
     });
 
     test('clearKey returns false for non-existent key', () {
       final tracker = DriftTracker();
-      expect(tracker.clearKey(SpaceKey('normal:999')), isFalse);
+      expect(tracker.clearKey(const SpaceKey('normal:999')), isFalse);
     });
 
     test('clearKey returns false for unknown key (no observations exist)', () {
@@ -591,7 +591,7 @@ void main() {
     test('medianDriftForKey returns zero for nonexistent key', () {
       final tracker = DriftTracker();
       expect(
-        tracker.medianDriftForKey(SpaceKey('normal:99')),
+        tracker.medianDriftForKey(const SpaceKey('normal:99')),
         equals(Offset.zero),
       );
     });
@@ -654,11 +654,14 @@ void main() {
       tracker.clearSpatialRegion(0, 400);
 
       // Verify normal:0 is cleared
-      expect(tracker.observationCountForKey(SpaceKey('normal:0')), equals(0));
+      expect(tracker.observationCountForKey(const SpaceKey('normal:0')),
+          equals(0));
       // Verify ic:foo:0 is cleared
-      expect(tracker.observationCountForKey(SpaceKey('ic:foo:0')), equals(0));
+      expect(tracker.observationCountForKey(const SpaceKey('ic:foo:0')),
+          equals(0));
       // Verify normal:2 is untouched
-      expect(tracker.observationCountForKey(SpaceKey('normal:2')), equals(3));
+      expect(tracker.observationCountForKey(const SpaceKey('normal:2')),
+          equals(3));
     });
 
     test('clearSpatialRegion at exact region boundary (500px)', () {
@@ -746,18 +749,19 @@ void main() {
 
       // Verify normal:0 median drift
       expect(
-        tracker.medianDriftForKey(SpaceKey('normal:0')).dy,
+        tracker.medianDriftForKey(const SpaceKey('normal:0')).dy,
         closeTo(10.0, 0.1),
       );
       // Verify ic:test_container:0 median drift
       expect(
-        tracker.medianDriftForKey(SpaceKey('ic:test_container:0')).dy,
+        tracker.medianDriftForKey(const SpaceKey('ic:test_container:0')).dy,
         closeTo(20.0, 0.1),
       );
       // Verify they don't see each other's drift
-      expect(tracker.observationCountForKey(SpaceKey('normal:0')), equals(3));
+      expect(tracker.observationCountForKey(const SpaceKey('normal:0')),
+          equals(3));
       expect(
-        tracker.observationCountForKey(SpaceKey('ic:test_container:0')),
+        tracker.observationCountForKey(const SpaceKey('ic:test_container:0')),
         equals(3),
       );
     });
@@ -787,11 +791,11 @@ void main() {
 
       // Verify independent drift tracking
       expect(
-        tracker.medianDriftForKey(SpaceKey('ic:left_sidebar:0')).dy,
+        tracker.medianDriftForKey(const SpaceKey('ic:left_sidebar:0')).dy,
         closeTo(5.0, 0.1),
       );
       expect(
-        tracker.medianDriftForKey(SpaceKey('ic:right_sidebar:0')).dy,
+        tracker.medianDriftForKey(const SpaceKey('ic:right_sidebar:0')).dy,
         closeTo(15.0, 0.1),
       );
       // Verify keys differ
@@ -815,15 +819,15 @@ void main() {
       final tracker = DriftTracker();
       expect(
         tracker.spaceKeyFor(_makeBlock(top: 499)),
-        equals(SpaceKey('normal:0')),
+        equals(const SpaceKey('normal:0')),
       );
       expect(
         tracker.spaceKeyFor(_makeBlock(top: 500)),
-        equals(SpaceKey('normal:1')),
+        equals(const SpaceKey('normal:1')),
       );
       expect(
         tracker.spaceKeyFor(_makeBlock(top: 501)),
-        equals(SpaceKey('normal:1')),
+        equals(const SpaceKey('normal:1')),
       );
     });
 
@@ -838,9 +842,10 @@ void main() {
         );
         tracker.addObservation(block, const Offset(0, 5.0));
         // Must not pollute normal space — observation is excluded entirely
-        expect(tracker.observationCountForKey(SpaceKey('normal:0')), equals(0));
+        expect(tracker.observationCountForKey(const SpaceKey('normal:0')),
+            equals(0));
         expect(
-          tracker.observationCountForKey(SpaceKey('ic:null:0')),
+          tracker.observationCountForKey(const SpaceKey('ic:null:0')),
           equals(0),
         );
         // No unknown-space observations either
@@ -991,9 +996,9 @@ void main() {
       tracker.addObservation(block, const Offset(1.0, 1.0), blockHeight: 20.0);
 
       // Record propagations
-      tracker.recordPropagation(SpaceKey('normal:0'));
-      tracker.recordPropagation(SpaceKey('normal:0'));
-      tracker.recordPropagation(SpaceKey('normal:0'));
+      tracker.recordPropagation(const SpaceKey('normal:0'));
+      tracker.recordPropagation(const SpaceKey('normal:0'));
+      tracker.recordPropagation(const SpaceKey('normal:0'));
 
       final log = tracker.exportDebugLog();
       expect(log, contains('propagations=3'));
@@ -1020,9 +1025,9 @@ void main() {
       }
 
       // Record different propagation counts
-      tracker.recordPropagation(SpaceKey('normal:0'));
-      tracker.recordPropagation(SpaceKey('normal:0'));
-      tracker.recordPropagation(SpaceKey('normal:1'));
+      tracker.recordPropagation(const SpaceKey('normal:0'));
+      tracker.recordPropagation(const SpaceKey('normal:0'));
+      tracker.recordPropagation(const SpaceKey('normal:1'));
 
       final log = tracker.exportDebugLog();
       expect(log, contains('space=normal:0'));
@@ -1035,8 +1040,8 @@ void main() {
       final tracker = DriftTracker();
       final block = _makeBlock(top: 250, blockHeight: 20.0);
       tracker.addObservation(block, const Offset(1.0, 1.0), blockHeight: 20.0);
-      tracker.recordPropagation(SpaceKey('normal:0'));
-      tracker.recordPropagation(SpaceKey('normal:0'));
+      tracker.recordPropagation(const SpaceKey('normal:0'));
+      tracker.recordPropagation(const SpaceKey('normal:0'));
 
       tracker.clear();
 
@@ -1140,6 +1145,44 @@ void main() {
     test('TrackedBlock<Never> payload throws UnsupportedError', () {
       final block = _makeBlock(top: 100);
       expect(() => block.payload, throwsUnsupportedError);
+    });
+  });
+
+  group('propagation-count lifecycle (#55 / v0.6.0)', () {
+    test('clearKey removes the matching propagation count', () {
+      final tracker = DriftTracker();
+      final key = SpaceKey.normal(0);
+      tracker.recordPropagation(key);
+      tracker.recordPropagation(key);
+      expect(tracker.propagationCountFor(key), 2);
+
+      tracker.clearKey(key);
+      expect(tracker.propagationCountFor(key), 0,
+          reason: 'pre-0.6.0, cleared keys leaked their propagation '
+              'counts for the rest of the session');
+    });
+
+    test('clearSpatialRegion removes counts for intersecting regions', () {
+      final tracker = DriftTracker();
+      final inRange = SpaceKey.normal(1); // region 1 = 500-1000 CSS px
+      final outOfRange = SpaceKey.normal(5);
+      tracker.recordPropagation(inRange);
+      tracker.recordPropagation(outOfRange);
+
+      tracker.clearSpatialRegion(500, 1000);
+      expect(tracker.propagationCountFor(inRange), 0);
+      expect(tracker.propagationCountFor(outOfRange), 1);
+    });
+
+    test('deprecated spaceKeys alias still mirrors observedKeys', () {
+      final tracker = DriftTracker();
+      tracker.addObservation(
+        _makeBlock(top: 100),
+        const Offset(2, 3),
+        blockHeight: 30,
+      );
+      // ignore: deprecated_member_use_from_same_package
+      expect(tracker.spaceKeys.toList(), tracker.observedKeys.toList());
     });
   });
 }

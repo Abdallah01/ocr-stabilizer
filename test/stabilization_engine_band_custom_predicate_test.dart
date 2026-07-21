@@ -134,7 +134,7 @@ void main() {
           mode: BandFallbackMode.observeOnly,
           candidateObservationFloor: 1,
           spatialConfirm: (TrackedBlock fresh, TrackedBlock candidate) {
-            throw FormatException('predicate boom (observeOnly)');
+            throw const FormatException('predicate boom (observeOnly)');
           },
         ),
       );

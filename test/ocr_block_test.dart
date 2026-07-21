@@ -45,16 +45,16 @@ void main() {
   group('OcrBlock', () {
     test('const constructor with all fields', () {
       final block = OcrBlock(
-        boundingBox: Rect.fromLTRB(0, 0, 300, 100),
+        boundingBox: const Rect.fromLTRB(0, 0, 300, 100),
         text: '测试文本',
         confidence: 0.95,
         lines: [
-          OcrLine(
+          const OcrLine(
             boundingBox: Rect.fromLTRB(0, 0, 300, 50),
             text: '测试',
             elements: [],
           ),
-          OcrLine(
+          const OcrLine(
             boundingBox: Rect.fromLTRB(0, 50, 300, 100),
             text: '文本',
             elements: [],
@@ -69,7 +69,7 @@ void main() {
 
     test('confidence defaults to null', () {
       final block = OcrBlock(
-        boundingBox: Rect.fromLTRB(0, 0, 100, 50),
+        boundingBox: const Rect.fromLTRB(0, 0, 100, 50),
         text: 'abc',
         lines: [],
       );
@@ -96,11 +96,41 @@ void main() {
 
     test('empty lines list is valid (flat OCR engines)', () {
       final block = OcrBlock(
-        boundingBox: Rect.fromLTRB(0, 0, 100, 50),
+        boundingBox: const Rect.fromLTRB(0, 0, 100, 50),
         text: 'flat text',
         lines: [],
       );
       expect(block.lines, isEmpty);
+    });
+
+    test('NaN confidence is stored as null, not NaN (v0.5.1)', () {
+      // nan.clamp(0.0, 1.0) returns NaN in Dart, so the pre-0.5.1 clamp
+      // let NaN through despite the documented "clamped" contract.
+      final block = OcrBlock(
+        boundingBox: const Rect.fromLTRB(0, 0, 100, 50),
+        text: 'abc',
+        lines: const [],
+        confidence: double.nan,
+      );
+      expect(block.confidence, isNull);
+    });
+
+    test('infinite confidences still clamp to the range bounds', () {
+      final posInf = OcrBlock(
+        boundingBox: const Rect.fromLTRB(0, 0, 100, 50),
+        text: 'abc',
+        lines: const [],
+        confidence: double.infinity,
+      );
+      expect(posInf.confidence, 1.0);
+
+      final negInf = OcrBlock(
+        boundingBox: const Rect.fromLTRB(0, 0, 100, 50),
+        text: 'abc',
+        lines: const [],
+        confidence: double.negativeInfinity,
+      );
+      expect(negInf.confidence, 0.0);
     });
   });
 }

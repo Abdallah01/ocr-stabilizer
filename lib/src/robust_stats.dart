@@ -150,7 +150,10 @@ class RobustStats {
   /// The constant 1.35 converts IQR to the same σ-equivalent scale as MAD
   /// (IQR ≈ 1.35σ under normality, so IQR / 1.35 ≈ σ).
   ///
-  /// **Guaranteed:** Never returns zero or negative.
+  /// **Guaranteed:** Never returns zero or negative, provided
+  /// [minSpread] is positive (the default is 1.0). Every fallback arm
+  /// bottoms out at [minSpread], so a zero or negative [minSpread]
+  /// voids the guarantee.
   static double madOrFallback(List<double> values, {double minSpread = 1.0}) {
     if (values.length < _kMinMadFallbackSamples) return minSpread;
 

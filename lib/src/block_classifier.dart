@@ -54,8 +54,18 @@ class BlockClassifierService {
   /// deferral). The consumer handles dedup and translation cache splitting.
   ///
   /// [positionLookup] provides O(1) position history for stability scoring.
-  /// When null, stability defaults to 0.5 (neutral). The callback must not
-  /// throw — wrap implementations in try-catch and return null on failure.
+  /// When null, stability defaults to 0.5 (neutral). If the callback
+  /// throws, the throw is caught and that block falls back to neutral
+  /// stability (0.5) — the pipeline is never aborted. Prefer returning
+  /// null on failure so the fallback is explicit rather than exceptional.
+  ///
+  /// **Silent fallbacks:** when `input.imageToLayoutScale <= 0.001`
+  /// (degenerate capture geometry), the CSS-per-pixel factor falls back
+  /// to identity (1.0) rather than rejecting the frame — coordinates in
+  /// the result are then unreliable. Similarly, a near-singular container
+  /// transform matrix leaves rects untransformed (see
+  /// [applyInverseTransform]). Callers that can detect these upstream
+  /// should skip the frame instead.
   ClassificationResult classifyGroups({
     required List<List<OcrBlock>> textGroups,
     required ClassificationInput input,
@@ -367,6 +377,11 @@ class BlockClassifierService {
   /// The 6-element matrix is `[a, b, c, d, tx, ty]` matching the CSS
   /// `matrix(a,b,c,d,tx,ty)` function. The inverse is applied to recover
   /// the un-transformed bounding box.
+  ///
+  /// Returns [rect] unchanged when the matrix has fewer than 6 elements
+  /// or is near-singular (`|det| < 1e-6`) — a non-invertible transform
+  /// (e.g. `scale(0)`) has no meaningful inverse, so the rect passes
+  /// through untransformed rather than producing infinities.
   static Rect applyInverseTransform(Rect rect, List<double> matrix) {
     if (matrix.length < 6) return rect;
     final a = matrix[0], b = matrix[1], c = matrix[2], d = matrix[3];

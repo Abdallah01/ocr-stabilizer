@@ -127,6 +127,11 @@ class BlockKeyGenerator {
     return keys;
   }
 
+  /// Base-36 rendering of [String.hashCode].
+  ///
+  /// **In-memory only:** [String.hashCode] is not stable across Dart
+  /// runtimes (VM vs web) or necessarily across VM versions, so generated
+  /// keys must never be persisted or compared across processes (#53).
   static String _textHash(String text) {
     return text.hashCode.toRadixString(36);
   }

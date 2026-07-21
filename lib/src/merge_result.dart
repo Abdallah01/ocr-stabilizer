@@ -52,6 +52,11 @@ class MergeResult {
   // ── Observation state (engine increments) ──
 
   /// Total observation count after this merge.
+  ///
+  /// Normally `existing.observationCount + 1`. Exception: while a
+  /// band-admitted block is inside its provisional freeze window, the
+  /// engine passes the existing count through unchanged — frozen
+  /// captures do not accrue observation evidence.
   final int observationCount;
 
   /// Whether the merged block remains provisional (not yet promoted).

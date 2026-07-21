@@ -115,13 +115,39 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     SubmapMembership? submapMembership,
     bool Function(T fresh, T existing)? contextualCheck,
     this.bandFallback = const BandFallbackConfig(),
+    this.missedFrameRetention = 0,
   })  : _merger = merger,
         driftTracker =
             driftTracker ?? DriftTracker(submapMembership: submapMembership),
         spatialIndex = spatialIndex ?? SpatialBlockIndex<T>(),
         _contextualCheck = contextualCheck {
     _validateBandFallbackConfig(bandFallback);
+    if (missedFrameRetention < 0) {
+      throw ArgumentError(
+        'missedFrameRetention must be >= 0 (got $missedFrameRetention). '
+        '0 disables retention; N keeps a not-re-observed block matchable '
+        'for N further stabilize() calls.',
+      );
+    }
   }
+
+  /// How many consecutive [stabilize] calls a tracked block survives in
+  /// [spatialIndex] without being re-observed (#46).
+  ///
+  /// `0` (the default) preserves the pre-0.6.0 behavior: the index is
+  /// rebuilt from each call's `stableBlocks` only, so a block missed for
+  /// a single capture (OCR glare, occlusion) loses its identity and
+  /// re-enters as new. With `N > 0`, a missed block stays in the index as
+  /// a match candidate for up to N calls; re-observation within the
+  /// window merges into its accumulated history and resets the counter,
+  /// and expiry evicts it. Retained blocks are **not** included in
+  /// [StabilizationResult.stableBlocks] — the result remains "what this
+  /// capture produced"; retention only affects future matching.
+  final int missedFrameRetention;
+
+  /// Consecutive-miss counter per retained block (identity-keyed; block
+  /// instances persist across frames precisely when unmatched).
+  final Map<T, int> _missCounts = Map<T, int>.identity();
 
   /// Validate [BandFallbackConfig] invariants with release-safe [ArgumentError].
   ///
@@ -172,13 +198,93 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   }
 
   /// Current bucket width for dedup key generation.
-  double bucketWidth = BlockKeyGenerator.kDefaultBucketSize;
+  ///
+  /// Setting a non-finite or non-positive value throws [ArgumentError].
+  /// Prefer [updateViewport], which also keeps [spatialIndex]'s buckets in
+  /// sync (#52).
+  double get bucketWidth => _bucketWidth;
+  set bucketWidth(double value) {
+    _validatePositiveFinite('bucketWidth', value);
+    _bucketWidth = value;
+  }
+
+  double _bucketWidth = BlockKeyGenerator.kDefaultBucketSize;
 
   /// Current bucket height for dedup key generation.
-  double bucketHeight = BlockKeyGenerator.kDefaultBucketSize;
+  ///
+  /// Setting a non-finite or non-positive value throws [ArgumentError].
+  /// Prefer [updateViewport] (#52).
+  double get bucketHeight => _bucketHeight;
+  set bucketHeight(double value) {
+    _validatePositiveFinite('bucketHeight', value);
+    _bucketHeight = value;
+  }
+
+  double _bucketHeight = BlockKeyGenerator.kDefaultBucketSize;
 
   /// Current visual viewport scale for dedup key generation.
-  double scale = 1.0;
+  ///
+  /// Setting a non-finite or non-positive value throws [ArgumentError].
+  double get scale => _scale;
+  set scale(double value) {
+    _validatePositiveFinite('scale', value);
+    _scale = value;
+  }
+
+  double _scale = 1.0;
+
+  /// Update every viewport-derived quantization knob in one call.
+  ///
+  /// Before 0.6.0 the engine had three uncoordinated quantization systems
+  /// — the dedup-key buckets here, [SpatialBlockIndex.updateBucketSizes],
+  /// and [DriftTracker.regionSize] — and an app that updated one but not
+  /// the others silently degraded matching. This method is the single
+  /// entry point: it recomputes [spatialIndex]'s adaptive buckets from the
+  /// viewport and adopts the same bucket dimensions for dedup keys, so
+  /// the two quantizations cannot drift apart. ([DriftTracker.regionSize]
+  /// is intentionally not touched — it is a fixed CSS-pixel constant from
+  /// [SubmapMembership], not a viewport-derived value.)
+  ///
+  /// [scale] (the visual viewport scale for dedup keys) is only changed
+  /// when passed. Throws [ArgumentError] on non-finite or non-positive
+  /// arguments; no state is modified when validation fails.
+  ///
+  /// The index's stored blocks are re-keyed under the new bucket
+  /// geometry before this method returns: cell keys are a function of
+  /// bucket size, so changing the size without a rebuild would leave
+  /// every cached block filed under stale cells — unfindable by the
+  /// next [stabilize] at any scroll depth where old and new cell
+  /// coordinates diverge by more than the ±1-neighbor scan
+  /// (PR #61 review).
+  void updateViewport({
+    required double viewportWidth,
+    required double viewportHeight,
+    double? scale,
+  }) {
+    _validatePositiveFinite('viewportWidth', viewportWidth);
+    _validatePositiveFinite('viewportHeight', viewportHeight);
+    if (scale != null) _validatePositiveFinite('scale', scale);
+    final cached = spatialIndex.allBlocks.toList();
+    spatialIndex.updateBucketSizes(
+      viewportWidth: viewportWidth,
+      viewportHeight: viewportHeight,
+    );
+    spatialIndex.rebuild(cached);
+    _bucketWidth = spatialIndex.bucketWidth;
+    _bucketHeight = spatialIndex.bucketHeight;
+    if (scale != null) _scale = scale;
+  }
+
+  /// Throw [ArgumentError] unless [value] is a finite double > 0.
+  static void _validatePositiveFinite(String name, double value) {
+    if (!value.isFinite || value <= 0) {
+      throw ArgumentError(
+        '$name must be a finite double > 0 (got $value). Non-finite or '
+        'non-positive quantization values silently corrupt dedup keys '
+        'and spatial-cell assignment.',
+      );
+    }
+  }
 
   /// Overlap resolver for spatial NMS.
   final OverlapResolver _resolver = const OverlapResolver();
@@ -236,6 +342,16 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// before this method returns — callers no longer rebuild it after each
   /// [stabilize] call (#13).
   ///
+  /// **Index ownership:** the rebuild replaces the index with this call's
+  /// `stableBlocks` plus, when [missedFrameRetention] > 0, cached blocks
+  /// still inside their retention window. With the default retention of
+  /// 0, a tracked block that is not re-observed in a capture (OCR miss,
+  /// glare, occlusion) leaves the index and, if it reappears later, is
+  /// treated as new — opt into retention to preserve identity across
+  /// missed frames (#46). Blocks the app inserts into [spatialIndex]
+  /// between calls are treated like any other cached block: dropped at
+  /// the next [stabilize] unless retention keeps them.
+  ///
   /// Throws [ArgumentError] if any observation carries an invalid (NaN or
   /// out-of-range) [PositionConfidence] or [TextConfidence] value (#27).
   StabilizationResult<T> stabilize(List<T> freshBlocks) {
@@ -260,10 +376,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final wellObservedTexts = <String>[];
     final stableBlocks = <T>[];
 
+    final matchedExisting = Set<T>.identity();
     for (final fresh in deduped) {
       final matchResult = _findMatch(fresh);
       final existing = matchResult.match;
       if (existing != null) {
+        matchedExisting.add(existing);
         final merged = _merge(
           fresh,
           existing,
@@ -277,8 +395,40 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       }
     }
 
+    // Missed-frame retention (#46): cached blocks that were not matched
+    // this capture stay in the index as match candidates for up to
+    // [missedFrameRetention] further calls, so a single OCR miss does
+    // not reset a block's accumulated identity. Matched blocks are
+    // consumed (their history lives on in the merged result); expired
+    // blocks are dropped along with their miss counter.
+    //
+    // The counter map is REBUILT from the current index contents each
+    // call rather than mutated incrementally: [spatialIndex] is a public
+    // field the app may rebuild, clear, or remove blocks from between
+    // calls, and an incrementally-maintained map would keep strong
+    // references (and stale counts) for every instance that left the
+    // index externally. Rebuilding bounds the map to exactly the
+    // currently-retained set (PR #61 review).
+    final retained = <T>[];
+    if (missedFrameRetention > 0) {
+      final nextMissCounts = Map<T, int>.identity();
+      for (final cached in spatialIndex.allBlocks) {
+        if (matchedExisting.contains(cached)) continue;
+        final misses = (_missCounts[cached] ?? 0) + 1;
+        if (misses <= missedFrameRetention) {
+          nextMissCounts[cached] = misses;
+          retained.add(cached);
+        }
+      }
+      _missCounts
+        ..clear()
+        ..addAll(nextMissCounts);
+    } else {
+      _missCounts.clear();
+    }
+
     // Rebuild the spatial index so callers cannot get it wrong (#13).
-    spatialIndex.rebuild(stableBlocks);
+    spatialIndex.rebuild([...stableBlocks, ...retained]);
 
     return StabilizationResult<T>(
       stableBlocks: stableBlocks,
@@ -369,6 +519,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   List<T> _dedup(List<T> blocks) {
     final out = <T>[];
     final seenKeys = <String>{};
+    // Key each *kept* block was registered under, so an evicted block's
+    // key can be retired with it. Identity-keyed: consumer blocks may
+    // implement value equality (#50).
+    final keptKeys = Map<T, String>.identity();
 
     for (final b in blocks) {
       // 1. Noise filter: skip blocks with empty/whitespace-only text
@@ -386,9 +540,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       // Also check ±1 neighbor buckets for boundary-straddling duplicates
       if (_isKeySeenFuzzy(key, seenKeys, b)) continue;
 
-      seenKeys.add(key);
-
-      // 3. Spatial overlap NMS within the batch
+      // 3. Spatial overlap NMS within the batch. Keys are registered
+      // only for blocks that survive NMS — a dropped block's key must
+      // not suppress later same-bucket blocks, and an evicted block's
+      // key retires with it (#50).
       final overlapping = _findBatchOverlap(b, out);
       if (overlapping != null) {
         final result = _resolver.resolveOverlap(
@@ -401,18 +556,42 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         );
         switch (result) {
           case OverlapResult.evict:
-            out[out.indexOf(overlapping)] = b;
+            // Identity-based lookup: indexOf uses ==, which for
+            // value-equal consumer blocks can hit a different element
+            // than the one NMS resolved against (#50).
+            final idx = _identityIndexOf(out, overlapping);
+            out[idx] = b;
+            final evictedKey = keptKeys.remove(overlapping);
+            if (evictedKey != null) seenKeys.remove(evictedKey);
+            seenKeys.add(key);
+            keptKeys[b] = key;
           case OverlapResult.keep:
             out.add(b);
+            seenKeys.add(key);
+            keptKeys[b] = key;
           case OverlapResult.drop:
-            // Discard incoming
+            // Discard incoming — key intentionally not registered.
             break;
         }
       } else {
         out.add(b);
+        seenKeys.add(key);
+        keptKeys[b] = key;
       }
     }
     return out;
+  }
+
+  /// Index of [target] in [list] by object identity (never `==`).
+  static int _identityIndexOf<E>(List<E> list, E target) {
+    for (var i = 0; i < list.length; i++) {
+      if (identical(list[i], target)) return i;
+    }
+    throw StateError(
+      'NMS invariant: resolved overlap target not found in batch output — '
+      'the existing block returned by _findBatchOverlap must be present '
+      'in `out` by identity.',
+    );
   }
 
   /// Check if [block] has a fuzzy key match (±1 bucket) in [seenKeys].
@@ -462,7 +641,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final shouldRunBand = bandFallback.mode != BandFallbackMode.off;
 
     T? primaryMatch;
-    double bestPrimarySim = 0.0;
+    // Seeded below any reachable score so a candidate admitted purely via
+    // the Jaccard arm with Levenshtein 0.0 (e.g. short reordered CJK,
+    // "北京" vs "京北") still registers as the primary match instead of
+    // being silently dropped by the strict `>` comparison.
+    double bestPrimarySim = -1.0;
     T? bandAdmitted;
 
     for (final candidate in candidates) {
@@ -875,6 +1058,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     for (final cached in spatialIndex.allBlocks) {
       if (cached.observationCount < _kMinObsForContradiction) continue;
 
+      // VR blocks live in a different coordinate contract (viewport-
+      // relative, not page-absolute) and blocksInRegion never returns VR
+      // fresh blocks — so any "subdividers" found for a VR cached block
+      // are numeric coincidences (e.g. near scroll offset 0, where the
+      // two spaces coincide), not evidence. Same guard the matching path
+      // and OverlapResolver.checkOverlap already apply (#49).
+      if (cached.isViewportRelative) continue;
+
       final cRect = cached.absoluteRect.raw;
       if (cRect.width <= 0 || cRect.height <= 0) continue;
 
@@ -937,6 +1128,13 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final alreadyTargeted = <T>{};
 
     for (final fresh in freshBlocks) {
+      // VR fresh blocks carry viewport-relative coordinates; the cached
+      // blocks returned by blocksInRegion are page-absolute (VR cached
+      // blocks live in a separate cell namespace and are never returned).
+      // Comparing across the two contracts can only produce false
+      // "subsumed" evidence near scroll offset 0 (#49).
+      if (fresh.isViewportRelative) continue;
+
       final fRect = fresh.absoluteRect.raw;
       if (fRect.width <= 0 || fRect.height <= 0) continue;
 

@@ -158,10 +158,22 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
     assertConfidenceRange('textConfidence', textConfidence.raw);
   }
 
+  /// Sentinel distinguishing "parameter not passed" from an explicit null
+  /// in [copyWith] — `containerId ?? this.containerId` could never *clear*
+  /// the field, which made IC demotion via `copyWith` impossible (#47).
+  static const Object _unset = Object();
+
   /// Per-field immutable update. Pass only the fields that change.
+  ///
+  /// [containerId] accepts an explicit `null` to clear the field — required
+  /// when demoting an inner-scroller block
+  /// (`copyWith(isInnerScrollerChild: false, containerId: null)`), because
+  /// the constructor rejects `containerId` without `isInnerScrollerChild`.
+  /// Passing a non-null value must be a [ContainerId]; omitting the
+  /// parameter keeps the current value.
   DefaultTrackedBlock<T> copyWith({
     AbsoluteRect? absoluteRect,
-    ContainerId? containerId,
+    Object? containerId = _unset,
     bool? isViewportRelative,
     bool? isInnerScrollerChild,
     double? innerScrollerTop,
@@ -186,7 +198,9 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
     return DefaultTrackedBlock<T>(
       absoluteRect: absoluteRect ?? this.absoluteRect,
       payload: payload ?? this.payload,
-      containerId: containerId ?? this.containerId,
+      containerId: identical(containerId, _unset)
+          ? this.containerId
+          : containerId as ContainerId?,
       isViewportRelative: isViewportRelative ?? this.isViewportRelative,
       isInnerScrollerChild: isInnerScrollerChild ?? this.isInnerScrollerChild,
       innerScrollerTop: innerScrollerTop ?? this.innerScrollerTop,

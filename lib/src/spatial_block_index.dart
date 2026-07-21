@@ -102,6 +102,12 @@ class SpatialBlockIndex<T extends TrackedBlock> {
   }
 
   /// Remove [block] from the spatial index.
+  ///
+  /// Cell keys are recomputed from the block's *current* rect and flags.
+  /// If those changed since [add] (a different `absoluteRect`, or a
+  /// toggled IC flag), the lookup lands in a different cell and the
+  /// removal silently no-ops — remove the block *before* mutating it, or
+  /// use [rebuild].
   void remove(T block) {
     final absKey = absoluteCellKey(block);
     final absList = _cells[absKey];
@@ -157,6 +163,12 @@ class SpatialBlockIndex<T extends TrackedBlock> {
   /// logic to find stale blocks that should be evicted when in-place DOM
   /// content changes.
   ///
+  /// Blocks are indexed by their *center* cell, and the margin is fixed at
+  /// one cell — a block wider or taller than ~2 cells whose center lies
+  /// outside the margin can intersect [region] yet not be yielded. With
+  /// viewport-derived bucket sizes this doesn't occur for normal text
+  /// blocks; oversized banner-style blocks are the edge case.
+  ///
   /// VR (viewport-relative) blocks live in a separate cell namespace ("vr:")
   /// and are not returned — they are unaffected by page-content mutations.
   Iterable<T> blocksInRegion(Rect region) sync* {
@@ -179,12 +191,21 @@ class SpatialBlockIndex<T extends TrackedBlock> {
 
   /// Yield blocks in the 3×3 grid neighborhood around [block].
   /// For IC blocks, also checks the IC-relative layer for IC↔IC matches.
+  ///
+  /// Each block is yielded at most once. Like [allBlocks], deduplication is
+  /// by object identity: dual-indexed IC blocks reachable from both their
+  /// page-absolute cell and their `ic:` cell appear a single time.
   Iterable<T> candidates(T block) sync* {
+    final seen = Set<T>.identity();
     for (int dc = -1; dc <= 1; dc++) {
       for (int dr = -1; dr <= 1; dr++) {
         final key = absoluteCellKey(block, dc, dr);
         final cell = _cells[key];
-        if (cell != null) yield* cell;
+        if (cell != null) {
+          for (final b in cell) {
+            if (seen.add(b)) yield b;
+          }
+        }
       }
     }
     if (block.isInnerScrollerChild) {
@@ -192,7 +213,11 @@ class SpatialBlockIndex<T extends TrackedBlock> {
         for (int dr = -1; dr <= 1; dr++) {
           final key = icRelativeCellKey(block, dc, dr);
           final cell = _cells[key];
-          if (cell != null) yield* cell;
+          if (cell != null) {
+            for (final b in cell) {
+              if (seen.add(b)) yield b;
+            }
+          }
         }
       }
     }

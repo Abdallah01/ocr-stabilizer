@@ -49,10 +49,14 @@ class OcrBlock {
   ///
   /// [confidence] should be in [0.0, 1.0] or null. Out-of-range values
   /// are clamped to the valid range (engines may return unclamped values).
+  /// NaN is treated as unavailable and stored as null — in IEEE-754,
+  /// `nan.clamp(0.0, 1.0)` returns NaN, so clamping alone cannot contain it.
   OcrBlock({
     required this.boundingBox,
     required this.text,
     required this.lines,
     double? confidence,
-  }) : confidence = confidence?.clamp(0.0, 1.0);
+  }) : confidence = (confidence == null || confidence.isNaN)
+            ? null
+            : confidence.clamp(0.0, 1.0);
 }

@@ -21,4 +21,19 @@ class TextVote {
     required this.score,
     required this.bestConfidence,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TextVote &&
+          other.rawText == rawText &&
+          other.score == score &&
+          other.bestConfidence == bestConfidence;
+
+  @override
+  int get hashCode => Object.hash(rawText, score, bestConfidence);
+
+  @override
+  String toString() => 'TextVote(rawText: "$rawText", score: $score, '
+      'bestConfidence: $bestConfidence)';
 }

@@ -22,9 +22,23 @@ adapts SLAM techniques to the OCR domain.
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^0.5.0
+  ocr_stabilizer: ^0.6.0
 ```
 
+> **What's new in 0.6.0** — audit-driven release: opt-in
+> `missedFrameRetention` keeps block identity across missed OCR frames,
+> `updateViewport()` unifies the quantization knobs, viewport-relative
+> blocks no longer receive page-scroll drift corrections or false
+> contradiction events, and batch-NMS key handling is fixed. Behavioral
+> changes — see the [CHANGELOG](CHANGELOG.md#060---2026-07-20) Breaking
+> section before upgrading. 504 tests, verified down to Flutter 3.19.
+>
+> **What's new in 0.5.1** — bug-fix release, no API changes: spatial-index
+> candidate de-duplication (band counters no longer double-tick for IC
+> blocks), Jaccard-only primary matches are no longer dropped, `OcrBlock`
+> NaN confidence is stored as null, and the CJK predicate now includes
+> Extension B everywhere. See the [CHANGELOG](CHANGELOG.md#051---2026-07-20).
+>
 > **What's new in 0.5.0** — additive surface only; safe upgrade from 0.4.x:
 > a typed `BandPredicateException` surfaces consumer-supplied predicate
 > throws instead of swallowing them, a new `rejectedTextBand` counter

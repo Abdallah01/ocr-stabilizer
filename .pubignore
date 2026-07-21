@@ -1,0 +1,17 @@
+# .pubignore replaces .gitignore for `dart pub publish`, so the
+# .gitignore entries are repeated here.
+.dart_tool/
+.packages
+build/
+pubspec.lock
+.idea/
+.vscode/
+*.iml
+.ultra/
+.claude/
+tmp/
+
+# Internal process docs (design specs, plans, audits) — repo-only,
+# not part of the published package archive.
+doc/superpowers/
+doc/audit/

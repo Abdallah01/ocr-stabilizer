@@ -209,7 +209,7 @@ void main() {
       index.add(normalBlock);
       index.add(vrBlock);
 
-      final region = Rect.fromLTWH(0, 0, 500, 500);
+      const region = Rect.fromLTWH(0, 0, 500, 500);
       final blocks = index.blocksInRegion(region).toList();
 
       expect(blocks, contains(normalBlock));
@@ -345,7 +345,7 @@ void main() {
       index.add(block1);
       index.add(block2);
 
-      final region = Rect.fromLTWH(50, 50, 300, 300); // Overlaps block1
+      const region = Rect.fromLTWH(50, 50, 300, 300); // Overlaps block1
       final blocks = index.blocksInRegion(region).toList();
 
       expect(blocks, contains(block1));
@@ -361,7 +361,7 @@ void main() {
       index.add(block1);
       index.add(block2);
 
-      final region = Rect.fromLTWH(50, 50, 200, 200);
+      const region = Rect.fromLTWH(50, 50, 200, 200);
       final blocks = index.blocksInRegion(region).toList();
 
       expect(blocks, contains(block1));
@@ -376,7 +376,7 @@ void main() {
       index.add(block);
 
       // Query a region that spans multiple cells, overlapping the same block
-      final region = Rect.fromLTWH(50, 50, 300, 300);
+      const region = Rect.fromLTWH(50, 50, 300, 300);
       final blocks = index.blocksInRegion(region).toList();
 
       expect(blocks.where((b) => b == block).length, equals(1));
@@ -506,6 +506,80 @@ void main() {
       final index = SpatialBlockIndex<_TestBlock>();
       final block = _makeBlock(left: 100, top: 100);
       expect(() => index.remove(block), returnsNormally);
+    });
+
+    // ┌─────────────────────────────────────────────────────────────────────┐
+    // │ Candidate De-duplication (v0.5.1)                                   │
+    // └─────────────────────────────────────────────────────────────────────┘
+
+    test('dual-indexed IC block is yielded exactly once for an IC query', () {
+      final index = SpatialBlockIndex<_TestBlock>();
+      index.updateBucketSizes(viewportWidth: 1000, viewportHeight: 1000);
+
+      // IC block with innerScrollerTop 0: reachable from both its
+      // page-absolute cell and its "ic:" cell for an IC query block.
+      final cached = _makeBlock(
+        left: 100,
+        top: 100,
+        isInnerScrollerChild: true,
+        containerId: const ContainerId('c1'),
+      );
+      index.add(cached);
+
+      final fresh = _makeBlock(
+        left: 102,
+        top: 101,
+        isInnerScrollerChild: true,
+        containerId: const ContainerId('c1'),
+      );
+
+      final hits = index.candidates(fresh).where((b) => identical(b, cached));
+      expect(hits, hasLength(1));
+    });
+
+    test('IC candidate reachable ONLY via the scroller-relative layer', () {
+      // Cached and query IC blocks share the same scroller-RELATIVE Y
+      // (center 35) but live ~500px apart in absolute page space, so
+      // their absolute cells are disjoint — only the "ic:" cell layer
+      // can connect them. Kills mutants that disable or mis-key the IC
+      // second pass in candidates() (post-0.6.0 sweep survivors).
+      final index = SpatialBlockIndex<_TestBlock>();
+      index.updateBucketSizes(viewportWidth: 1000, viewportHeight: 1000);
+
+      final cached = _makeBlock(
+        left: 100,
+        top: 520,
+        isInnerScrollerChild: true,
+        innerScrollerTop: 500,
+        containerId: const ContainerId('c1'),
+      );
+      index.add(cached);
+
+      final query = _makeBlock(
+        left: 100,
+        top: 20,
+        isInnerScrollerChild: true,
+        innerScrollerTop: 0,
+        containerId: const ContainerId('c1'),
+      );
+      expect(index.candidates(query), contains(cached));
+
+      // A non-IC query at the same absolute position must NOT reach it:
+      // the ic: layer is IC-to-IC only.
+      final normalQuery = _makeBlock(left: 100, top: 20);
+      expect(index.candidates(normalQuery), isNot(contains(cached)));
+    });
+
+    test('normal blocks are yielded exactly once', () {
+      final index = SpatialBlockIndex<_TestBlock>();
+      index.updateBucketSizes(viewportWidth: 1000, viewportHeight: 1000);
+
+      final cached = _makeBlock(left: 100, top: 100);
+      index.add(cached);
+
+      final fresh = _makeBlock(left: 105, top: 102);
+      final hits = index.candidates(fresh).where((b) => identical(b, cached));
+      expect(hits, hasLength(1));
     });
   });
 }
