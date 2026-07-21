@@ -34,4 +34,4 @@ dev_dependencies:
   # only 4.x lets contributors on Flutter 3.19 run `pub get`. (The 0.6.0
   # CI floor leg caught the previous ^5.0.0 pin violating exactly this —
   # its comment claimed 3.3 compatibility it never had, #56.)
-  flutter_lints: ^4.0.0
+  flutter_lints: ">=4.0.0 <7.0.0"
