@@ -1066,6 +1066,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // Public entry point: build the fresh-block index here. The internal
     // [stabilize] path passes the batch grid `_dedup` already built for
     // NMS instead of constructing a second one per capture (#55).
+    if (freshBlocks.length < 2) return const [];
     final freshIndex = SpatialBlockIndex<T>()..adoptBucketSizes(spatialIndex);
     freshIndex.rebuild(freshBlocks);
     return _detectGroupingContradictions(freshBlocks, freshIndex);
