@@ -66,6 +66,16 @@ class SpatialBlockIndex<T extends TrackedBlock> {
     );
   }
 
+  /// Copy [other]'s current bucket dimensions.
+  ///
+  /// For auxiliary short-lived grids (e.g. the engine's per-batch NMS
+  /// index, #55) that must quantize identically to a primary index
+  /// without recomputing from viewport dimensions.
+  void adoptBucketSizes(SpatialBlockIndex<TrackedBlock> other) {
+    _bucketWidth = other._bucketWidth;
+    _bucketHeight = other._bucketHeight;
+  }
+
   // ── Cell key generation ──
 
   /// Page-absolute cell key for [block], optionally offset by [dCol]/[dRow].

@@ -21,7 +21,15 @@ jobs:
           flutter-version: ${{ matrix.flutter-version }}
       - run: flutter pub get
       - run: flutter analyze
-      - run: flutter test
+      - run: flutter test --coverage
+      # Coverage visibility (#60): lcov uploaded as a build artifact from
+      # the latest-stable leg. No external coverage service — wiring a
+      # Codecov-style badge needs a repo token, tracked in #60.
+      - uses: actions/upload-artifact@v4
+        if: matrix.flutter-version == ''
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
 
   pana:
     # Score guard for issue #36: dartdoc 9.0.2+ crashes on Windows due to
