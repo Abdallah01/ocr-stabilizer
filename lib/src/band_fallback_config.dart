@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
 // SPDX-License-Identifier: BSD-3-Clause
 
-import 'package:flutter/foundation.dart' show immutable;
+import 'package:meta/meta.dart' show immutable;
 
 import 'tracked_block.dart';
 

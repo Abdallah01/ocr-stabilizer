@@ -7,7 +7,7 @@
 // enabling future extraction to the package and reuse for PDF, camera, etc.
 // =============================================================================
 
-import 'dart:ui' show Rect;
+import 'types/geometry.dart' show Rect;
 
 import 'types/container_id.dart';
 

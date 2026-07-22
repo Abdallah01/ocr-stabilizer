@@ -1,4 +1,4 @@
-import 'dart:ui' show Rect;
+import 'types/geometry.dart' show Rect;
 
 /// A recognized text element (word or character).
 class OcrElement {

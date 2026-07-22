@@ -1,4 +1,4 @@
-import 'dart:ui' show Rect;
+import 'types/geometry.dart' show Rect;
 
 import 'internal/cjk_ideographs.dart';
 import 'ocr_block.dart';
