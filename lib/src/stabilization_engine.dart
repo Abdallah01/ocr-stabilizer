@@ -955,6 +955,16 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     bool wasBandFallback = false,
   }) {
     // ┌─── Provisional freeze ─────────────────────────────────────────
+    // DECIDED (#57, 2026-07-22): frozen captures intentionally accrue NO
+    // evidence — no observation count, no text votes, no position update.
+    // Validated against production capture data (consumer stream replayed
+    // via tool/replay): at default config the freeze path carries zero
+    // traffic (candidateObservationFloor is unreachable on continuous-
+    // scroll streams whose observation chains cap at ~4), so richer
+    // freeze semantics would change nothing observable. Revisit ONLY if
+    // (a) candidateObservationFloor is lowered below provisionalCaptures+1
+    // or (b) a dwell/reflow-heavy stream shows nonzero freeze traffic —
+    // details in issue #57's closing data comment.
     if (existing.isProvisional) {
       final remaining = existing.provisionalCapturesRemaining - 1;
       final result = MergeResult(
