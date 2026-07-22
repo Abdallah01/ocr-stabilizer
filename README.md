@@ -23,9 +23,21 @@ adapts SLAM techniques to the OCR domain.
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^0.8.0
+  ocr_stabilizer: ^0.9.0
 ```
 
+> **What's new in 0.9.0** — `agreementWeighted` numerics validated on
+> production captures and recalibrated: the agreement scale is now a
+> jitter allowance (3× regional median block height, #73), replacing the
+> drift-margin-derived scale that collapsed confidence on stable streams
+> (#70) and was unreachable everywhere else. Deep-chain jitter now damps
+> to 3.8 px/merge (legacy: 11.8) with regime-discriminating confidence.
+> Opt-in only — `legacy` (the default) is untouched; the 1.0 default flip
+> is tracked in #74. Sweep evidence:
+> [`doc/replay/validation/2026-07-scale-sweep/`](doc/replay/validation/2026-07-scale-sweep/SWEEP.md).
+> Also new: the consumer-capture replay rig (#68,
+> [`tool/replay/`](tool/replay/) + [`doc/replay/capture_schema.md`](doc/replay/capture_schema.md)).
+>
 > **What's new in 0.8.0** — the package is now pure Dart (#59): no Flutter
 > SDK dependency, usable server-side. `Rect`/`Offset`/`Size` now come from
 > the package instead of `dart:ui` (member-compatible; see
