@@ -28,7 +28,7 @@ DefaultTrackedBlock<void> _at(double left, {double confidence = 0.5}) {
   );
 }
 
-/// Observe [block-left] positions in sequence; return the final block.
+/// Observe blocks at the given left positions; return the final block.
 DefaultTrackedBlock<void> _run(
   StabilizationEngine<DefaultTrackedBlock<void>, void> engine,
   List<double> lefts,

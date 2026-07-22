@@ -208,7 +208,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         // Existing confidence is anchored by its observation count —
         // a 1/n-style decay, so long-observed blocks become
         // positionally sticky while a twice-seen block still adapts.
-        final anchored = existingConf * existing.observationCount;
+        // The count is clamped to >= 1: a consumer block with a zero or
+        // negative count (invalid, but reachable via the public index
+        // seam) must not drive the weight past 1.0 and extrapolate the
+        // lerp (PR #65 review).
+        final anchored = existingConf * max(1, existing.observationCount);
         final total = anchored + freshConf;
         return total > 0 ? freshConf / total : 0.5;
     }
@@ -244,7 +248,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
             : driftTracker.medianBlockHeightForKey(spaceKey);
         final agreement =
             scale > 0 ? (1.0 - residual / scale).clamp(0.0, 1.0) : 0.0;
-        final n = existing.observationCount;
+        // Clamped for the same reason as the merge weight: n <= -1
+        // would zero or invert the running-mean denominator
+        // (PR #65 review).
+        final n = max(1, existing.observationCount);
         return ((existing.positionConfidence.raw * n) + agreement) / (n + 1);
     }
   }

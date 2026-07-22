@@ -7,8 +7,8 @@ upgrade without review.
 ### Added
 - `PositionMergeModel` enum and
   `StabilizationEngine(positionMergeModel: ...)` (#58). The default
-  [legacy] preserves 0.x numerics exactly. The opt-in
-  [agreementWeighted] prototype addresses the audit §1.7 findings:
+  `legacy` preserves 0.x numerics exactly. The opt-in
+  `agreementWeighted` prototype addresses the audit §1.7 findings:
   - **Merge weight decays with observation count**
     (`fresh / (existing·n + fresh)`): long-observed blocks become
     positionally sticky — a 6-times-confirmed block barely moves for a
