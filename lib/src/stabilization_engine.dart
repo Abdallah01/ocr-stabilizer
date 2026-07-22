@@ -50,7 +50,9 @@ enum PositionMergeModel {
   /// still adapt quickly. Merged confidence is a running mean of
   /// positional *agreement* — how close each corrected observation
   /// lands to the tracked position, scaled by the region's drift margin
-  /// (median block height when no margin is established) — so
+  /// (median block height when no margin of at least 0.01 px is
+  /// established — sub-quantum margins are numeric residue, not
+  /// jitter) — so
   /// disagreeing observations reduce confidence instead of saturating
   /// it, and `OverlapResolver.qualityScore`'s position term becomes
   /// informative again for well-observed blocks.
