@@ -1,3 +1,36 @@
+## 0.6.1 - 2026-07-21
+
+Performance release finishing the remaining #55 items. No API changes.
+
+### Performance
+- Intra-batch NMS now resolves overlaps against a per-batch spatial
+  grid instead of linearly scanning the whole output per fresh block —
+  ~O(n²)·(drift-margin per pair) becomes O(cells) (#55). Behavioral
+  nuance: the grid applies the same 3×3-neighborhood locality contract
+  the inter-capture matching path already uses, so two blocks whose
+  centers sit more than one bucket apart are no longer compared — only
+  observable for blocks wider than ~2 buckets, which the spatial index
+  documented as out-of-contract in 0.5.1.
+- `stabilize()` reuses that batch grid for grouping-contradiction
+  detection instead of building a second throwaway index every capture
+  (#55). The public `detectGroupingContradictions` now sizes its
+  temporary index's buckets from the engine's spatial index rather than
+  defaults.
+- `DriftTracker.medianDriftForKey` / `medianBlockHeightForKey` /
+  `driftMarginForKey` cache per-key results, invalidated on
+  `addObservation` and every clearing path — previously each call
+  copied and sorted up to 20 samples, several times per block per
+  capture (#55).
+
+### Internal
+- CI uploads the lcov coverage report as a build artifact from the
+  latest-stable leg (#60; badge/coverage-service wiring still open
+  there — needs a repo token).
+- `flutter_lints` constraint comment updated for the Dependabot-widened
+  `>=4.0.0 <7.0.0` range (#63): 4.x resolves on the Dart 3.3 floor,
+  newer lines elsewhere.
+- Test count: 513.
+
 ## 0.6.0 - 2026-07-20
 
 Audit-driven feature-and-fix release implementing the 0.6.0 roadmap

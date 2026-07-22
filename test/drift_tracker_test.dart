@@ -1174,6 +1174,25 @@ void main() {
       expect(tracker.propagationCountFor(outOfRange), 1);
     });
 
+    test('median cache invalidates on new observations and clears (#55)', () {
+      final tracker = DriftTracker();
+      for (var i = 0; i < 5; i++) {
+        tracker.addObservation(_makeBlock(top: 100), const Offset(0, 2.0));
+      }
+      final key = tracker.spaceKeyFor(_makeBlock(top: 100));
+      expect(tracker.medianDriftForKey(key).dy, closeTo(2.0, 1e-9));
+
+      // Shift the window decisively; the cached median must not survive.
+      for (var i = 0; i < 20; i++) {
+        tracker.addObservation(_makeBlock(top: 100), const Offset(0, 8.0));
+      }
+      expect(tracker.medianDriftForKey(key).dy, closeTo(8.0, 1e-9));
+
+      tracker.clearKey(key);
+      expect(tracker.medianDriftForKey(key), Offset.zero);
+      expect(tracker.medianBlockHeightForKey(key), 16.0);
+    });
+
     test('deprecated spaceKeys alias still mirrors observedKeys', () {
       final tracker = DriftTracker();
       tracker.addObservation(

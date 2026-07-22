@@ -102,6 +102,7 @@ class DriftTracker {
     if (!blockHeight.isFinite || blockHeight <= 0) blockHeight = 16.0;
 
     final spaceKey = spaceKeyFor(block);
+    _invalidateMedianCaches(spaceKey);
     if (kDebugMode) {
       debugPrint(
         '[DRIFT] RECORDED key=$spaceKey drift=(${drift.dx.toStringAsFixed(1)},${drift.dy.toStringAsFixed(1)}) total=${(_regionDrifts[spaceKey]?.length ?? 0) + 1}',
@@ -150,31 +151,50 @@ class DriftTracker {
   /// 2. Median: [RobustStats.median] for proper even-length handling
   /// 3. Boundedness: clamped to ±[medianBlockHeightForKey]
   ///
+  /// Per-key median caches (#55). The medians are queried several times
+  /// per block per capture (dedup margin, NMS, band spatial confirm,
+  /// merge correction) but only change when an observation lands in the
+  /// key's window — so each cache entry is computed once per
+  /// (key, window-state) instead of sort-per-call. Invalidated per key
+  /// by [addObservation] and by every clearing path.
+  final Map<SpaceKey, Offset> _medianDriftCache = {};
+  final Map<SpaceKey, double> _medianHeightCache = {};
+
+  /// Drop cached medians for [spaceKey] (its window changed).
+  void _invalidateMedianCaches(SpaceKey spaceKey) {
+    _medianDriftCache.remove(spaceKey);
+    _medianHeightCache.remove(spaceKey);
+  }
+
   /// The returned value is always safe to apply directly as a correction.
   Offset medianDriftForKey(SpaceKey spaceKey) {
-    final drifts = _regionDrifts[spaceKey];
-    if (drifts == null || drifts.length < 3) return Offset.zero;
+    return _medianDriftCache.putIfAbsent(spaceKey, () {
+      final drifts = _regionDrifts[spaceKey];
+      if (drifts == null || drifts.length < 3) return Offset.zero;
 
-    final medianDx =
-        RobustStats.median(drifts.map((d) => d.dx).toList()) ?? 0.0;
-    final medianDy =
-        RobustStats.median(drifts.map((d) => d.dy).toList()) ?? 0.0;
+      final medianDx =
+          RobustStats.median(drifts.map((d) => d.dx).toList()) ?? 0.0;
+      final medianDy =
+          RobustStats.median(drifts.map((d) => d.dy).toList()) ?? 0.0;
 
-    final maxMargin = medianBlockHeightForKey(spaceKey);
-    return Offset(
-      medianDx.clamp(-maxMargin, maxMargin).toDouble(),
-      medianDy.clamp(-maxMargin, maxMargin).toDouble(),
-    );
+      final maxMargin = medianBlockHeightForKey(spaceKey);
+      return Offset(
+        medianDx.clamp(-maxMargin, maxMargin).toDouble(),
+        medianDy.clamp(-maxMargin, maxMargin).toDouble(),
+      );
+    });
   }
 
   /// Median block height for a space key.
   ///
   /// Returns 16.0 if no observations for the key.
   double medianBlockHeightForKey(SpaceKey spaceKey) {
-    final heights = _regionBlockHeights[spaceKey];
-    if (heights == null || heights.isEmpty) return 16.0;
+    return _medianHeightCache.putIfAbsent(spaceKey, () {
+      final heights = _regionBlockHeights[spaceKey];
+      if (heights == null || heights.isEmpty) return 16.0;
 
-    return RobustStats.median(heights.toList()) ?? 16.0;
+      return RobustStats.median(heights.toList()) ?? 16.0;
+    });
   }
 
   /// Adaptive overlap detection threshold for a space key.
@@ -195,6 +215,7 @@ class DriftTracker {
     final hadDrifts = _regionDrifts.remove(spaceKey) != null;
     final hadHeights = _regionBlockHeights.remove(spaceKey) != null;
     _propagationCounts.remove(spaceKey);
+    _invalidateMedianCaches(spaceKey);
     if (kDebugMode && !hadDrifts && !hadHeights) {
       debugPrint('[DRIFT] clearKey no-op: "$spaceKey" not found');
     }
@@ -222,6 +243,14 @@ class DriftTracker {
       return region >= firstRegion && region <= lastRegion;
     });
     _propagationCounts.removeWhere((key, _) {
+      final region = key.regionIndex;
+      return region >= firstRegion && region <= lastRegion;
+    });
+    _medianDriftCache.removeWhere((key, _) {
+      final region = key.regionIndex;
+      return region >= firstRegion && region <= lastRegion;
+    });
+    _medianHeightCache.removeWhere((key, _) {
       final region = key.regionIndex;
       return region >= firstRegion && region <= lastRegion;
     });
@@ -270,6 +299,8 @@ class DriftTracker {
     _regionBlockHeights.clear();
     _observationLog.clear();
     _propagationCounts.clear();
+    _medianDriftCache.clear();
+    _medianHeightCache.clear();
   }
 
   /// Number of drift propagations recorded for [spaceKey] via

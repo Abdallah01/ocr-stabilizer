@@ -361,13 +361,16 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       _assertValidConfidence(freshBlocks[i], index: i);
     }
 
-    // 1. Dedup pipeline
-    final deduped = _dedup(freshBlocks);
+    // 1. Dedup pipeline (also yields the per-batch spatial grid, reused
+    //    below so grouping detection doesn't build a second throwaway
+    //    index every capture, #55)
+    final dedupResult = _dedup(freshBlocks);
+    final deduped = dedupResult.blocks;
 
     // 2. Contradiction detection (before merge so contradicted blocks
     //    can be signaled for eviction before fresh blocks enter)
     final contradictions = <ContradictionEvent<T>>[
-      ...detectGroupingContradictions(deduped),
+      ..._detectGroupingContradictions(deduped, dedupResult.batchIndex),
       ...detectSplittingContradictions(deduped),
     ];
 
@@ -516,13 +519,22 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   ///    position+text twice
   /// 3. Spatial overlap NMS — when two batch blocks overlap, higher quality
   ///    or higher hierarchy weight wins
-  List<T> _dedup(List<T> blocks) {
+  ({List<T> blocks, SpatialBlockIndex<T> batchIndex}) _dedup(List<T> blocks) {
     final out = <T>[];
     final seenKeys = <String>{};
     // Key each *kept* block was registered under, so an evicted block's
     // key can be retired with it. Identity-keyed: consumer blocks may
     // implement value equality (#50).
     final keptKeys = Map<T, String>.identity();
+    // Per-batch spatial grid mirroring `out` (#55): overlap lookup was a
+    // linear scan of the whole output per fresh block — O(n²) with a
+    // drift-margin computation per pair. The grid makes it O(cells).
+    // Bucket sizes adopt the main index's so quantization stays uniform.
+    // Note the grid's 3×3-neighborhood semantics: a pair whose centers
+    // sit more than one cell apart is not considered overlapping — the
+    // same locality contract the inter-capture matching path already
+    // uses via [SpatialBlockIndex.candidates].
+    final batchIndex = SpatialBlockIndex<T>()..adoptBucketSizes(spatialIndex);
 
     for (final b in blocks) {
       // 1. Noise filter: skip blocks with empty/whitespace-only text
@@ -544,7 +556,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       // only for blocks that survive NMS — a dropped block's key must
       // not suppress later same-bucket blocks, and an evicted block's
       // key retires with it (#50).
-      final overlapping = _findBatchOverlap(b, out);
+      final overlapping = _findBatchOverlap(b, batchIndex);
       if (overlapping != null) {
         final result = _resolver.resolveOverlap(
           incoming: b,
@@ -561,12 +573,15 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
             // than the one NMS resolved against (#50).
             final idx = _identityIndexOf(out, overlapping);
             out[idx] = b;
+            batchIndex.remove(overlapping);
+            batchIndex.add(b);
             final evictedKey = keptKeys.remove(overlapping);
             if (evictedKey != null) seenKeys.remove(evictedKey);
             seenKeys.add(key);
             keptKeys[b] = key;
           case OverlapResult.keep:
             out.add(b);
+            batchIndex.add(b);
             seenKeys.add(key);
             keptKeys[b] = key;
           case OverlapResult.drop:
@@ -575,11 +590,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         }
       } else {
         out.add(b);
+        batchIndex.add(b);
         seenKeys.add(key);
         keptKeys[b] = key;
       }
     }
-    return out;
+    return (blocks: out, batchIndex: batchIndex);
   }
 
   /// Index of [target] in [list] by object identity (never `==`).
@@ -605,11 +621,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     return neighbors.any(seenKeys.contains);
   }
 
-  /// Find an overlapping block within the current batch [out].
-  T? _findBatchOverlap(T block, List<T> out) {
+  /// Find an overlapping block among [batchIndex]'s grid-neighborhood
+  /// candidates for [block] (#55 — replaces the O(n²) full-batch scan).
+  T? _findBatchOverlap(T block, SpatialBlockIndex<T> batchIndex) {
     final threshold = _resolver.overlapThresholdFor(block);
     final dm = driftTracker.driftMarginForKey(driftTracker.spaceKeyFor(block));
-    for (final existing in out) {
+    for (final existing in batchIndex.candidates(block)) {
       final match = _resolver.checkOverlap(
         block,
         block.absoluteRect,
@@ -1046,11 +1063,19 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   List<ContradictionEvent<T>> detectGroupingContradictions(
     List<T> freshBlocks,
   ) {
-    if (freshBlocks.length < 2) return const [];
-
-    // Build a temporary spatial index of fresh blocks for O(cells) lookup
-    final freshIndex = SpatialBlockIndex<T>();
+    // Public entry point: build the fresh-block index here. The internal
+    // [stabilize] path passes the batch grid `_dedup` already built for
+    // NMS instead of constructing a second one per capture (#55).
+    final freshIndex = SpatialBlockIndex<T>()..adoptBucketSizes(spatialIndex);
     freshIndex.rebuild(freshBlocks);
+    return _detectGroupingContradictions(freshBlocks, freshIndex);
+  }
+
+  List<ContradictionEvent<T>> _detectGroupingContradictions(
+    List<T> freshBlocks,
+    SpatialBlockIndex<T> freshIndex,
+  ) {
+    if (freshBlocks.length < 2) return const [];
 
     final events = <ContradictionEvent<T>>[];
 
