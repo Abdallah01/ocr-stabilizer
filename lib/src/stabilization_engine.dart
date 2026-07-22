@@ -49,10 +49,9 @@ enum PositionMergeModel {
   /// long-observed blocks become positionally sticky while young blocks
   /// still adapt quickly. Merged confidence is a running mean of
   /// positional *agreement* — how close each corrected observation
-  /// lands to the tracked position, scaled by the region's drift margin
-  /// (median block height when no margin of at least 0.01 px is
-  /// established — sub-quantum margins are numeric residue, not
-  /// jitter) — so
+  /// lands to the tracked position, scaled by the region's jitter
+  /// allowance (3x median block height, sweep-validated on production
+  /// captures — see #58) — so
   /// disagreeing observations reduce confidence instead of saturating
   /// it, and `OverlapResolver.qualityScore`'s position term becomes
   /// informative again for well-observed blocks.
@@ -63,23 +62,28 @@ enum PositionMergeModel {
 /// translation stability to the consumer.
 const int _kWellObservedThreshold = 3;
 
-/// Minimum drift margin (px) treated as an *established* jitter scale by
-/// [PositionMergeModel.agreementWeighted].
+/// Jitter allowance multiplier for [PositionMergeModel.agreementWeighted]:
+/// the agreement scale is this multiple of the region's median block
+/// height. A residual equal to the full allowance scores agreement 0; a
+/// residual well inside it scores partial agreement.
 ///
-/// Pixel-stable consumer streams are not bit-stable: coordinate
-/// normalization (scroll subtraction, DPR scaling) leaves numeric residue
-/// on re-observed rects — observed up to ~2e-5 px in production captures
-/// (#58). Once a region window holds three observations, its median drift
-/// lands nonzero-tiny, and an exact-zero `margin > 0` test would adopt
-/// that residue as the agreement scale, dividing noise by noise (measured:
-/// agreement p50 = 0.0, confidence decaying 1.0 → 0.34 on a block that
-/// never moved). Margins below this floor mean "no measurable drift" and
-/// must engage the median-block-height fallback exactly like the no-data
-/// case. 1e-2 px sits ~3 orders above the observed residue and below the
-/// smallest layout jitter worth adapting to; genuine sub-floor drift (if a
-/// renderer ever produces it) degrades to the lenient fallback, not to a
-/// wrong scale.
-const double _kMinEstablishedMarginPx = 0.01;
+/// Why not the drift margin? `driftMarginForKey` is a *median-of-drift* —
+/// a systematic-offset measure, ~0 under symmetric jitter and sub-floor
+/// numeric residue on stable streams — so a margin-derived scale is dead
+/// or poisonous in every sampled production regime (#58, #70, #71). A
+/// spread measure (MAD of drift residuals, see `RobustStats`) is the
+/// documented option if a drift-adaptive scale is ever wanted; note #72
+/// (the `madOrFallback` floor) becomes load-bearing first.
+///
+/// Why 3? Sweep-validated on production captures (#58, 2026-07-22):
+/// at 1x, deep-chain OCR jitter is chased at 15.8 px/merge (worse than
+/// legacy's 11.8); at 3x the confidence→weight anchoring loop engages and
+/// damps it to 3.8 px/merge, while confidence stays regime-discriminating
+/// (~1.0 stable / 0.85 reflow / 0.35 heavy jitter — never saturated-blind
+/// like legacy). Calibrated against ML-Kit-shaped noise; re-run the sweep
+/// (`tool/replay` ab-report) before trusting it for a different OCR
+/// engine's residual distribution.
+const double _kAgreementJitterAllowance = 3.0;
 
 /// Maximum text vote entries per block to prevent OOM on noisy edges.
 const int _kMaxTextVotes = 5;
@@ -255,17 +259,15 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       case PositionMergeModel.agreementWeighted:
         // Confidence is a running mean of positional AGREEMENT: how
         // close the corrected fresh observation landed to the tracked
-        // position, scaled by the region's expected jitter — the drift
-        // margin when one is established ([_kMinEstablishedMarginPx]),
-        // else the median block height. Disagreeing observations now
-        // REDUCE confidence instead of saturating it.
+        // position, scaled by the region's jitter allowance
+        // ([_kAgreementJitterAllowance] x median block height).
+        // Disagreeing observations REDUCE confidence instead of
+        // saturating it.
         final residual =
             (correctedRect.topLeft - existing.absoluteRect.raw.topLeft)
                 .distance;
-        final margin = driftTracker.driftMarginForKey(spaceKey);
-        final scale = margin >= _kMinEstablishedMarginPx
-            ? margin
-            : driftTracker.medianBlockHeightForKey(spaceKey);
+        final scale = driftTracker.medianBlockHeightForKey(spaceKey) *
+            _kAgreementJitterAllowance;
         final agreement =
             scale > 0 ? (1.0 - residual / scale).clamp(0.0, 1.0) : 0.0;
         // Clamped for the same reason as the merge weight: n <= -1
