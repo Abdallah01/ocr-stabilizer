@@ -9,33 +9,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # '' resolves to latest stable; 3.19.6 is the declared minimum
-        # floor (pubspec sdk ^3.3.0 / flutter >=3.19.0) — without this
-        # leg, a post-3.3 language feature could ship unnoticed (#56).
-        flutter-version: ['', '3.19.6']
+        # 'stable' is the latest Dart SDK; 3.3 is the declared minimum
+        # floor (pubspec sdk ^3.3.0) — without this leg, a post-3.3
+        # language feature could ship unnoticed (#56). Pure-Dart since
+        # 0.8.0 (#59): flutter-action replaced by setup-dart.
+        sdk: [stable, 3.3.4]
     steps:
       - uses: actions/checkout@v7
-      - uses: subosito/flutter-action@v2
+      - uses: dart-lang/setup-dart@v1
         with:
-          channel: stable
-          flutter-version: ${{ matrix.flutter-version }}
-      - run: flutter pub get
-      - run: flutter analyze
-      - run: flutter test --coverage
+          sdk: ${{ matrix.sdk }}
+      - run: dart pub get
+      - run: dart analyze --fatal-infos
+      - run: dart test
       # Coverage visibility (#60): lcov uploaded as a build artifact from
       # the latest-stable leg. No external coverage service — wiring a
       # Codecov-style badge needs a repo token, tracked in #60.
+      - if: matrix.sdk == 'stable'
+        run: |
+          dart pub global activate coverage
+          dart pub global run coverage:test_with_coverage
       - uses: actions/upload-artifact@v4
-        if: matrix.flutter-version == ''
+        if: matrix.sdk == 'stable'
         with:
           name: coverage-lcov
           path: coverage/lcov.info
 
   pana:
-    # Score guard for issue #36: dartdoc 9.0.2+ crashes on Windows due to
-    # CRLF offsets in Flutter SDK @docImport files
-    # (https://github.com/dart-lang/dartdoc/issues/4180), capping local pana at
-    # 150/160. pub.dev's scoring runs on Linux where the bug can't reproduce —
+    # Score guard for issue #36. pub.dev's scoring runs on Linux —
     # this job is the authoritative pre-publish score check.
     #
     # pana is pinned: future releases can shift scoring weights or add
@@ -44,9 +45,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: subosito/flutter-action@v2
+      - uses: dart-lang/setup-dart@v1
         with:
-          channel: stable
-      - run: flutter pub get
+          sdk: stable
+      - run: dart pub get
       - run: dart pub global activate pana 0.23.12
       - run: dart pub global run pana --exit-code-threshold 0

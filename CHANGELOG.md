@@ -1,3 +1,42 @@
+## 0.8.0 - 2026-07-22
+
+The package is now **pure Dart** (#59): no Flutter SDK dependency, usable
+in server-side Dart (PDF and camera OCR pipelines) and CLI tools as well
+as Flutter apps. Same behavior, new geometry types — read the migration
+notes below.
+
+### Breaking
+- **Geometry types moved off `dart:ui`.** `Rect`, `Offset`, and `Size`
+  are now package-owned value types exported from the barrel
+  (`lib/src/types/geometry.dart`), member-compatible with their
+  `dart:ui` counterparts and matching their semantics exactly (strict
+  `overlaps` on edge-touching rects, negative-size `intersect` for
+  disjoint rects, `Rect.lerp` incl. null-scaling branches).
+  Migration:
+  - Code constructing package inputs: change the import — call sites
+    are unchanged.
+  - Flutter render boundary: convert with
+    `ui.Rect.fromLTRB(r.left, r.top, r.right, r.bottom)` and the
+    reverse (copy-paste extensions in the README's Platform Support
+    section).
+- **Debug logging is opt-in.** `BlockClassifierService` and
+  `DriftTracker` take a `debugLogger: void Function(String)?`
+  constructor parameter (default null = silent) instead of calling
+  Flutter's `debugPrint`. Pass `debugLogger: print` to restore the
+  previous output.
+- **pubspec surface**: the `flutter` SDK dependency and
+  `flutter: '>=3.19.0'` environment constraint are gone; dev-deps are
+  `test` + `lints` (replacing `flutter_test` + `flutter_lints` — the
+  effective lint rule set is unchanged, `flutter_lints` layered
+  Flutter-widget rules this package never triggered).
+
+### Internal
+- CI runs on `dart` natively: latest stable plus a Dart 3.3 floor leg
+  (replacing the Flutter 3.19 floor leg — same floor, expressed in the
+  SDK that now matters). Coverage artifact retained.
+- All 520 tests pass under plain `dart test` on both legs; zero Flutter
+  packages in dependency resolution.
+
 ## 0.7.0 - 2026-07-22
 
 Additive release: the opt-in `agreementWeighted` position-merge

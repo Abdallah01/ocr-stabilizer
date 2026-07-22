@@ -1,7 +1,5 @@
-import 'dart:ui';
-
-import 'package:flutter_test/flutter_test.dart';
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';
+import 'package:test/test.dart';
 
 // =============================================================================
 // POSITION MERGE MODEL (#58 / v0.7.0)

@@ -1,14 +1,12 @@
-import 'dart:ui';
-
-import 'package:flutter/foundation.dart';
-
 import 'block_meta.dart';
 import 'classification_input.dart';
 import 'classification_result.dart';
 import 'confidence.dart';
+import 'internal/debug.dart';
 import 'iqr_outlier.dart';
 import 'ocr_block.dart';
 import 'types/absolute_rect.dart';
+import 'types/geometry.dart' show Offset, Rect;
 import 'types/confidence_types.dart';
 import 'types/scroll_context.dart';
 import 'types/sticky_fallback.dart';
@@ -41,10 +39,22 @@ class BlockClassifierService {
   /// Clock function for deterministic testing. Defaults to [DateTime.now].
   final DateTime Function() _clock;
 
-  /// Creates a block classifier with optional exclusion threshold and clock.
+  /// Injectable sink for debug diagnostics.
+  ///
+  /// Pure-Dart replacement for Flutter's `debugPrint`: when non-null and the
+  /// build is a debug build ([kDebugMode]), classification diagnostics are
+  /// forwarded to this callback. Defaults to null, which silences all
+  /// diagnostic output (the previous Flutter behavior printed them to the
+  /// console). Pass `print` — or a logging framework hook — to restore
+  /// visible output.
+  final void Function(String message)? debugLogger;
+
+  /// Creates a block classifier with optional exclusion threshold, clock,
+  /// and debug logger.
   BlockClassifierService({
     this.exclusionOverlapThreshold = 0.5,
     DateTime Function()? clock,
+    this.debugLogger,
   }) : _clock = clock ?? DateTime.now;
 
   /// Classify OCR text groups and compute absolute coordinates.
@@ -105,7 +115,8 @@ class BlockClassifierService {
       // #5: Guard against empty groups (would crash reduce())
       if (group.isEmpty) {
         if (kDebugMode) {
-          debugPrint('[BlockClassifier] empty group in textGroups — skipping');
+          debugLogger
+              ?.call('[BlockClassifier] empty group in textGroups — skipping');
         }
         continue;
       }
@@ -168,7 +179,7 @@ class BlockClassifierService {
             // #2: Guard with kDebugMode
             if (kDebugMode) {
               final exclText = group.map((b) => b.text).join(' ');
-              debugPrint(
+              debugLogger?.call(
                 '[Classify] EXCLUSION DROP: "${exclText.length > 30 ? '${exclText.substring(0, 30)}…' : exclText}"',
               );
             }
@@ -280,7 +291,7 @@ class BlockClassifierService {
           droppedViewport++;
           // #2: Guard with kDebugMode
           if (kDebugMode) {
-            debugPrint(
+            debugLogger?.call(
               '[Classify] VIEWPORT DROP: h=${absoluteRect.height.toStringAsFixed(0)} '
               'limit=${limit.toStringAsFixed(0)} text="${originalText.length > 30 ? '${originalText.substring(0, 30)}…' : originalText}"',
             );
@@ -299,7 +310,7 @@ class BlockClassifierService {
         }
       } catch (e) {
         if (kDebugMode) {
-          debugPrint(
+          debugLogger?.call(
             '[BlockClassifier] positionLookup threw: $e — using neutral stability',
           );
         }
@@ -313,7 +324,7 @@ class BlockClassifierService {
 
       // Debug: flag IC blocks without containerId
       if (kDebugMode && isIcChild && input.innerScrollerContainerId == null) {
-        debugPrint(
+        debugLogger?.call(
           '[BlockClassifier] IC block without containerId — drift will fall back to normal: space',
         );
       }
@@ -347,7 +358,7 @@ class BlockClassifierService {
 
     // #2: Guard with kDebugMode
     if (kDebugMode) {
-      debugPrint(
+      debugLogger?.call(
         '[Classify] ${textGroups.length} groups → '
         '${classified.length} classified, '
         'dropped: $droppedExclusion exclusion, $droppedViewport viewport, '
@@ -357,7 +368,7 @@ class BlockClassifierService {
       );
 
       if (deferredAnimating > 0) {
-        debugPrint(
+        debugLogger?.call(
           '[BlockClassifier] deferred $deferredAnimating block(s) in animating carousel',
         );
       }

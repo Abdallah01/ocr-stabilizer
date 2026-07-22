@@ -1,7 +1,5 @@
 // ignore_for_file: avoid_print
 
-import 'dart:ui';
-
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
 /// Minimal example: stabilize two batches of OCR observations using

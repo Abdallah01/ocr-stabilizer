@@ -17,7 +17,7 @@
 // independently testable and replaceable.
 // =============================================================================
 
-import 'dart:ui' show Rect;
+import 'types/geometry.dart' show Rect;
 
 import 'tracked_block.dart';
 

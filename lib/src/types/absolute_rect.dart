@@ -1,4 +1,4 @@
-import 'dart:ui' show Offset, Rect, Size;
+import 'geometry.dart' show Offset, Rect, Size;
 
 /// Bounding box in absolute coordinates (world-space).
 ///

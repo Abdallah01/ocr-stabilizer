@@ -11,7 +11,7 @@
 // - C1: rejectedTextBand counter ticks correctly so the band funnel is
 //       decomposable.
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 import 'package:ocr_stabilizer/src/band_fallback_config.dart';
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';

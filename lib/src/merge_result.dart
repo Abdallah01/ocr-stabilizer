@@ -1,4 +1,4 @@
-import 'dart:ui' show Offset;
+import 'types/geometry.dart' show Offset;
 
 import 'internal/confidence_validation.dart';
 import 'text_vote.dart';

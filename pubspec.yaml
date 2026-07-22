@@ -1,8 +1,8 @@
 name: ocr_stabilizer
 description: >-
   Real-time OCR overlay stabilization engine — drift correction,
-  spatial indexing, block tracking. Built for Flutter.
-version: 0.7.0
+  spatial indexing, block tracking. Pure Dart; Flutter-ready.
+version: 0.8.0
 homepage: https://github.com/Abdallah01/ocr-stabilizer
 repository: https://github.com/Abdallah01/ocr-stabilizer
 issue_tracker: https://github.com/Abdallah01/ocr-stabilizer/issues
@@ -16,22 +16,20 @@ topics:
 
 environment:
   sdk: ^3.3.0
-  flutter: '>=3.19.0'
 
 dependencies:
-  flutter:
-    sdk: flutter
-  # @internal annotation on BandFallbackStatsInternal (#53). Constraint
-  # floor matches the meta version pinned by Flutter 3.19.x, the
-  # package's minimum supported Flutter.
+  # @immutable / @visibleForTesting / @internal annotations. Was already a
+  # direct dependency before the pure-Dart migration (#59); floor matches
+  # the meta version pinned by Flutter 3.19.x, the package's previous
+  # minimum supported Flutter.
   meta: ^1.11.0
 
 dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  # Range resolves adaptively per SDK: 4.x on the package floor
-  # (Dart ^3.3.0 / Flutter 3.19, where 5.x+ can't resolve), newest
-  # available line elsewhere. Keep the lower bound at 4.0.0 so
-  # contributors on the floor can `pub get`; Dependabot widens the
-  # upper bound as new majors ship (#56, #63).
-  flutter_lints: ">=4.0.0 <7.0.0"
+  # Core lint set replacing flutter_lints after the pure-Dart migration
+  # (#59). flutter_lints layers Flutter-specific rules on top of this
+  # same package, so the effective rule set for pure-Dart code is
+  # unchanged.
+  lints: ^4.0.0
+  # Replaces flutter_test (#59): the API surface the suite uses
+  # (group/test/expect and core matchers) is identical.
+  test: ^1.24.0
