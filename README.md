@@ -4,8 +4,9 @@ A real-time stabilization engine for live OCR overlays. Tracks text block
 identity across noisy captures, corrects positional drift, and provides
 spatial indexing for deduplication.
 
-Built for Flutter. Designed for OCR pipelines where screenshots are captured
-at 1-2 Hz and translated overlays must remain stable as the user scrolls.
+Pure Dart — usable in Flutter apps and server-side pipelines alike.
+Designed for OCR pipelines where screenshots are captured at 1-2 Hz and
+translated overlays must remain stable as the user scrolls.
 
 ## The Problem
 
@@ -22,9 +23,16 @@ adapts SLAM techniques to the OCR domain.
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^0.7.0
+  ocr_stabilizer: ^0.8.0
 ```
 
+> **What's new in 0.8.0** — the package is now pure Dart (#59): no Flutter
+> SDK dependency, usable server-side. `Rect`/`Offset`/`Size` now come from
+> the package instead of `dart:ui` (member-compatible; see
+> [Platform Support](#platform-support) for the two-line render-boundary
+> conversion), and debug logging became an opt-in `debugLogger` parameter.
+> See the [CHANGELOG](CHANGELOG.md#080---2026-07-22) Breaking section.
+>
 > **What's new in 0.7.0** — opt-in `PositionMergeModel.agreementWeighted`:
 > observation-count-anchored merge weights (long-observed blocks stop
 > chasing jitter) and agreement-derived position confidence (disagreement
@@ -326,9 +334,30 @@ A block's identity is a six-dimensional signature:
 
 ## Platform Support
 
-The package depends on `dart:ui` (for `Rect`, `Offset`) and therefore
-requires the Flutter SDK. It has no platform-specific code — it works on
-Android, iOS, macOS, Windows, Linux, and Web.
+The package is pure Dart (since 0.8.0) — no Flutter SDK required. It runs
+anywhere Dart runs: Flutter apps on every platform, server-side Dart, and
+CLI tools.
+
+Geometry uses the package's own `Rect` / `Offset` / `Size` value types
+(member-compatible with `dart:ui`'s). Flutter apps convert at the render
+boundary — the extensions below are all that's needed:
+
+```dart
+import 'dart:ui' as ui;
+import 'package:ocr_stabilizer/ocr_stabilizer.dart';
+
+extension RectToUi on Rect {
+  ui.Rect toUi() => ui.Rect.fromLTRB(left, top, right, bottom);
+}
+
+extension UiToRect on ui.Rect {
+  Rect toStabilizer() => Rect.fromLTRB(left, top, right, bottom);
+}
+```
+
+Debug diagnostics are opt-in: pass `debugLogger: print` to
+`BlockClassifierService` or `DriftTracker` to restore the pre-0.8.0
+`debugPrint` output (default is silent).
 
 The `SubmapMembership` and `ClassificationInput` interfaces allow the engine
 to support different input sources:
