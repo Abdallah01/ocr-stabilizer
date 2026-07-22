@@ -62,6 +62,7 @@ export 'src/tracked_block.dart';
 export 'src/types/absolute_rect.dart';
 export 'src/types/confidence_types.dart';
 export 'src/types/container_id.dart';
+export 'src/types/geometry.dart';
 export 'src/types/scroll_context.dart';
 export 'src/types/space_key.dart';
 export 'src/types/sticky_fallback.dart';

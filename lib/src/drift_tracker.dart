@@ -8,15 +8,15 @@
 // ============================================================================
 
 import 'dart:collection' show Queue;
-import 'dart:ui' show Offset, Rect;
 
-import 'package:flutter/foundation.dart'
-    show debugPrint, kDebugMode, visibleForTesting;
+import 'package:meta/meta.dart' show visibleForTesting;
 
 import 'css_submap_membership.dart';
+import 'internal/debug.dart';
 import 'robust_stats.dart';
 import 'submap_membership.dart';
 import 'tracked_block.dart';
+import 'types/geometry.dart' show Offset, Rect;
 import 'types/space_key.dart';
 
 /// Tracks per-region OCR drift observations to compensate for systematic
@@ -40,8 +40,18 @@ class DriftTracker {
   /// Layout pixels per scroll region, from [submapMembership].
   int get regionSize => submapMembership.regionSize;
 
-  /// Create a new drift tracker with optional custom submap membership strategy.
-  DriftTracker({SubmapMembership? submapMembership})
+  /// Injectable sink for debug diagnostics.
+  ///
+  /// Pure-Dart replacement for Flutter's `debugPrint`: when non-null and the
+  /// build is a debug build ([kDebugMode]), drift diagnostics are forwarded
+  /// to this callback. Defaults to null, which silences all diagnostic
+  /// output (the previous Flutter behavior printed them to the console).
+  /// Pass `print` — or a logging framework hook — to restore visible output.
+  final void Function(String message)? debugLogger;
+
+  /// Create a new drift tracker with optional custom submap membership
+  /// strategy and debug logger.
+  DriftTracker({SubmapMembership? submapMembership, this.debugLogger})
       : submapMembership = submapMembership ?? const CssSubmapMembership();
 
   /// Maximum observations per region (rolling window).
@@ -83,18 +93,20 @@ class DriftTracker {
   void addObservation(TrackedBlock block, Offset drift, {double? blockHeight}) {
     // Check exclusion rules from membership strategy
     if (submapMembership.shouldExcludeFromObservation(block)) {
-      if (kDebugMode) debugPrint('[DRIFT] skip: excluded by submap membership');
+      if (kDebugMode) {
+        debugLogger?.call('[DRIFT] skip: excluded by submap membership');
+      }
       return;
     }
 
     if (!drift.dx.isFinite || !drift.dy.isFinite) {
-      if (kDebugMode) debugPrint('[DRIFT] skip non-finite drift');
+      if (kDebugMode) debugLogger?.call('[DRIFT] skip non-finite drift');
       return;
     }
 
     // Guard against NaN/infinity in block position
     if (!block.absoluteRect.top.isFinite) {
-      if (kDebugMode) debugPrint('[DRIFT] skip non-finite top');
+      if (kDebugMode) debugLogger?.call('[DRIFT] skip non-finite top');
       return;
     }
 
@@ -104,7 +116,7 @@ class DriftTracker {
     final spaceKey = spaceKeyFor(block);
     _invalidateMedianCaches(spaceKey);
     if (kDebugMode) {
-      debugPrint(
+      debugLogger?.call(
         '[DRIFT] RECORDED key=$spaceKey drift=(${drift.dx.toStringAsFixed(1)},${drift.dy.toStringAsFixed(1)}) total=${(_regionDrifts[spaceKey]?.length ?? 0) + 1}',
       );
     }
@@ -217,7 +229,7 @@ class DriftTracker {
     _propagationCounts.remove(spaceKey);
     _invalidateMedianCaches(spaceKey);
     if (kDebugMode && !hadDrifts && !hadHeights) {
-      debugPrint('[DRIFT] clearKey no-op: "$spaceKey" not found');
+      debugLogger?.call('[DRIFT] clearKey no-op: "$spaceKey" not found');
     }
     return hadDrifts || hadHeights;
   }

@@ -1,5 +1,5 @@
 import 'dart:math' show max, min;
-import 'dart:ui' show Offset, Rect;
+import 'types/geometry.dart' show Offset, Rect;
 
 import 'band_fallback_config.dart';
 import 'band_fallback_stats.dart';

@@ -1,6 +1,4 @@
-import 'dart:ui';
-
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
 void main() {

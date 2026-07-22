@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
 // SPDX-License-Identifier: BSD-3-Clause
 
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/types/absolute_rect.dart';
