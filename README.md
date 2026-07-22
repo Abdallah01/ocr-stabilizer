@@ -22,8 +22,15 @@ adapts SLAM techniques to the OCR domain.
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^0.6.0
+  ocr_stabilizer: ^0.7.0
 ```
+
+> **What's new in 0.7.0** — opt-in `PositionMergeModel.agreementWeighted`:
+> observation-count-anchored merge weights (long-observed blocks stop
+> chasing jitter) and agreement-derived position confidence (disagreement
+> reduces confidence instead of saturating it). Default stays `legacy` —
+> upgrade is a no-op until you opt in. See the
+> [CHANGELOG](CHANGELOG.md#070---2026-07-22).
 
 > **What's new in 0.6.0** — audit-driven release: opt-in
 > `missedFrameRetention` keeps block identity across missed OCR frames,
