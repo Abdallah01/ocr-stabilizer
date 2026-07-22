@@ -1,3 +1,39 @@
+## 0.9.0 - 2026-07-23
+
+Validation release for the opt-in `agreementWeighted` model (#58 data
+arc): production-capture replay across three stream regimes (stable /
+reflow / heavy OCR jitter), two numerics fixes, and the replay tooling
+that produced the evidence. Default behavior is unchanged — `legacy`
+consumers can upgrade without review.
+
+### Changed (opt-in `agreementWeighted` numerics only)
+- **The agreement scale is now a jitter allowance: 3× the regional
+  median block height** (#70, #73). The 0.7.0 drift-margin-derived scale
+  was removed: median-of-drift is a systematic-offset measure — ~0 under
+  symmetric jitter and pure numeric residue on stable streams — so it
+  collapsed position confidence on unmoving blocks (1.0 → 0.34) and,
+  via the confidence-anchored merge weight, chased deep-chain jitter at
+  15.8 px/merge. Post-change: deep-chain jitter damps to 3.8 px/merge
+  (legacy: 11.8) while confidence stays regime-discriminating
+  (~1.0 stable / 0.85 reflow / 0.35 heavy jitter). Sweep evidence:
+  `doc/replay/validation/2026-07-scale-sweep/`. Slated to become the
+  1.0 default (#74).
+
+### Added
+- **Replay rig for consumer-captured observation streams** (#68):
+  `dart tool/replay/replay.dart <freeze-report|ab-report|live-report>
+  <capture.jsonl>` grades captured streams against the engine — freeze
+  semantics (#57), position-model A/B (#58), and consumer-side lifecycle
+  views. JSONL schema contract: `doc/replay/capture_schema.md`.
+
+### Decided
+- **Provisional-freeze semantics stay evidence-free** (#57, #69, #76):
+  frozen captures accrue no observation count, text votes, or position.
+  Decision + re-armed re-open triggers are codified at the freeze path;
+  the one nonzero-traffic counterfactual observed (noisy-OCR dwell,
+  admit-mode replay) was tail magnitude — 1 chain, 3 freezes, 2
+  discarded high-confidence votes per ~5-minute session.
+
 ## 0.8.0 - 2026-07-22
 
 The package is now **pure Dart** (#59): no Flutter SDK dependency, usable
