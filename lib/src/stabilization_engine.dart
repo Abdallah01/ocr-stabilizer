@@ -977,16 +977,18 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     bool wasBandFallback = false,
   }) {
     // ┌─── Provisional freeze ─────────────────────────────────────────
-    // DECIDED (#57, 2026-07-22): frozen captures intentionally accrue NO
-    // evidence — no observation count, no text votes, no position update.
-    // Validated against production capture data (consumer stream replayed
-    // via tool/replay): at default config the freeze path carries zero
-    // traffic (candidateObservationFloor is unreachable on continuous-
-    // scroll streams whose observation chains cap at ~4), so richer
-    // freeze semantics would change nothing observable. Revisit ONLY if
-    // (a) candidateObservationFloor is lowered below provisionalCaptures+1
-    // or (b) a dwell/reflow-heavy stream shows nonzero freeze traffic —
-    // details in issue #57's closing data comment.
+    // DECIDED (#57, 2026-07-22; trigger fired and re-armed 2026-07-23):
+    // frozen captures intentionally accrue NO evidence — no observation
+    // count, no text votes, no position update. Validated against
+    // production capture data (consumer streams replayed via tool/replay):
+    // deterministic-rect streams carry zero freeze traffic, and the one
+    // admit-mode counterfactual WITH traffic (a noisy-OCR dwell) showed
+    // tail magnitude only — 1 provisional chain, 3 freezes, 2 discarded
+    // high-confidence text votes per ~5-minute session. Revisit ONLY if
+    // a consumer adopts BandFallbackMode.admit in production AND its
+    // captures show recurring high-confidence text-vote loss; the bounded
+    // change to evaluate then is text-vote-only accrual during freeze
+    // (position stays frozen by design). Details: issue #57.
     if (existing.isProvisional) {
       final remaining = existing.provisionalCapturesRemaining - 1;
       final result = MergeResult(
