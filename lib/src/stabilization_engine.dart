@@ -73,8 +73,10 @@ const int _kWellObservedThreshold = 3;
 /// agreement p50 = 0.0, confidence decaying 1.0 → 0.34 on a block that
 /// never moved). Margins below this floor mean "no measurable drift" and
 /// must engage the median-block-height fallback exactly like the no-data
-/// case. 1e-2 px sits ~3 orders above the observed residue and below any
-/// real layout jitter (≥ device-pixel quantum).
+/// case. 1e-2 px sits ~3 orders above the observed residue and below the
+/// smallest layout jitter worth adapting to; genuine sub-floor drift (if a
+/// renderer ever produces it) degrades to the lenient fallback, not to a
+/// wrong scale.
 const double _kMinEstablishedMarginPx = 0.01;
 
 /// Maximum text vote entries per block to prevent OOM on noisy edges.
