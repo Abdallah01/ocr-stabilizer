@@ -107,6 +107,76 @@ void main() {
     });
   });
 
+  group('loader hardening (review P1s)', () {
+    test('malformed meta.v is skipped, not fatal', () {
+      final s = CaptureStream.parse([
+        '{"t":"meta","v":"not-a-number","ts":1}',
+        '{"t":"obs","cap":1,"raw":0,"blocks":[]}',
+      ]);
+      expect(s.schemaVersion, isNull);
+      expect(s.skippedLines, 1);
+      expect(s.batches, hasLength(1));
+    });
+
+    test('non-string t is skipped and never reaches report code', () {
+      final s = CaptureStream.parse([
+        '{"t":42,"foo":"bar"}',
+        '{"t":"freeze","cap":1,"differs":false,"freshTconf":0.5}',
+      ]);
+      expect(s.skippedLines, 1);
+      expect(s.events, hasLength(1));
+      // liveReport must not crash on the surviving stream.
+      expect(liveReport(s)['mode'], 'live-report');
+    });
+
+    test('invariant-violating obs blocks count as invalidRecords, '
+        'separate from line noise', () {
+      final s = CaptureStream.parse([
+        'not json at all',
+        '{"t":"obs","cap":1,"raw":1,"blocks":['
+            '{"rect":[0,0,50,20],"otext":"x","pconf":7.5,"tconf":0.5}]}',
+      ]);
+      expect(s.skippedLines, 1, reason: 'the non-JSON line');
+      expect(s.invalidRecords, 1,
+          reason: 'pconf 7.5 violates the confidence-range invariant');
+      expect(s.batches, isEmpty);
+    });
+
+    test('latency join is rect-aware: recurring text across unrelated '
+        'windows does not false-join', () {
+      final s = CaptureStream.parse([
+        '{"t":"band_stamp","cap":10,"fresh":{"otext":"dup","rect":[0,0,50,20]},'
+            '"existing":{"otext":"other","rect":[0,10,50,30]}}',
+        '{"t":"band_stamp","cap":50,"fresh":{"otext":"dup","rect":[0,500,50,520]},'
+            '"existing":{"otext":"other2","rect":[0,510,50,530]}}',
+        '{"t":"band_decrement","cap":52,"block":{"otext":"dup",'
+            '"rect":[0,500,50,520]},"remaining":0,"expired":true,"inBatch":false}',
+      ]);
+      final lifecycle =
+          liveReport(s)['provisionalLifecycle'] as Map<String, Object?>;
+      final latency = lifecycle['promotionLatencyCaptures'] as Map;
+      expect(latency['count'], 1);
+      expect(latency['p50'], 2,
+          reason: 'must join the cap-50 stamp at the same rect, '
+              'not the cap-10 stamp 500px away (latency 42)');
+      expect(lifecycle['unjoinedTerminals'], 0);
+    });
+
+    test('terminal with no stamp inside the join radius counts unjoined',
+        () {
+      final s = CaptureStream.parse([
+        '{"t":"band_stamp","cap":10,"fresh":{"otext":"dup","rect":[0,0,50,20]},'
+            '"existing":{"otext":"other","rect":[0,10,50,30]}}',
+        '{"t":"band_decrement","cap":12,"block":{"otext":"dup",'
+            '"rect":[0,900,50,920]},"remaining":0,"expired":true,"inBatch":false}',
+      ]);
+      final lifecycle =
+          liveReport(s)['provisionalLifecycle'] as Map<String, Object?>;
+      expect((lifecycle['promotionLatencyCaptures'] as Map)['count'], 0);
+      expect(lifecycle['unjoinedTerminals'], 1);
+    });
+  });
+
   group('live-report (#57 consumer view)', () {
     test('aggregates lifecycle events and joins promotion latency', () {
       final report = liveReport(loadFixture());

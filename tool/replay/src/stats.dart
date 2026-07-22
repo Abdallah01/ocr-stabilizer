@@ -41,3 +41,10 @@ class NumStats {
       : 'n=$count mean=${mean.toStringAsFixed(2)} '
           'p50=${p50.toStringAsFixed(2)} p90=${p90.toStringAsFixed(2)}';
 }
+
+/// Round-to-nearest share with 3 decimals; null when the denominator is 0.
+/// The single share helper for every report module — mixing `~/`
+/// truncation with `.round()` made the same conceptual metric read
+/// differently across report types.
+Object? share(int part, int whole) =>
+    whole == 0 ? null : (part * 1000 / whole).round() / 1000;

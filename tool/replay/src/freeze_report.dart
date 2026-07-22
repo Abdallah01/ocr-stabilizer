@@ -36,6 +36,7 @@ Map<String, Object?> freezeReport(
       'batches': result.batches,
       'observations': result.observations,
       'skippedLines': stream.skippedLines,
+      'invalidRecords': stream.invalidRecords,
     },
     'funnel': {
       'primaryMatchesAdmitted': s.primaryMatchesAdmitted,
@@ -50,10 +51,10 @@ Map<String, Object?> freezeReport(
     'freeze': {
       'totalMerges': result.merges.length,
       'frozenMerges': freezes.length,
-      'frozenShare': _share(freezes.length, result.merges.length),
+      'frozenShare': share(freezes.length, result.merges.length),
       'freshTconf': NumStats([for (final f in freezes) f.freshTconf]).toJson(),
       'textDiffers': differing.length,
-      'textDiffersShare': _share(differing.length, freezes.length),
+      'textDiffersShare': share(differing.length, freezes.length),
       'highConfDiscardedVotes': highConfDiffering,
     },
     'provisional': {
@@ -67,12 +68,13 @@ Map<String, Object?> freezeReport(
     },
     'caveats': [
       'Replay starts from an empty engine (no consumer cache seed).',
-      'Unresolved chains = admitted blocks never re-observed to expiry '
-          '(scrolled away or evicted); the live-report view is the '
-          'consumer-side complement.',
+      'Unresolved chains = admitted blocks never re-observed to expiry. '
+          'Replay uses missedFrameRetention: 0 (matching current consumer '
+          'production config), so a single missed capture — routine OCR '
+          'glare, not necessarily scroll-away — permanently drops a '
+          'provisional block; do not read unresolved as purely '
+          '"scrolled away". The live-report view is the consumer-side '
+          'complement.',
     ],
   };
 }
-
-Object? _share(int part, int whole) =>
-    whole == 0 ? null : (part * 1000 / whole).round() / 1000;

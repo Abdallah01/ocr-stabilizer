@@ -4,6 +4,17 @@
 import 'capture_stream.dart';
 import 'stats.dart';
 
+/// Max rect-center distance for a terminal event to join a band_stamp of
+/// the same text. Generous enough for drift/merge movement inside one
+/// provisional window; far smaller than distinct page positions.
+const double _joinRadiusPx = 200;
+
+(double, double)? _center(Map? blockRef) {
+  final rect = (blockRef?['rect'] as List?)?.cast<num>();
+  if (rect == null || rect.length != 4) return null;
+  return ((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2);
+}
+
 /// #57 consumer-side view: aggregate the lifecycle events the consumer
 /// recorded from its own integration (no replay). Complements
 /// freeze-report: this is what the freeze path did in production, under
@@ -31,38 +42,54 @@ Map<String, Object?> liveReport(CaptureStream stream) {
 
   // Promotion latency: join each terminal event (expired decrement or
   // cluster resolve) back to the band_stamp that opened the window, by
-  // exact original text. Unjoined terminals are reported, not dropped.
-  final stampCapByText = <String, int>{};
+  // original text AND rect proximity — text alone false-joins recurring
+  // strings (chapter headers, repeated UI labels) across unrelated
+  // windows, silently corrupting the latency stats. The join picks the
+  // LATEST stamp at-or-before the terminal capture whose rect center is
+  // within [_joinRadiusPx]. Unjoined terminals are reported, not dropped.
+  final stampsByText = <String, List<({int cap, double cx, double cy})>>{};
   for (final s in stamps) {
     for (final side in ['fresh', 'existing']) {
-      final text = ((s[side] as Map?)?['otext']) as String?;
+      final ref = s[side] as Map?;
+      final text = ref?['otext'] as String?;
       final cap = (s['cap'] as num?)?.toInt();
-      if (text != null && cap != null) {
-        stampCapByText.putIfAbsent(text, () => cap);
+      final center = _center(ref);
+      if (text != null && cap != null && center != null) {
+        stampsByText
+            .putIfAbsent(text, () => [])
+            .add((cap: cap, cx: center.$1, cy: center.$2));
       }
     }
   }
   final latencies = <int>[];
   var unjoined = 0;
-  void joinTerminal(String? text, int? cap) {
-    if (text == null || cap == null) return;
-    final start = stampCapByText[text];
-    if (start == null || cap < start) {
+  void joinTerminal(Map? blockRef, int? cap) {
+    final text = blockRef?['otext'] as String?;
+    final center = _center(blockRef);
+    if (text == null || cap == null || center == null) {
+      unjoined++;
+      return;
+    }
+    ({int cap, double cx, double cy})? best;
+    for (final s in stampsByText[text] ?? const []) {
+      if (s.cap > cap) continue;
+      final dx = s.cx - center.$1;
+      final dy = s.cy - center.$2;
+      if (dx * dx + dy * dy > _joinRadiusPx * _joinRadiusPx) continue;
+      if (best == null || s.cap > best.cap) best = s;
+    }
+    if (best == null) {
       unjoined++;
     } else {
-      latencies.add(cap - start);
+      latencies.add(cap - best.cap);
     }
   }
 
   for (final d in decrements.where((d) => d['expired'] == true)) {
-    joinTerminal(
-        ((d['block'] as Map?)?['otext']) as String?,
-        (d['cap'] as num?)?.toInt());
+    joinTerminal(d['block'] as Map?, (d['cap'] as num?)?.toInt());
   }
   for (final r in resolves) {
-    joinTerminal(
-        ((r['survivor'] as Map?)?['otext']) as String?,
-        (r['cap'] as num?)?.toInt());
+    joinTerminal(r['survivor'] as Map?, (r['cap'] as num?)?.toInt());
   }
 
   return {
@@ -72,15 +99,12 @@ Map<String, Object?> liveReport(CaptureStream stream) {
       'observations': stream.observationCount,
       'events': stream.events.length,
       'skippedLines': stream.skippedLines,
+      'invalidRecords': stream.invalidRecords,
     },
     'freeze': {
       'merges': merges.length,
       'frozenMerges': freezes.length,
-      'frozenShare': merges.isEmpty && freezes.isEmpty
-          ? null
-          : (freezes.length * 1000 ~/
-                  (merges.length + freezes.length)) /
-              1000,
+      'frozenShare': share(freezes.length, merges.length + freezes.length),
       'textDiffers': differs.length,
       'highConfDiscardedVotes': highConfDiscarded,
       'freshTconf': NumStats(

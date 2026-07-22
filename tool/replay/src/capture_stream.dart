@@ -28,6 +28,7 @@ class CaptureStream {
     required this.events,
     required this.schemaVersion,
     required this.skippedLines,
+    this.invalidRecords = 0,
   });
 
   final List<ObsBatch> batches;
@@ -40,6 +41,11 @@ class CaptureStream {
   /// Malformed lines skipped (reported, never silently discarded).
   final int skippedLines;
 
+  /// Well-formed `obs` records whose blocks violated an engine invariant
+  /// at reconstruction (confidence range, coordinate-space flags) — a
+  /// recorder bug signal, kept separate from line-noise [skippedLines].
+  final int invalidRecords;
+
   int get observationCount =>
       batches.fold(0, (sum, b) => sum + b.blocks.length);
 
@@ -48,6 +54,7 @@ class CaptureStream {
     final events = <Map<String, Object?>>[];
     int? version;
     var skipped = 0;
+    var invalidRecords = 0;
 
     for (final line in lines) {
       final trimmed = line.trim();
@@ -61,18 +68,24 @@ class CaptureStream {
       }
       switch (record['t']) {
         case 'meta':
-          version = (record['v'] as num?)?.toInt();
+          final v = record['v'];
+          version = v is num ? v.toInt() : version;
+          if (v is! num) skipped++;
         case 'obs':
           try {
             batches.add(_parseObs(record));
           } on Object {
-            // A malformed batch must not abort the whole stream; count it.
-            skipped++;
+            // A malformed batch must not abort the whole stream — but a
+            // block that *parses* and still throws is an invariant
+            // violation (confidence range, containerId/isc), not line
+            // noise; count it separately so recorder bugs stay loud.
+            invalidRecords++;
           }
-        case null:
-          skipped++;
-        default:
+        case final String _:
           events.add(record);
+        default:
+          // Non-string discriminator: never let it reach report code.
+          skipped++;
       }
     }
     return CaptureStream(
@@ -80,6 +93,7 @@ class CaptureStream {
       events: events,
       schemaVersion: version,
       skippedLines: skipped,
+      invalidRecords: invalidRecords,
     );
   }
 
@@ -141,10 +155,12 @@ DefaultTrackedBlock<Object> blockFromJson(Map<String, Object?> b) {
     isProvisional: b['prov'] as bool? ?? false,
     provisionalCapturesRemaining: (b['provN'] as num?)?.toInt() ?? 0,
     classificationVotes: _intMap(b['cvotes']) ?? const {},
-    // Absent → the phantom {-1: 1} "never seen in a carousel" sentinel
-    // (mirrors DefaultTrackedBlock's own default, which a null can't reach).
+    // Absent OR explicitly empty → the phantom {-1: 1} "never seen in a
+    // carousel" sentinel (mirrors DefaultTrackedBlock's own default; an
+    // empty map would misclassify the first real carousel observation).
     // tvotes is intentionally NOT reconstructed in loader v1 (schema doc).
-    carouselIdVotes: carVotes ?? const {-1: 1},
+    carouselIdVotes:
+        (carVotes == null || carVotes.isEmpty) ? const {-1: 1} : carVotes,
   );
 }
 

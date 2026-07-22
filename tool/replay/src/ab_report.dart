@@ -22,6 +22,7 @@ Map<String, Object?> abReport(CaptureStream stream) {
       'batches': stream.batches.length,
       'observations': stream.observationCount,
       'skippedLines': stream.skippedLines,
+      'invalidRecords': stream.invalidRecords,
     },
     'legacy': _arm(legacy),
     'agreementWeighted': _arm(agreement),
@@ -57,12 +58,9 @@ Map<String, Object?> _arm(ReplayResult r) {
     // qualityScore); agreement-weighted should show spread.
     'wellObservedPconf':
         NumStats([for (final m in wellObserved) m.pconfAfter]).toJson(),
-    'wellObservedPconfSaturated': wellObserved.isEmpty
-        ? null
-        : (wellObserved.where((m) => m.pconfAfter >= 0.999).length *
-                1000 ~/
-                wellObserved.length) /
-            1000,
+    'wellObservedPconfSaturated': share(
+        wellObserved.where((m) => m.pconfAfter >= 0.999).length,
+        wellObserved.length),
   };
 }
 
