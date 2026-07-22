@@ -1,0 +1,81 @@
+{
+  "mode": "ab-report",
+  "input": {
+    "batches": 24,
+    "observations": 163,
+    "skippedLines": 0,
+    "invalidRecords": 0
+  },
+  "legacy": {
+    "mergeCount": 113,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 71,
+        "mean": 0.007,
+        "p50": 0.0,
+        "p90": 0.015,
+        "max": 0.258
+      },
+      "n3-5": {
+        "count": 29,
+        "mean": 9.291,
+        "p50": 0.0,
+        "p90": 35.419,
+        "max": 71.527
+      },
+      "n6-10": {
+        "count": 13,
+        "mean": 6.904,
+        "p50": 4.47,
+        "p90": 17.671,
+        "max": 17.882
+      }
+    },
+    "wellObservedPconf": {
+      "count": 18,
+      "mean": 1.0,
+      "p50": 1.0,
+      "p90": 1.0,
+      "max": 1.0
+    },
+    "wellObservedPconfSaturated": 1.0
+  },
+  "agreementWeighted": {
+    "mergeCount": 113,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 71,
+        "mean": 0.02,
+        "p50": 0.0,
+        "p90": 0.086,
+        "max": 0.258
+      },
+      "n3-5": {
+        "count": 29,
+        "mean": 4.572,
+        "p50": 0.0,
+        "p90": 11.833,
+        "max": 28.611
+      },
+      "n6-10": {
+        "count": 13,
+        "mean": 7.2,
+        "p50": 4.98,
+        "p90": 14.649,
+        "max": 18.311
+      }
+    },
+    "wellObservedPconf": {
+      "count": 18,
+      "mean": 0.769,
+      "p50": 0.763,
+      "p90": 0.983,
+      "max": 0.992
+    },
+    "wellObservedPconfSaturated": 0.0
+  },
+  "caveats": [
+    "Arms may diverge in pairing over time: positions evolve per model, and matching is spatial+text. Compare mergeCount before reading displacement deltas.",
+    "Replay pairing uses the package funnel, not the consumer's own matching stage; consumer-side `merge` events in live-report give the production-path legacy reference."
+  ]
+}
