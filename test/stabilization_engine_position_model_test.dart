@@ -112,5 +112,22 @@ void main() {
       final merged = _run(engine, [10, 180, 10, 120, 10, 10]);
       expect(merged.positionConfidence.raw, inInclusiveRange(0.0, 1.0));
     });
+
+    test('numeric-residue drift must not become the agreement scale', () {
+      final engine = _engine(PositionMergeModel.agreementWeighted);
+      // Production streams are pixel-stable but not bit-stable: coordinate
+      // normalization leaves ~1e-6 px residue on re-observed rects, so the
+      // region's median drift lands nonzero-tiny rather than exactly zero.
+      // An exact-zero "margin established?" test then adopts that residue
+      // as the agreement scale and divides noise by noise (production
+      // capture: pconf decayed 1.0 → 0.34 by obsN 59 on a block that
+      // never moved more than 1e-5 px).
+      final lefts = [for (var k = 0; k < 12; k++) 10 + k * 2e-6];
+      final merged = _run(engine, lefts);
+      expect(merged.positionConfidence.raw, greaterThan(0.9),
+          reason: 'a sub-quantum residual on a stationary block is perfect '
+              'agreement — the scale must fall back to median block height '
+              'exactly as the no-drift-data case does');
+    });
   });
 }
