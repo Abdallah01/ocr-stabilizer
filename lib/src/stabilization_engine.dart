@@ -20,6 +20,43 @@ import 'types/absolute_rect.dart';
 import 'types/confidence_types.dart';
 import 'types/space_key.dart';
 
+/// How the engine merges an existing block's position with a fresh
+/// drift-corrected observation, and how merged position confidence is
+/// derived (#58).
+///
+/// Selected via `StabilizationEngine(positionMergeModel: ...)`. The
+/// default is [legacy]; [agreementWeighted] is the opt-in prototype for
+/// the 1.0 model — validate it against your captures (mirroring the
+/// band-fallback off → observe → adopt rollout) before relying on its
+/// numerics, which WILL differ from what 0.x consumers may have tuned
+/// against.
+enum PositionMergeModel {
+  /// 0.x numerics, preserved exactly.
+  ///
+  /// Merge weight is the confidence ratio `fresh / (existing + fresh)`
+  /// and merged confidence is the clamped sum
+  /// `min(existing + fresh, 1.0)`. Two consequences the audit flagged
+  /// (§1.7): confidence saturates to 1.0 after two ~0.5-confidence
+  /// observations regardless of positional agreement, and the merge
+  /// weight never decays — a long-observed block still moves ~33%
+  /// toward every noisy rect, so jitter never fully damps.
+  legacy,
+
+  /// Agreement-weighted prototype.
+  ///
+  /// The merge weight anchors existing confidence by the block's
+  /// `observationCount` (`fresh / (existing·n + fresh)`), so
+  /// long-observed blocks become positionally sticky while young blocks
+  /// still adapt quickly. Merged confidence is a running mean of
+  /// positional *agreement* — how close each corrected observation
+  /// lands to the tracked position, scaled by the region's drift margin
+  /// (median block height when no margin is established) — so
+  /// disagreeing observations reduce confidence instead of saturating
+  /// it, and `OverlapResolver.qualityScore`'s position term becomes
+  /// informative again for well-observed blocks.
+  agreementWeighted,
+}
+
 /// Well-observed threshold: blocks with this many observations signal
 /// translation stability to the consumer.
 const int _kWellObservedThreshold = 3;
@@ -116,6 +153,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     bool Function(T fresh, T existing)? contextualCheck,
     this.bandFallback = const BandFallbackConfig(),
     this.missedFrameRetention = 0,
+    this.positionMergeModel = PositionMergeModel.legacy,
   })  : _merger = merger,
         driftTracker =
             driftTracker ?? DriftTracker(submapMembership: submapMembership),
@@ -148,6 +186,68 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Consecutive-miss counter per retained block (identity-keyed; block
   /// instances persist across frames precisely when unmatched).
   final Map<T, int> _missCounts = Map<T, int>.identity();
+
+  /// Position merge model (#58). Default [PositionMergeModel.legacy]
+  /// preserves 0.x numerics exactly; [PositionMergeModel.agreementWeighted]
+  /// is the opt-in prototype slated to become the 1.0 default once
+  /// validated against production captures.
+  final PositionMergeModel positionMergeModel;
+
+  /// Lerp weight toward the fresh (drift-corrected) observation.
+  double _positionMergeWeight(T fresh, T existing) {
+    final freshConf = fresh.positionConfidence.raw;
+    final existingConf = existing.positionConfidence.raw;
+    switch (positionMergeModel) {
+      case PositionMergeModel.legacy:
+        // 0.x behavior: confidence ratio only. Locks near
+        // fresh/(1+fresh) once existing confidence saturates, so even a
+        // 100-times-observed block moves ~33% toward every noisy rect.
+        final totalConf = existingConf + freshConf;
+        return totalConf > 0 ? freshConf / totalConf : 0.5;
+      case PositionMergeModel.agreementWeighted:
+        // Existing confidence is anchored by its observation count —
+        // a 1/n-style decay, so long-observed blocks become
+        // positionally sticky while a twice-seen block still adapts.
+        final anchored = existingConf * existing.observationCount;
+        final total = anchored + freshConf;
+        return total > 0 ? freshConf / total : 0.5;
+    }
+  }
+
+  /// Merged position confidence for the current [positionMergeModel].
+  double _mergedPositionConfidence(
+    T fresh,
+    T existing,
+    Rect correctedRect,
+    SpaceKey spaceKey,
+  ) {
+    switch (positionMergeModel) {
+      case PositionMergeModel.legacy:
+        // 0.x behavior: additive with clamp — saturates to 1.0 after two
+        // ~0.5-confidence observations regardless of agreement (#58).
+        final totalConf =
+            existing.positionConfidence.raw + fresh.positionConfidence.raw;
+        return min(totalConf, 1.0);
+      case PositionMergeModel.agreementWeighted:
+        // Confidence is a running mean of positional AGREEMENT: how
+        // close the corrected fresh observation landed to the tracked
+        // position, scaled by the region's expected jitter (drift
+        // margin, falling back to the median block height so the scale
+        // is never zero). Disagreeing observations now REDUCE
+        // confidence instead of saturating it.
+        final residual =
+            (correctedRect.topLeft - existing.absoluteRect.raw.topLeft)
+                .distance;
+        final margin = driftTracker.driftMarginForKey(spaceKey);
+        final scale = margin > 0
+            ? margin
+            : driftTracker.medianBlockHeightForKey(spaceKey);
+        final agreement =
+            scale > 0 ? (1.0 - residual / scale).clamp(0.0, 1.0) : 0.0;
+        final n = existing.observationCount;
+        return ((existing.positionConfidence.raw * n) + agreement) / (n + 1);
+    }
+  }
 
   /// Validate [BandFallbackConfig] invariants with release-safe [ArgumentError].
   ///
@@ -893,10 +993,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       regionDrift,
     );
 
-    // 3. Weighted average against corrected position.
-    final totalConf =
-        existing.positionConfidence.raw + fresh.positionConfidence.raw;
-    final w = totalConf > 0 ? fresh.positionConfidence.raw / totalConf : 0.5;
+    // 3. Weighted average against corrected position (weight per
+    //    [positionMergeModel], #58).
+    final w = _positionMergeWeight(fresh, existing);
     final mergedRaw = Rect.lerp(existing.absoluteRect.raw, correctedRect, w)!;
 
     // 4a. Classification vote accumulation
@@ -994,7 +1093,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // captures of this now-provisional block enter the freeze path above and
     // decrement the counter until it graduates.
     final mergedRectCalculated = AbsoluteRect(mergedRaw);
-    final mergedPositionConf = PositionConfidence.from(min(totalConf, 1.0));
+    final mergedPositionConf = PositionConfidence.from(
+      _mergedPositionConfidence(fresh, existing, correctedRect, spaceKey),
+    );
     final mergedTextConfTyped = TextConfidence.from(mergedTextConf);
 
     // The provisional-freeze path above (line ~600) returns early when

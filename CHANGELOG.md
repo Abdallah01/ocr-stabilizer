@@ -1,3 +1,27 @@
+## 0.7.0 - 2026-07-22
+
+Additive release: the opt-in `agreementWeighted` position-merge
+prototype (#58). Default behavior is unchanged — `^0.6.0` consumers can
+upgrade without review.
+
+### Added
+- `PositionMergeModel` enum and
+  `StabilizationEngine(positionMergeModel: ...)` (#58). The default
+  [legacy] preserves 0.x numerics exactly. The opt-in
+  [agreementWeighted] prototype addresses the audit §1.7 findings:
+  - **Merge weight decays with observation count**
+    (`fresh / (existing·n + fresh)`): long-observed blocks become
+    positionally sticky — a 6-times-confirmed block barely moves for a
+    single 12px outlier — while young blocks still adapt quickly.
+  - **Merged confidence is a running mean of positional agreement**
+    (residual vs the region's drift margin, median-block-height scaled
+    when no margin exists) instead of the saturating sum: disagreeing
+    observations now reduce confidence, making `qualityScore`'s
+    position term informative again for well-observed blocks.
+  Rollout mirrors the band-fallback pattern: ship on `legacy`, A/B
+  `agreementWeighted` against your captures, adopt when the numbers
+  hold. Slated to become the 1.0 default pending that validation.
+
 ## 0.6.1 - 2026-07-21
 
 Performance release finishing the remaining #55 items. No API changes.
