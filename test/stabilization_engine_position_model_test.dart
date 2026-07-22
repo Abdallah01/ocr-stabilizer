@@ -113,6 +113,24 @@ void main() {
       expect(merged.positionConfidence.raw, inInclusiveRange(0.0, 1.0));
     });
 
+    test('agreement scale is the 3x-median-height jitter allowance', () {
+      final engine = _engine(PositionMergeModel.agreementWeighted);
+      // Settle 3 observations at left=10: seed 0.5 -> 0.75 -> 0.8333,
+      // observationCount 3, median block height 30 (fixture rect height).
+      // Then observe at left=70: residual 60.
+      //   scale = 3 x 30 = 90 -> agreement = 1 - 60/90 = 1/3
+      //   newConf = (0.8333*3 + 1/3) / 4 = 0.7083
+      // A 1x scale (30) clamps agreement to 0 and yields 0.625 instead —
+      // sub-allowance jitter must degrade confidence, not zero it.
+      _run(engine, [10, 10, 10]);
+      final disturbed = _run(engine, [70]);
+      expect(disturbed.positionConfidence.raw, closeTo(0.7083, 0.005),
+          reason: 'a residual inside the jitter allowance (3x median '
+              'block height) is partial agreement; the #58 sweep showed '
+              '1x chases deep-chain jitter (15.8px/merge) while 3x damps '
+              'it to 3.8px with confidence still regime-discriminating');
+    });
+
     test('numeric-residue drift must not become the agreement scale', () {
       final engine = _engine(PositionMergeModel.agreementWeighted);
       // Production streams are pixel-stable but not bit-stable: coordinate
@@ -126,8 +144,8 @@ void main() {
       final merged = _run(engine, lefts);
       expect(merged.positionConfidence.raw, greaterThan(0.9),
           reason: 'a sub-quantum residual on a stationary block is perfect '
-              'agreement — the scale must fall back to median block height '
-              'exactly as the no-drift-data case does');
+              'agreement — the agreement scale must never derive from '
+              'numeric residue');
     });
   });
 }
