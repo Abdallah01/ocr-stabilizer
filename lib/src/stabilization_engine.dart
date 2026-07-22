@@ -61,6 +61,22 @@ enum PositionMergeModel {
 /// translation stability to the consumer.
 const int _kWellObservedThreshold = 3;
 
+/// Minimum drift margin (px) treated as an *established* jitter scale by
+/// [PositionMergeModel.agreementWeighted].
+///
+/// Pixel-stable consumer streams are not bit-stable: coordinate
+/// normalization (scroll subtraction, DPR scaling) leaves numeric residue
+/// on re-observed rects — observed up to ~2e-5 px in production captures
+/// (#58). Once a region window holds three observations, its median drift
+/// lands nonzero-tiny, and an exact-zero `margin > 0` test would adopt
+/// that residue as the agreement scale, dividing noise by noise (measured:
+/// agreement p50 = 0.0, confidence decaying 1.0 → 0.34 on a block that
+/// never moved). Margins below this floor mean "no measurable drift" and
+/// must engage the median-block-height fallback exactly like the no-data
+/// case. 1e-2 px sits ~3 orders above the observed residue and below any
+/// real layout jitter (≥ device-pixel quantum).
+const double _kMinEstablishedMarginPx = 0.01;
+
 /// Maximum text vote entries per block to prevent OOM on noisy edges.
 const int _kMaxTextVotes = 5;
 
@@ -235,15 +251,15 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       case PositionMergeModel.agreementWeighted:
         // Confidence is a running mean of positional AGREEMENT: how
         // close the corrected fresh observation landed to the tracked
-        // position, scaled by the region's expected jitter (drift
-        // margin, falling back to the median block height so the scale
-        // is never zero). Disagreeing observations now REDUCE
-        // confidence instead of saturating it.
+        // position, scaled by the region's expected jitter — the drift
+        // margin when one is established ([_kMinEstablishedMarginPx]),
+        // else the median block height. Disagreeing observations now
+        // REDUCE confidence instead of saturating it.
         final residual =
             (correctedRect.topLeft - existing.absoluteRect.raw.topLeft)
                 .distance;
         final margin = driftTracker.driftMarginForKey(spaceKey);
-        final scale = margin > 0
+        final scale = margin >= _kMinEstablishedMarginPx
             ? margin
             : driftTracker.medianBlockHeightForKey(spaceKey);
         final agreement =
