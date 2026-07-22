@@ -984,7 +984,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // deterministic-rect streams carry zero freeze traffic, and the one
     // admit-mode counterfactual WITH traffic (a noisy-OCR dwell) showed
     // tail magnitude only — 1 provisional chain, 3 freezes, 2 discarded
-    // high-confidence text votes per ~4-minute session. Revisit ONLY if
+    // high-confidence text votes per ~5-minute session. Revisit ONLY if
     // a consumer adopts BandFallbackMode.admit in production AND its
     // captures show recurring high-confidence text-vote loss; the bounded
     // change to evaluate then is text-vote-only accrual during freeze
