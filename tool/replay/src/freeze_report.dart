@@ -1,0 +1,78 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: BSD-3-Clause
+
+import 'package:ocr_stabilizer/ocr_stabilizer.dart';
+
+import 'capture_stream.dart';
+import 'replay_session.dart';
+import 'stats.dart';
+
+/// #57 decision data: replay the observation stream with the band path in
+/// `admit` mode and report what the provisional freeze actually does —
+/// freeze frequency, evidence lost, promotion latency — as computed by the
+/// package's own funnel.
+Map<String, Object?> freezeReport(
+  CaptureStream stream, {
+  int? candidateObservationFloor,
+}) {
+  final result = replay(
+    stream,
+    band: BandFallbackConfig(
+      mode: BandFallbackMode.admit,
+      candidateObservationFloor: candidateObservationFloor,
+    ),
+  );
+
+  final freezes = result.freezes.toList();
+  final differing = freezes.where((f) => f.textDiffers).toList();
+  final highConfDiffering =
+      differing.where((f) => f.freshTconf >= 0.8).length;
+  final promoted = result.chains.where((c) => c.promoted).toList();
+  final s = result.stats;
+
+  return {
+    'mode': 'freeze-report',
+    'input': {
+      'batches': result.batches,
+      'observations': result.observations,
+      'skippedLines': stream.skippedLines,
+    },
+    'funnel': {
+      'primaryMatchesAdmitted': s.primaryMatchesAdmitted,
+      'primaryMatchesRejected': s.primaryMatchesRejected,
+      'candidatesConsidered': s.candidatesConsidered,
+      'rejectedCandidateFloor': s.rejectedCandidateFloor,
+      'rejectedSpatial': s.rejectedSpatial,
+      'rejectedTextBand': s.rejectedTextBand,
+      'bandMatchesIdentified': s.bandMatchesIdentified,
+      'matchesAdmitted': s.matchesAdmitted,
+    },
+    'freeze': {
+      'totalMerges': result.merges.length,
+      'frozenMerges': freezes.length,
+      'frozenShare': _share(freezes.length, result.merges.length),
+      'freshTconf': NumStats([for (final f in freezes) f.freshTconf]).toJson(),
+      'textDiffers': differing.length,
+      'textDiffersShare': _share(differing.length, freezes.length),
+      'highConfDiscardedVotes': highConfDiffering,
+    },
+    'provisional': {
+      'admissions': result.chains.length,
+      'promoted': promoted.length,
+      'unresolved': result.chains.length - promoted.length,
+      'promotionLatencyCaptures':
+          NumStats([for (final c in promoted) c.latencyCaptures!]).toJson(),
+      'freezesPerChain':
+          NumStats([for (final c in result.chains) c.freezes]).toJson(),
+    },
+    'caveats': [
+      'Replay starts from an empty engine (no consumer cache seed).',
+      'Unresolved chains = admitted blocks never re-observed to expiry '
+          '(scrolled away or evicted); the live-report view is the '
+          'consumer-side complement.',
+    ],
+  };
+}
+
+Object? _share(int part, int whole) =>
+    whole == 0 ? null : (part * 1000 / whole).round() / 1000;
