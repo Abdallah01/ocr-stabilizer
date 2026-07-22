@@ -11,9 +11,11 @@ consumers can upgrade without review.
   median block height** (#70, #73). The 0.7.0 drift-margin-derived scale
   was removed: median-of-drift is a systematic-offset measure — ~0 under
   symmetric jitter and pure numeric residue on stable streams — so it
-  collapsed position confidence on unmoving blocks (1.0 → 0.34) and,
-  via the confidence-anchored merge weight, chased deep-chain jitter at
-  15.8 px/merge. Post-change: deep-chain jitter damps to 3.8 px/merge
+  collapsed position confidence on unmoving blocks (1.0 → 0.34, fixed
+  by the #70 floor) and was unreachable everywhere else. Separately, the
+  sweep showed the un-tuned 1× fallback scale let the confidence-anchored
+  merge weight chase deep-chain jitter at 15.8 px/merge (worse than
+  legacy). Post-change: deep-chain jitter damps to 3.8 px/merge
   (legacy: 11.8) while confidence stays regime-discriminating
   (~1.0 stable / 0.85 reflow / 0.35 heavy jitter). Sweep evidence:
   `doc/replay/validation/2026-07-scale-sweep/`. Slated to become the
