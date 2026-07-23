@@ -36,6 +36,16 @@ Two families of records coexist in one file:
  "differs":bool, "freshTconf":.., "heldTconf":.., "remaining":<post-decrement>,
  "obsN":<held count>}
 
+// Consumer dedup stage attribution: which cascade stage consumed each
+// incoming block of the batch (machine-readable twin of the consumer's
+// per-capture audit line). Added after a consumer investigation found
+// `obs` records alone cannot attribute WHERE re-observations die
+// (incoming blocks are always obsN=1 by construction). Additive v1
+// event — loaders that don't know it skip it.
+{"t":"dedup", "ts":..., "cap":..., "in":<batch size>, "added":..,
+ "cold":.., "cooldown":.., "nav":.., "fuzzy":.., "sar":.., "replace":..,
+ "ambig":.., "nestedE":.., "nestedK":.., "nestedD":.., "nms":..}
+
 // Consumer provisional admission lifecycle (#57 item 3).
 {"t":"band_stamp", "ts":..., "cap":..., "fresh":<blockRef>, "existing":<blockRef>}
 {"t":"band_decrement", "ts":..., "cap":..., "block":<blockRef>,
