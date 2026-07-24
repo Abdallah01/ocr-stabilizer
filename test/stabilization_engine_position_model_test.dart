@@ -39,14 +39,21 @@ DefaultTrackedBlock<void> _run(
 }
 
 void main() {
-  group('PositionMergeModel.legacy (default) preserves 0.x numerics', () {
-    test('default engine uses legacy', () {
+  group('constructor default (#74 1.0 flip)', () {
+    test('default engine uses agreementWeighted', () {
       final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
         merger: (existing, fresh, merge) => existing.applyMerge(merge),
       );
-      expect(engine.positionMergeModel, PositionMergeModel.legacy);
+      expect(engine.positionMergeModel, PositionMergeModel.agreementWeighted,
+          reason: '1.0 default per the #58 validation verdict + the #74 '
+              'consumer final gate (paired same-stream ab-report on two '
+              'current consumer captures, 2026-07-24): equal young-block '
+              'tracking, halved established-block displacement, informative '
+              'confidence. legacy remains selectable for 0.x numerics.');
     });
+  });
 
+  group('PositionMergeModel.legacy preserves 0.x numerics', () {
     test('confidence saturates additively after two observations', () {
       final engine = _engine(PositionMergeModel.legacy);
       final merged = _run(engine, [10, 10]);

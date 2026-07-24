@@ -25,11 +25,13 @@ import 'types/space_key.dart';
 /// derived (#58).
 ///
 /// Selected via `StabilizationEngine(positionMergeModel: ...)`. The
-/// default is [legacy]; [agreementWeighted] is the opt-in prototype for
-/// the 1.0 model — validate it against your captures (mirroring the
-/// band-fallback off → observe → adopt rollout) before relying on its
-/// numerics, which WILL differ from what 0.x consumers may have tuned
-/// against.
+/// default is [agreementWeighted] since 1.0 (#74 flip: the #58 regime
+/// matrix plus the consumer final gate — paired same-stream ab-report on
+/// two current consumer captures — showed equal young-block tracking,
+/// halved established-block displacement, and informative confidence).
+/// [legacy] preserves the 0.x numerics exactly and remains selectable:
+/// consumers who tuned against 0.x confidence values (which saturate to
+/// 1.0) should pin it until they re-validate.
 enum PositionMergeModel {
   /// 0.x numerics, preserved exactly.
   ///
@@ -42,7 +44,7 @@ enum PositionMergeModel {
   /// toward every noisy rect, so jitter never fully damps.
   legacy,
 
-  /// Agreement-weighted prototype.
+  /// Agreement-weighted model — the 1.0 default.
   ///
   /// The merge weight anchors existing confidence by the block's
   /// `observationCount` (`fresh / (existing·n + fresh)`), so
@@ -177,7 +179,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     bool Function(T fresh, T existing)? contextualCheck,
     this.bandFallback = const BandFallbackConfig(),
     this.missedFrameRetention = 0,
-    this.positionMergeModel = PositionMergeModel.legacy,
+    this.positionMergeModel = PositionMergeModel.agreementWeighted,
   })  : _merger = merger,
         driftTracker =
             driftTracker ?? DriftTracker(submapMembership: submapMembership),
@@ -211,10 +213,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// instances persist across frames precisely when unmatched).
   final Map<T, int> _missCounts = Map<T, int>.identity();
 
-  /// Position merge model (#58). Default [PositionMergeModel.legacy]
-  /// preserves 0.x numerics exactly; [PositionMergeModel.agreementWeighted]
-  /// is the opt-in prototype slated to become the 1.0 default once
-  /// validated against production captures.
+  /// Position merge model (#58). Default [PositionMergeModel.agreementWeighted]
+  /// since 1.0 (#74 flip, validated against production captures); pass
+  /// [PositionMergeModel.legacy] to preserve the 0.x numerics exactly.
   final PositionMergeModel positionMergeModel;
 
   /// Lerp weight toward the fresh (drift-corrected) observation.

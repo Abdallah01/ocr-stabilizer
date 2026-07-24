@@ -23,9 +23,21 @@ adapts SLAM techniques to the OCR domain.
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^0.9.0
+  ocr_stabilizer: ^1.0.0
 ```
 
+> **What's new in 1.0.0** — `agreementWeighted` is now the DEFAULT
+> position-merge model (#74), after the final consumer gate: a paired
+> same-stream ab-report on two current consumer captures showed equal
+> young-block tracking, roughly halved established-block displacement
+> (n3-5 mean 0.44 vs 0.87 px), and informative position confidence where
+> `legacy` saturates flat 1.0. **Breaking for consumers tuned against 0.x
+> confidence numerics** — position confidence is no longer
+> additive-saturating; pin
+> `StabilizationEngine(positionMergeModel: PositionMergeModel.legacy)`
+> for the exact 0.x behavior until you re-validate against a current
+> capture. See the [CHANGELOG](CHANGELOG.md#100---2026-07-24).
+>
 > **What's new in 0.9.0** — `agreementWeighted` numerics validated on
 > production captures and recalibrated: the agreement scale is now a
 > jitter allowance (3× regional median block height, #73), replacing the

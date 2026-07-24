@@ -229,13 +229,24 @@ StabilizationEngine<_TestBlock, Never> _createEngine({
   DriftTracker? driftTracker,
   SpatialBlockIndex<_TestBlock>? spatialIndex,
   bool Function(_TestBlock, _TestBlock)? contextualCheck,
+  // Null rides the engine default (agreementWeighted since 1.0); tests that
+  // document model-specific numerics pass their model explicitly.
+  PositionMergeModel? positionMergeModel,
 }) {
-  return StabilizationEngine<_TestBlock, Never>(
-    merger: _testMerger,
-    driftTracker: driftTracker,
-    spatialIndex: spatialIndex,
-    contextualCheck: contextualCheck,
-  );
+  return positionMergeModel == null
+      ? StabilizationEngine<_TestBlock, Never>(
+          merger: _testMerger,
+          driftTracker: driftTracker,
+          spatialIndex: spatialIndex,
+          contextualCheck: contextualCheck,
+        )
+      : StabilizationEngine<_TestBlock, Never>(
+          merger: _testMerger,
+          driftTracker: driftTracker,
+          spatialIndex: spatialIndex,
+          contextualCheck: contextualCheck,
+          positionMergeModel: positionMergeModel,
+        );
 }
 
 // =============================================================================
@@ -254,12 +265,18 @@ void main() {
       expect(result.stableBlocks[0].observationCount, 1);
     });
 
-    test('fresh block matching existing merges position', () {
+    test('fresh block matching existing merges position (legacy numerics '
+        'pinned — the 1.0 changelog promises them unchanged)', () {
       final existing = _block(text: '测试文本内容', posConf: 0.5);
       final spatialIndex = SpatialBlockIndex<_TestBlock>();
       spatialIndex.add(existing);
 
-      final engine = _createEngine(spatialIndex: spatialIndex);
+      // Explicit legacy since the #74 default flip: this test documents the
+      // 0.x additive-saturation formula, which legacy must preserve exactly.
+      final engine = _createEngine(
+        spatialIndex: spatialIndex,
+        positionMergeModel: PositionMergeModel.legacy,
+      );
 
       // Fresh block at slightly different position with same text
       final fresh = _block(text: '测试文本内容', top: 103, left: 52, posConf: 0.5);
