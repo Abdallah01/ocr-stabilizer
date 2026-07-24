@@ -142,8 +142,9 @@ class RobustStats {
   /// Returns MAD if non-zero; falls back to robust alternatives when MAD = 0.
   ///
   /// **Fallback chain:**
-  /// 1. MAD > 0 → return MAD (normal case)
-  /// 2. MAD = 0 but IQR > 0 → return IQR / 1.35 (heavy concentration at median)
+  /// 1. MAD > 0 → return MAD, clamped to [minSpread, ∞) (normal case)
+  /// 2. MAD = 0 but IQR > 0 → return IQR / 1.35, clamped to [minSpread, ∞)
+  ///    (heavy concentration at median)
   /// 3. IQR also = 0 → return `0.1 × median`, clamped to [minSpread, ∞)
   /// 4. N < 3 or empty → return [minSpread] (insufficient data)
   ///
@@ -153,15 +154,23 @@ class RobustStats {
   /// **Guaranteed:** Never returns zero or negative, provided
   /// [minSpread] is positive (the default is 1.0). Every fallback arm
   /// bottoms out at [minSpread], so a zero or negative [minSpread]
-  /// voids the guarantee.
+  /// voids the guarantee. The floor is enforced on EVERY arm (#72): the
+  /// `> 0` gates are adoption sentinels, and a tiny-positive numeric
+  /// residue (the #70 sub-quantum-margin mechanism) must not escape the
+  /// floor — spread estimates are divisor-class, where near-zero poisons
+  /// downstream ratios rather than adding benign slack.
   static double madOrFallback(List<double> values, {double minSpread = 1.0}) {
     if (values.length < _kMinMadFallbackSamples) return minSpread;
 
     final madVal = mad(values);
-    if (madVal != null && madVal > 0) return madVal;
+    if (madVal != null && madVal > 0) {
+      return madVal.clamp(minSpread, double.infinity);
+    }
 
     final iqrVal = iqr(values);
-    if (iqrVal != null && iqrVal > 0) return iqrVal / _kIqrToSigma;
+    if (iqrVal != null && iqrVal > 0) {
+      return (iqrVal / _kIqrToSigma).clamp(minSpread, double.infinity);
+    }
 
     final medVal = median(values);
     if (medVal != null && medVal.abs() > 0) {
