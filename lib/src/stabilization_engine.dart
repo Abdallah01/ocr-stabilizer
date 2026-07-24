@@ -96,6 +96,12 @@ const int _kMaxTextVotes = 5;
 /// The engine owns SAR merge, dedup, drift propagation, and contradiction
 /// detection. The app owns cache management (LRU, TTL, staging, UI).
 ///
+/// Timing contract: render at first sight, refine on re-sight. A
+/// first-sighting block is returned in [StabilizationResult.stableBlocks]
+/// on the very [stabilize] call that observed it — observation counts are
+/// evidence depth for position refinement and caching hints, never a
+/// readiness gate.
+///
 /// Generic parameters:
 /// - [T] — concrete block type (must implement [ObservableBlock<P>])
 /// - [P] — opaque payload type carried by the block
@@ -466,7 +472,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// - [StabilizationResult.stableBlocks] — merged/new blocks
   /// - [StabilizationResult.contradictions] — detected contradictions
   /// - [StabilizationResult.invalidatedTexts] — texts needing re-translation
-  /// - [StabilizationResult.wellObservedTexts] — texts reaching stability
+  /// - [StabilizationResult.wellObservedTexts] — texts crossing the
+  ///   well-observed threshold (3 observations): a long-term-caching hint,
+  ///   NOT a display gate — first-sighting blocks are already in
+  ///   `stableBlocks`
   ///
   /// [spatialIndex] is rebuilt internally from the returned `stableBlocks`
   /// before this method returns — callers no longer rebuild it after each

@@ -1,3 +1,16 @@
+## 1.0.2 - 2026-07-24
+
+### Docs
+- New README "Timing model" section + engine dartdoc stating the latency
+  contract explicitly: **render at first sight, refine on re-sight**.
+  First-sighting blocks are returned in `stableBlocks` on the call that
+  observed them; observation counts and the chain-depth validation bands
+  (n1-2 … n11+) are per-*re*-observation refinement stats, never a
+  readiness ladder; `wellObservedTexts` fires at 3 observations as a
+  caching hint, not a display gate. Previously the "captured at 1-2 Hz"
+  framing plus the deep-band tables could read as "stable after ~11
+  captures (≈11 s)" — no such warm-up exists.
+
 ## 1.0.1 - 2026-07-24
 
 ### Fixed
