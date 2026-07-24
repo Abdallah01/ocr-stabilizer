@@ -381,7 +381,10 @@ extension UiToRect on ui.Rect {
 
 Debug diagnostics are opt-in: pass `debugLogger: print` to
 `BlockClassifierService` or `DriftTracker` to restore the pre-0.8.0
-`debugPrint` output (default is silent).
+`debugPrint` output (default is silent). Since 1.0.1 the logger carries two
+severities: chatty lines fire in debug builds only (tree-shaken elsewhere),
+while anomaly-class events — non-finite input skips, a throwing
+`positionLookup` callback — are delivered in every build mode (#78).
 
 The `SubmapMembership` and `ClassificationInput` interfaces allow the engine
 to support different input sources:

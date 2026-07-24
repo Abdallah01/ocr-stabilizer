@@ -41,12 +41,14 @@ class BlockClassifierService {
 
   /// Injectable sink for debug diagnostics.
   ///
-  /// Pure-Dart replacement for Flutter's `debugPrint`: when non-null and the
-  /// build is a debug build ([kDebugMode]), classification diagnostics are
-  /// forwarded to this callback. Defaults to null, which silences all
-  /// diagnostic output (the previous Flutter behavior printed them to the
-  /// console). Pass `print` — or a logging framework hook — to restore
-  /// visible output.
+  /// Pure-Dart replacement for Flutter's `debugPrint`. Two severities (#78):
+  /// CHATTY lines (drop/skip summaries, empty-group notices) fire only in
+  /// debug builds ([kDebugMode]) — tree-shaken out of profile and release.
+  /// ANOMALY-class lines (a throwing `positionLookup` callback, which is
+  /// otherwise swallowed by the neutral-stability fallback) are delivered
+  /// UNgated in every build mode: a wired logger is the only trace.
+  /// Defaults to null, which silences all diagnostic output. Pass `print` —
+  /// or a logging framework hook — to restore visible output.
   final void Function(String message)? debugLogger;
 
   /// Creates a block classifier with optional exclusion threshold, clock,
@@ -322,11 +324,12 @@ class BlockClassifierService {
           positionDelta = (lastPos - absoluteRect.topLeft).distance;
         }
       } catch (e) {
-        if (kDebugMode) {
-          debugLogger?.call(
-            '[BlockClassifier] positionLookup threw: $e — using neutral stability',
-          );
-        }
+        // Anomaly-class (#78): delivered UNgated — the throw is swallowed by
+        // design (pipeline never aborts; neutral-stability fallback), so a
+        // wired logger is the only trace in profile/release builds.
+        debugLogger?.call(
+          '[BlockClassifier] positionLookup threw: $e — using neutral stability',
+        );
       }
       final stability = computeStability(
         positionDelta,
