@@ -472,10 +472,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// - [StabilizationResult.stableBlocks] — merged/new blocks
   /// - [StabilizationResult.contradictions] — detected contradictions
   /// - [StabilizationResult.invalidatedTexts] — texts needing re-translation
-  /// - [StabilizationResult.wellObservedTexts] — texts crossing the
+  /// - [StabilizationResult.wellObservedTexts] — texts at or past the
   ///   well-observed threshold (3 observations): a long-term-caching hint,
-  ///   NOT a display gate — first-sighting blocks are already in
-  ///   `stableBlocks`
+  ///   not a display gate — first-sighting blocks are already in
+  ///   [StabilizationResult.stableBlocks]
   ///
   /// [spatialIndex] is rebuilt internally from the returned `stableBlocks`
   /// before this method returns — callers no longer rebuild it after each
