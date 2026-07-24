@@ -185,5 +185,38 @@ void main() {
       expect(RobustStats.madOrFallback([1.0, 100.0]), 1.0);
       expect(RobustStats.madOrFallback([1.0, 100.0], minSpread: 2.5), 2.5);
     });
+
+    // #72 — zero-sentinel defect class (same as the #70 agreement-scale fix):
+    // `> 0` gates arm adoption, so a tiny-positive numeric residue passes the
+    // sentinel and returns UNFLOORED. This is divisor-poisoning class — the
+    // docstring's "every fallback arm bottoms out at [minSpread]" must hold
+    // on every arm, not just arm 3.
+    test('#72 arm 1: near-zero MAD residue is floored at minSpread', () {
+      // Median 100, deviations [0, 1e-9, 1e-9] → MAD = 1e-9: positive, so
+      // the MAD arm adopts it — and must clamp to minSpread.
+      expect(
+        RobustStats.madOrFallback([100.0, 100.0 + 1e-9, 100.0 - 1e-9]),
+        1.0,
+      );
+    });
+
+    test('#72 arm 2: near-zero IQR residue is floored at minSpread', () {
+      // MAD = 0 (median deviation 0) → IQR arm: q1 = 100, q3 = 100 + 1e-9
+      // → IQR/1.35 = tiny positive: adopted — and must clamp to minSpread.
+      expect(
+        RobustStats.madOrFallback(
+            [100.0, 100.0, 100.0, 100.0 + 1e-9, 100.0 + 1e-9]),
+        1.0,
+      );
+    });
+
+    test('#72 genuine spread above minSpread is returned unclamped', () {
+      // Raw MAD of [10,20,30,40,50] = 10, σ-scaled ×1.4826 = 14.826 — the
+      // floor must not distort real spread (guard on the clamp direction).
+      expect(
+        RobustStats.madOrFallback([10.0, 20.0, 30.0, 40.0, 50.0]),
+        closeTo(14.826, 1e-9),
+      );
+    });
   });
 }
