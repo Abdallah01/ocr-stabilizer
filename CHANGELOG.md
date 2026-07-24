@@ -1,3 +1,14 @@
+## 1.0.1 - 2026-07-24
+
+### Fixed
+- Anomaly-class diagnostics now reach a wired `debugLogger` in ALL build
+  modes (#78). Chatty lines stay debug-only (tree-shaken elsewhere), but
+  the events a consumer wires a logger precisely to see — `DriftTracker`'s
+  non-finite drift/top input skips (dropped before `dump()` or the
+  observation log ever see them) and `BlockClassifierService`'s swallowed
+  `positionLookup` callback throw — were invisible outside debug builds.
+  Both `debugLogger` docs now state the severity split explicitly.
+
 ## 1.0.0 - 2026-07-24
 
 The `agreementWeighted` position-merge model is now the default (#74),

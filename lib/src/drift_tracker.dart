@@ -42,11 +42,14 @@ class DriftTracker {
 
   /// Injectable sink for debug diagnostics.
   ///
-  /// Pure-Dart replacement for Flutter's `debugPrint`: when non-null and the
-  /// build is a debug build ([kDebugMode]), drift diagnostics are forwarded
-  /// to this callback. Defaults to null, which silences all diagnostic
-  /// output (the previous Flutter behavior printed them to the console).
-  /// Pass `print` — or a logging framework hook — to restore visible output.
+  /// Pure-Dart replacement for Flutter's `debugPrint`. Two severities (#78):
+  /// CHATTY lines (RECORDED, membership skips, clearKey no-ops) fire only in
+  /// debug builds ([kDebugMode]) — they are tree-shaken out of profile and
+  /// release. ANOMALY-class lines (non-finite drift/top skips) are delivered
+  /// UNgated in every build mode: those inputs are dropped before `dump()` or
+  /// the observation log see them, so a wired logger is the only trace.
+  /// Defaults to null, which silences all diagnostic output. Pass `print` —
+  /// or a logging framework hook — to restore visible output.
   final void Function(String message)? debugLogger;
 
   /// Create a new drift tracker with optional custom submap membership
@@ -99,14 +102,17 @@ class DriftTracker {
       return;
     }
 
+    // Anomaly-class (#78): delivered UNgated — a non-finite input is dropped
+    // before dump()/the observation log ever see it, so a wired logger is the
+    // only trace in profile/release builds.
     if (!drift.dx.isFinite || !drift.dy.isFinite) {
-      if (kDebugMode) debugLogger?.call('[DRIFT] skip non-finite drift');
+      debugLogger?.call('[DRIFT] skip non-finite drift');
       return;
     }
 
-    // Guard against NaN/infinity in block position
+    // Guard against NaN/infinity in block position — anomaly-class (#78).
     if (!block.absoluteRect.top.isFinite) {
-      if (kDebugMode) debugLogger?.call('[DRIFT] skip non-finite top');
+      debugLogger?.call('[DRIFT] skip non-finite top');
       return;
     }
 
