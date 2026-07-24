@@ -39,8 +39,8 @@ DefaultTrackedBlock<void> _run(
 }
 
 void main() {
-  group('PositionMergeModel.legacy preserves 0.x numerics', () {
-    test('default engine uses agreementWeighted (#74 1.0 flip)', () {
+  group('constructor default (#74 1.0 flip)', () {
+    test('default engine uses agreementWeighted', () {
       final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
         merger: (existing, fresh, merge) => existing.applyMerge(merge),
       );
@@ -51,7 +51,9 @@ void main() {
               'tracking, halved established-block displacement, informative '
               'confidence. legacy remains selectable for 0.x numerics.');
     });
+  });
 
+  group('PositionMergeModel.legacy preserves 0.x numerics', () {
     test('confidence saturates additively after two observations', () {
       final engine = _engine(PositionMergeModel.legacy);
       final merged = _run(engine, [10, 10]);

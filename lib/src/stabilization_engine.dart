@@ -213,10 +213,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// instances persist across frames precisely when unmatched).
   final Map<T, int> _missCounts = Map<T, int>.identity();
 
-  /// Position merge model (#58). Default [PositionMergeModel.legacy]
-  /// preserves 0.x numerics exactly; [PositionMergeModel.agreementWeighted]
-  /// is the opt-in prototype slated to become the 1.0 default once
-  /// validated against production captures.
+  /// Position merge model (#58). Default [PositionMergeModel.agreementWeighted]
+  /// since 1.0 (#74 flip, validated against production captures); pass
+  /// [PositionMergeModel.legacy] to preserve the 0.x numerics exactly.
   final PositionMergeModel positionMergeModel;
 
   /// Lerp weight toward the fresh (drift-corrected) observation.
