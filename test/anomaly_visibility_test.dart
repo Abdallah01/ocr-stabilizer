@@ -101,15 +101,20 @@ void main() {
   });
 
   group('#78 source shape — anomaly emits are NOT kDebugMode-gated', () {
-    // The emitting statement (literal line + 2 lines above, covering the
-    // `if (kDebugMode) {` block-opener form) must not carry the gate.
+    // The emitting statement (literal line + 4 lines above, covering the
+    // `if (kDebugMode) {` block-opener form with margin for a comment or
+    // brace-style line inside a future re-wrap — #84 review MINOR: a 2-line
+    // window had zero margin on the multi-line classifier call) must not
+    // carry the gate. Known narrowness, stated honestly: a helper-extraction
+    // refactor that moves the gate behind a function call is invisible to
+    // any lexical window — the mutation this pins is the direct re-wrap.
     void expectUngated(String path, String literal) {
       final lines = File(path).readAsLinesSync();
       final idx = lines.indexWhere((l) => l.contains(literal));
       expect(idx, greaterThanOrEqualTo(0),
           reason: 'anomaly literal "$literal" not found in $path — if the '
               'message changed, update this lock in the same PR');
-      final region = lines.sublist(max(0, idx - 2), idx + 1).join('\n');
+      final region = lines.sublist(max(0, idx - 4), idx + 1).join('\n');
       expect(region.contains('kDebugMode'), isFalse,
           reason: '#78 — "$literal" is anomaly-class: it must reach a wired '
               'logger in profile/release builds, so the emit must not sit '
