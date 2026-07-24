@@ -58,6 +58,17 @@ dependencies:
   ocr_stabilizer: ^1.0.0
 ```
 
+> **What's new in 1.1.0** — the `agreementWeighted` agreement scale is now
+> **per-block** (#75): 3× the tracked block's own height, replacing the
+> region-median base that small siblings could dilute (a caption's height
+> says nothing about how much a paragraph may jitter) and that needed a
+> cold-region default. Six-capture validation
+> (`doc/replay/validation/2026-07-perblock-scale/`): ~30–60% better
+> established-chain damping under OCR jitter with informative confidence,
+> no reflow lag regression, every other regime within noise. On uniform
+> streams the bases coincide, so existing tuning carries over; `legacy` is
+> unaffected.
+
 > **What's new in 1.0.0** — `agreementWeighted` is now the DEFAULT
 > position-merge model (#74), after the final consumer gate: a paired
 > same-stream ab-report on two current consumer captures showed equal

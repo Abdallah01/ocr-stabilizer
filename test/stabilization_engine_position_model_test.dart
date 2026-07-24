@@ -101,6 +101,36 @@ void main() {
               'small siblings collapses confidence on genuine-jitter-scale '
               'residuals');
     });
+
+    test(
+        'degenerate tracked-block height falls back to the 16px floor '
+        'instead of zeroing the agreement scale', () {
+      final engine = _engine(PositionMergeModel.agreementWeighted);
+      // Rect geometry is not construction-validated, so a zero-height
+      // tracked block is representable. Unfloored, its scale is 0 and the
+      // agreement ternary zeroes every merge — confidence collapses on a
+      // block whose position is PERFECTLY tracked (residual 0). The floor
+      // mirrors DriftTracker.addObservation's guard for the same quantity
+      // (#86 review; asymmetric-sibling-path class).
+      DefaultTrackedBlock<void> flat() => DefaultTrackedBlock<void>(
+            absoluteRect: AbsoluteRect(Rect.fromLTWH(10, 100, 200, 0)),
+            payload: null,
+            originalText: 'zero height edge block',
+            positionConfidence: PositionConfidence.from(0.9),
+            textConfidence: TextConfidence.from(0.9),
+          );
+      engine.stabilize([flat()]);
+      engine.stabilize([flat()]);
+      final result = engine.stabilize([flat()]);
+      final merged = result.stableBlocks.single;
+      expect(merged.observationCount, 3,
+          reason: 'fixture sanity: the zero-height block must MERGE on '
+              're-observation for the scale path to be exercised at all');
+      expect(merged.positionConfidence.raw, greaterThan(0.9),
+          reason: 'residual-0 re-observations are perfect agreement '
+              'whatever the height; a zeroed scale would collapse '
+              'confidence toward 0.3 instead');
+    });
   });
 
   group('PositionMergeModel.legacy preserves 0.x numerics', () {

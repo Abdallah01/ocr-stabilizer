@@ -51,9 +51,10 @@ enum PositionMergeModel {
   /// long-observed blocks become positionally sticky while young blocks
   /// still adapt quickly. Merged confidence is a running mean of
   /// positional *agreement* — how close each corrected observation
-  /// lands to the tracked position, scaled by the region's jitter
-  /// allowance (3x median block height, sweep-validated on production
-  /// captures — see #58) — so
+  /// lands to the tracked position, scaled by the block's own jitter
+  /// allowance (3x the tracked block's height since 1.1 (#75); 3x the
+  /// region-median height through 1.0.x — both sweep-validated on
+  /// production captures, see #58/#75) — so
   /// disagreeing observations reduce confidence instead of saturating
   /// it, and `OverlapResolver.qualityScore`'s position term becomes
   /// informative again for well-observed blocks.
@@ -285,8 +286,15 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         final residual =
             (correctedRect.topLeft - existing.absoluteRect.raw.topLeft)
                 .distance;
-        final scale =
-            existing.absoluteRect.raw.height * _kAgreementJitterAllowance;
+        // Height floor mirrors DriftTracker.addObservation's guard (the
+        // sibling site for this exact quantity): rect geometry is not
+        // construction-validated, so a degenerate height (0/negative/
+        // non-finite) must not zero the scale (agreement would collapse
+        // to 0 on a perfectly-tracked block) or saturate it (Infinity
+        // → agreement 1.0 regardless of motion). #86 review.
+        var heightBase = existing.absoluteRect.raw.height;
+        if (!heightBase.isFinite || heightBase <= 0) heightBase = 16.0;
+        final scale = heightBase * _kAgreementJitterAllowance;
         final agreement =
             scale > 0 ? (1.0 - residual / scale).clamp(0.0, 1.0) : 0.0;
         // Clamped for the same reason as the merge weight: n <= -1
