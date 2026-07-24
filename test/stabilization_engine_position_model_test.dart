@@ -53,6 +53,86 @@ void main() {
     });
   });
 
+  group('agreement scale is per-block (#75)', () {
+    test(
+        'a tall block in a small-median region tolerates jitter proportional '
+        'to ITS height, not the caption-polluted region median', () {
+      final engine = _engine(PositionMergeModel.agreementWeighted);
+
+      DefaultTrackedBlock<void> tall(double left) => DefaultTrackedBlock<void>(
+            absoluteRect: AbsoluteRect(Rect.fromLTWH(left, 400, 300, 200)),
+            payload: null,
+            originalText: 'tall paragraph block with plenty of text',
+            positionConfidence: PositionConfidence.from(0.9),
+            textConfidence: TextConfidence.from(0.9),
+          );
+      List<DefaultTrackedBlock<void>> smalls() => [
+            for (var i = 0; i < 5; i++)
+              DefaultTrackedBlock<void>(
+                absoluteRect:
+                    AbsoluteRect(Rect.fromLTWH(20, 40.0 + i * 30, 100, 12)),
+                payload: null,
+                originalText: 'caption line number $i',
+                positionConfidence: PositionConfidence.from(0.9),
+                textConfidence: TextConfidence.from(0.9),
+              ),
+          ];
+
+      // Batch 1: first sightings. Batch 2: exact re-observations — every
+      // merge records its block height, so the region median lands at 12 px
+      // (five captions vs one paragraph). Batch 3: the paragraph jitters
+      // 30 px — 15% of its own height, but 2.5× the polluted median.
+      engine.stabilize([...smalls(), tall(0)]);
+      engine.stabilize([...smalls(), tall(0)]);
+      final result = engine.stabilize([...smalls(), tall(30)]);
+      final merged = result.stableBlocks
+          .firstWhere((b) => b.originalText.startsWith('tall'));
+
+      // Per-block scale: 3 × 200 = 600 → agreement 1 − 30/600 = 0.95 →
+      // confidence holds (~0.95). Region-median scale reads 3 × 12 = 36 →
+      // agreement ≈ 0.17 → confidence dragged to ~0.69 by caption heights
+      // that say nothing about how much a 200 px paragraph may jitter —
+      // the #75 F2 pooling-dilution defect, validated against production
+      // captures 2026-07-24 (OCR-jitter damping ~30-60% better, reflow
+      // and every other regime within noise).
+      expect(merged.positionConfidence.raw, greaterThan(0.85),
+          reason: '#75 — the agreement tolerance must be proportional to '
+              'the block\'s own text size; a region median polluted by '
+              'small siblings collapses confidence on genuine-jitter-scale '
+              'residuals');
+    });
+
+    test(
+        'degenerate tracked-block height falls back to the 16px floor '
+        'instead of zeroing the agreement scale', () {
+      final engine = _engine(PositionMergeModel.agreementWeighted);
+      // Rect geometry is not construction-validated, so a zero-height
+      // tracked block is representable. Unfloored, its scale is 0 and the
+      // agreement ternary zeroes every merge — confidence collapses on a
+      // block whose position is PERFECTLY tracked (residual 0). The floor
+      // mirrors DriftTracker.addObservation's guard for the same quantity
+      // (#86 review; asymmetric-sibling-path class).
+      DefaultTrackedBlock<void> flat() => DefaultTrackedBlock<void>(
+            absoluteRect: AbsoluteRect(Rect.fromLTWH(10, 100, 200, 0)),
+            payload: null,
+            originalText: 'zero height edge block',
+            positionConfidence: PositionConfidence.from(0.9),
+            textConfidence: TextConfidence.from(0.9),
+          );
+      engine.stabilize([flat()]);
+      engine.stabilize([flat()]);
+      final result = engine.stabilize([flat()]);
+      final merged = result.stableBlocks.single;
+      expect(merged.observationCount, 3,
+          reason: 'fixture sanity: the zero-height block must MERGE on '
+              're-observation for the scale path to be exercised at all');
+      expect(merged.positionConfidence.raw, greaterThan(0.9),
+          reason: 'residual-0 re-observations are perfect agreement '
+              'whatever the height; a zeroed scale would collapse '
+              'confidence toward 0.3 instead');
+    });
+  });
+
   group('PositionMergeModel.legacy preserves 0.x numerics', () {
     test('confidence saturates additively after two observations', () {
       final engine = _engine(PositionMergeModel.legacy);
@@ -120,10 +200,13 @@ void main() {
       expect(merged.positionConfidence.raw, inInclusiveRange(0.0, 1.0));
     });
 
-    test('agreement scale is the 3x-median-height jitter allowance', () {
+    test('agreement scale is the 3x-own-height jitter allowance', () {
       final engine = _engine(PositionMergeModel.agreementWeighted);
       // Settle 3 observations at left=10: seed 0.5 -> 0.75 -> 0.8333,
-      // observationCount 3, median block height 30 (fixture rect height).
+      // observationCount 3, block height 30 (fixture rect height; #75 —
+      // the scale base is the existing block's OWN height, which for this
+      // lone block coincides with the pre-1.1 region median, so the #58
+      // sweep calibration transfers unchanged).
       // Then observe at left=70: residual 60.
       //   scale = 3 x 30 = 90 -> agreement = 1 - 60/90 = 1/3
       //   newConf = (0.8333*3 + 1/3) / 4 = 0.7083
@@ -132,8 +215,8 @@ void main() {
       _run(engine, [10, 10, 10]);
       final disturbed = _run(engine, [70]);
       expect(disturbed.positionConfidence.raw, closeTo(0.7083, 0.005),
-          reason: 'a residual inside the jitter allowance (3x median '
-              'block height) is partial agreement; the #58 sweep showed '
+          reason: 'a residual inside the jitter allowance (3x the block\'s '
+              'own height) is partial agreement; the #58 sweep showed '
               '1x chases deep-chain jitter (15.8px/merge) while 3x damps '
               'it to 3.8px with confidence still regime-discriminating');
     });

@@ -1,8 +1,12 @@
 # ocr_stabilizer
 
-A real-time stabilization engine for live OCR overlays. Tracks text block
-identity across noisy captures, corrects positional drift, and provides
-spatial indexing for deduplication.
+A real-time stabilization engine for live text-capture pipelines — OCR
+overlays and DOM/text extraction alike. Tracks text block identity across
+noisy captures, corrects positional drift, and provides spatial indexing
+for deduplication. Extraction streams are a first-line use case, not an
+afterthought: identity tracking, dedup, and text voting are exactly what
+keeps an extraction pipeline consistent across re-captures, while the
+position-merge refinements matter most for rendered overlays.
 
 Pure Dart — usable in Flutter apps and server-side pipelines alike.
 Built for event-driven OCR pipelines — e.g. screenshots captured on
@@ -53,6 +57,17 @@ counts are evidence depth, never a readiness ladder:
 dependencies:
   ocr_stabilizer: ^1.0.0
 ```
+
+> **What's new in 1.1.0** — the `agreementWeighted` agreement scale is now
+> **per-block** (#75): 3× the tracked block's own height, replacing the
+> region-median base that small siblings could dilute (a caption's height
+> says nothing about how much a paragraph may jitter) and that needed a
+> cold-region default. Six-capture validation
+> (`doc/replay/validation/2026-07-perblock-scale/`): ~30–60% better
+> established-chain damping under OCR jitter with informative confidence,
+> no reflow lag regression, every other regime within noise. On uniform
+> streams the bases coincide, so existing tuning carries over; `legacy` is
+> unaffected.
 
 > **What's new in 1.0.0** — `agreementWeighted` is now the DEFAULT
 > position-merge model (#74), after the final consumer gate: a paired
