@@ -1,3 +1,36 @@
+## 1.0.0 - 2026-07-24
+
+The `agreementWeighted` position-merge model is now the default (#74),
+per the #58 three-regime validation verdict and the final consumer gate:
+a paired same-stream `tool/replay` ab-report on two current consumer
+captures (2026-07-24) showed equal young-block tracking (n1-2 mean
+0.96 vs 1.04 px), roughly halved established-block displacement (n3-5
+0.44 vs 0.87 px; n6-10 0.28 vs 0.51 px), and informative position
+confidence (0.92 on a healthy stream) where `legacy` saturates flat 1.0.
+
+### Changed — BREAKING for consumers tuned against 0.x numerics
+- **`StabilizationEngine` default `positionMergeModel` is now
+  `agreementWeighted`.** Position confidence is no longer
+  additive-saturating: values below 1.0 are the informative norm, so any
+  consumer threshold or weighting tuned against 0.x confidence values
+  (`OverlapResolver.qualityScore`'s position term, custom cutoffs on
+  `positionConfidence`) must be re-validated against a current capture
+  (`tool/replay` ab-report is the supported harness).
+- **`legacy` remains available and unchanged** — pin
+  `StabilizationEngine(positionMergeModel: PositionMergeModel.legacy)`
+  to keep the exact 0.x numerics until you re-validate.
+- The agreement jitter allowance is calibrated against ML-Kit-shaped
+  residuals; consumers feeding a different OCR engine should re-run the
+  scale sweep (`doc/replay/validation/2026-07-scale-sweep/`) on their own
+  captures. Capture streams can carry per-capture engine attribution
+  (`engine` records, `doc/replay/capture_schema.md`) to make such
+  stratification possible.
+
+### Fixed
+- `RobustStats.madOrFallback` floors its MAD and IQR arms at `minSpread`
+  (#72) — the `> 0` adoption sentinels let tiny numeric residue through
+  unfloored (divisor-poisoning class; dormant, zero callers today).
+
 ## 0.9.0 - 2026-07-23
 
 Validation release for the opt-in `agreementWeighted` model (#58 data
