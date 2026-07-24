@@ -76,6 +76,19 @@ class BlockClassifierService {
   /// transform matrix leaves rects untransformed (see
   /// [applyInverseTransform]). Callers that can detect these upstream
   /// should skip the frame instead.
+  ///
+  /// **`fixedStickyRects` input contract — filter viewport-spanning
+  /// wrappers.** Containment against these rects marks contained blocks
+  /// viewport-relative (`isViewportRelative`), and this method trusts the
+  /// list as given: it applies no plausibility check of its own. Some sites
+  /// wrap their ENTIRE content area in a full-viewport `position:fixed`
+  /// container; passing that wrapper here blanket-flags every block on the
+  /// page as viewport-relative, which downstream typically means the
+  /// consumer's whole cache is treated as screen-anchored chrome (observed
+  /// consumer failure: the store was wiped on every capture and observation
+  /// counts never accrued). Filter such wrappers out before calling — a
+  /// pinned rect taller than ~half of `input.viewportHeight` is a wrapper
+  /// or backdrop, not chrome (real toolbars/bars are height-bounded).
   ClassificationResult classifyGroups({
     required List<List<OcrBlock>> textGroups,
     required ClassificationInput input,
