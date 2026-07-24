@@ -46,6 +46,16 @@ Two families of records coexist in one file:
  "cold":.., "cooldown":.., "nav":.., "fuzzy":.., "sar":.., "replace":..,
  "ambig":.., "nestedE":.., "nestedK":.., "nestedD":.., "nms":..}
 
+// Per-capture OCR engine attribution: which recognition engine produced
+// this capture's frame, decided at the consumer's dual-engine selection
+// gate (e.g. "mlkit" | "paddle"). Emitted once per OCR-sourced capture;
+// join against obs/dedup records by `cap` to stratify a dual-engine
+// stream per engine before grading it — engine identity is a
+// regime-determining field, like `origin`. Captures with no engine
+// record predate this event or did not come from an OCR engine.
+// Additive v1 event — loaders that don't know it skip it.
+{"t":"engine", "ts":..., "cap":..., "eng":"<engine id>"}
+
 // Consumer provisional admission lifecycle (#57 item 3).
 {"t":"band_stamp", "ts":..., "cap":..., "fresh":<blockRef>, "existing":<blockRef>}
 {"t":"band_decrement", "ts":..., "cap":..., "block":<blockRef>,
