@@ -1,8 +1,12 @@
 # ocr_stabilizer
 
-A real-time stabilization engine for live OCR overlays. Tracks text block
-identity across noisy captures, corrects positional drift, and provides
-spatial indexing for deduplication.
+A real-time stabilization engine for live text-capture pipelines — OCR
+overlays and DOM/text extraction alike. Tracks text block identity across
+noisy captures, corrects positional drift, and provides spatial indexing
+for deduplication. Extraction streams are a first-line use case, not an
+afterthought: identity tracking, dedup, and text voting are exactly what
+keeps an extraction pipeline consistent across re-captures, while the
+position-merge refinements matter most for rendered overlays.
 
 Pure Dart — usable in Flutter apps and server-side pipelines alike.
 Built for event-driven OCR pipelines — e.g. screenshots captured on

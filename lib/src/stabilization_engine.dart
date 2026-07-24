@@ -65,9 +65,12 @@ enum PositionMergeModel {
 const int _kWellObservedThreshold = 3;
 
 /// Jitter allowance multiplier for [PositionMergeModel.agreementWeighted]:
-/// the agreement scale is this multiple of the region's median block
-/// height. A residual equal to the full allowance scores agreement 0; a
-/// residual well inside it scores partial agreement.
+/// the agreement scale is this multiple of the existing (tracked) block's
+/// OWN height (#75; was the region's median block height through 1.0.x — a
+/// pooled median gets polluted by small siblings and needed a cold-region
+/// default, see `_mergedPositionConfidence`). A residual equal to the full
+/// allowance scores agreement 0; a residual well inside it scores partial
+/// agreement.
 ///
 /// Why not the drift margin? `driftMarginForKey` is a *median-of-drift* —
 /// a systematic-offset measure, ~0 under symmetric jitter and sub-floor
@@ -82,9 +85,14 @@ const int _kWellObservedThreshold = 3;
 /// legacy's 11.8); at 3x the confidence→weight anchoring loop engages and
 /// damps it to 3.8 px/merge, while confidence stays regime-discriminating
 /// (~1.0 stable / 0.85 reflow / 0.35 heavy jitter — never saturated-blind
-/// like legacy). Calibrated against ML-Kit-shaped noise; re-run the sweep
-/// (`tool/replay` ab-report) before trusting it for a different OCR
-/// engine's residual distribution.
+/// like legacy). The 3x multiplier carried over unchanged to the per-block
+/// base (#75, 2026-07-24): on uniform streams the two bases coincide (the
+/// sweep's calibration transfers), and the six-capture validation showed
+/// per-block ~30-60% better established-chain damping under OCR jitter
+/// with every other regime within noise
+/// (`doc/replay/validation/2026-07-perblock-scale/`). Calibrated against
+/// ML-Kit-shaped noise; re-run the sweep (`tool/replay` ab-report) before
+/// trusting it for a different OCR engine's residual distribution.
 const double _kAgreementJitterAllowance = 3.0;
 
 /// Maximum text vote entries per block to prevent OOM on noisy edges.
@@ -254,7 +262,6 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     T fresh,
     T existing,
     Rect correctedRect,
-    SpaceKey spaceKey,
   ) {
     switch (positionMergeModel) {
       case PositionMergeModel.legacy:
@@ -266,15 +273,20 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       case PositionMergeModel.agreementWeighted:
         // Confidence is a running mean of positional AGREEMENT: how
         // close the corrected fresh observation landed to the tracked
-        // position, scaled by the region's jitter allowance
-        // ([_kAgreementJitterAllowance] x median block height).
-        // Disagreeing observations REDUCE confidence instead of
+        // position, scaled by the block's OWN jitter allowance
+        // ([_kAgreementJitterAllowance] x the existing block's height,
+        // #75): tolerance proportional to the block's own text size. A
+        // region-median scale gets polluted by small siblings (a caption's
+        // height says nothing about how much a paragraph may jitter — F2)
+        // and cold regions fell to the 16 px height default (F4); the
+        // existing (tracked) block's height is jitter-stable and needs no
+        // default. Disagreeing observations REDUCE confidence instead of
         // saturating it.
         final residual =
             (correctedRect.topLeft - existing.absoluteRect.raw.topLeft)
                 .distance;
-        final scale = driftTracker.medianBlockHeightForKey(spaceKey) *
-            _kAgreementJitterAllowance;
+        final scale =
+            existing.absoluteRect.raw.height * _kAgreementJitterAllowance;
         final agreement =
             scale > 0 ? (1.0 - residual / scale).clamp(0.0, 1.0) : 0.0;
         // Clamped for the same reason as the merge weight: n <= -1
@@ -1145,7 +1157,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // decrement the counter until it graduates.
     final mergedRectCalculated = AbsoluteRect(mergedRaw);
     final mergedPositionConf = PositionConfidence.from(
-      _mergedPositionConfidence(fresh, existing, correctedRect, spaceKey),
+      _mergedPositionConfidence(fresh, existing, correctedRect),
     );
     final mergedTextConfTyped = TextConfidence.from(mergedTextConf);
 

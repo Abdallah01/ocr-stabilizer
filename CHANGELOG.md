@@ -1,3 +1,22 @@
+## 1.1.0 - 2026-07-24
+
+### Changed
+- **`agreementWeighted`'s agreement scale is now per-block** (#75): `3 ×`
+  the existing (tracked) block's own height, replacing the region-median
+  base. Tolerance becomes proportional to the block's own text size — a
+  pooled median gets diluted by small siblings (a caption's height says
+  nothing about how much a paragraph may jitter) and needed a cold-region
+  16 px default; both defects disappear. Six-capture validation
+  (`doc/replay/validation/2026-07-perblock-scale/`): established-chain
+  OCR-jitter damping improves ~30-60% with informative confidence
+  (0.62 vs 0.35 mean), a fresh physical-rotation reflow capture shows no
+  lag regression (within 0.12 px of the old base, identical at depth),
+  and every other regime is bit-identical or within noise. On uniform
+  streams the two bases coincide, so the #58 3× calibration transfers
+  unchanged — no pinned numerics moved. `legacy` is unaffected.
+- README: extraction pipelines named as a first-line use case alongside
+  rendered overlays.
+
 ## 1.0.2 - 2026-07-24
 
 ### Docs
