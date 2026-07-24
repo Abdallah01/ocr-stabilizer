@@ -23,12 +23,21 @@ jobs:
       - run: dart analyze --fatal-infos
       - run: dart test
       # Coverage visibility (#60): lcov uploaded as a build artifact from
-      # the latest-stable leg. No external coverage service — wiring a
-      # Codecov-style badge needs a repo token, tracked in #60.
+      # the latest-stable leg, and the line-rate printed to the job summary
+      # so the number is visible per-run without downloading the artifact.
+      # DECIDED (#60 close-out): no external coverage service — a
+      # Codecov-style badge needs a service token; for a personal-use
+      # package the per-run summary + artifact trend is enough.
       - if: matrix.sdk == 'stable'
         run: |
           dart pub global activate coverage
           dart pub global run coverage:test_with_coverage
+      - name: Coverage summary
+        if: matrix.sdk == 'stable'
+        run: |
+          PCT=$(awk -F, '/^DA:/ {t++; if ($2>0) c++} END {if (t) printf "%.1f", 100*c/t; else print "n/a"}' coverage/lcov.info)
+          echo "**Line coverage (stable leg): ${PCT}%**" >> "$GITHUB_STEP_SUMMARY"
+          echo "line coverage: ${PCT}%"
       - uses: actions/upload-artifact@v4
         if: matrix.sdk == 'stable'
         with:
