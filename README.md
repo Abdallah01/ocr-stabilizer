@@ -58,6 +58,14 @@ dependencies:
   ocr_stabilizer: ^1.0.0
 ```
 
+> **What's new in 1.2.0** — `ParagraphGrouper`: CJK-aware grouping of OCR
+> blocks into paragraph-level units (Otsu-thresholded gap clustering,
+> adaptive height-proportional thresholds, sentence-punctuation
+> awareness, Tukey IQR height fences, noise guards, inline-peer
+> detection), plus the exported `otsusThreshold` /
+> `otsusThresholdWithFallback` 1-D gap-clustering utilities. See
+> [ParagraphGrouper](#paragraphgrouper-v120) below.
+
 > **What's new in 1.1.0** — the `agreementWeighted` agreement scale is now
 > **per-block** (#75): 3× the tracked block's own height, replacing the
 > region-median base that small siblings could dilute (a caption's height
@@ -305,6 +313,45 @@ flags. Higher weight means more constrained coordinate space:
 | IC or carousel | 20 | Single-axis constraint |
 | Normal | 10 | Unrestricted page scroll |
 
+### ParagraphGrouper (v1.2.0+)
+
+Groups engine-level OCR blocks into paragraph-level units — the step between
+raw OCR output and translation/layout consumers. OCR engines return blocks
+that rarely match visual paragraphs: wrapped lines arrive as separate blocks,
+while unrelated UI elements (tag pills, toolbar items) sit close enough to
+merge under fixed-pixel gap heuristics. `ParagraphGrouper` reconstructs
+paragraph units with data-driven clustering instead:
+
+- **Otsu-thresholded gap clustering** — finds the natural break between
+  line-spacing and paragraph-spacing from each batch's own gap distribution
+  (no fixed pixel constants; also exposed directly as `otsusThreshold` /
+  `otsusThresholdWithFallback`).
+- **Adaptive height-proportional threshold** — scales with font size and
+  device pixel ratio, so high-DPR captures group identically to 1x.
+- **CJK punctuation awareness** — a block ending in 。！？… gets a stricter
+  merge threshold (the sentence is likely complete); multi-line blocks are
+  exploded at sentence-ending lines.
+- **Noise and identity guards** — Tukey IQR height fences, ICDAR aspect-ratio
+  bounds, rune-density filtering, and inline-peer detection (side-by-side
+  elements never merge).
+
+```dart
+final grouper = ParagraphGrouper(); // tuned defaults
+final paragraphs = grouper.groupIntoParagraphs(blocks); // List<List<OcrBlock>>
+
+// Knobs: gap floor/multiplier + merge caps
+final custom = ParagraphGrouper(
+  lineGapThreshold: 10.0,   // px floor for the adaptive threshold
+  lineGapMultiplier: 0.75,  // × average block height
+  maxParagraphBlocks: 3,    // blocks per merged paragraph
+  maxParagraphRunes: 200,   // total runes per merged paragraph
+);
+```
+
+Defaults were tuned on CJK novel pages (high-DPR mobile WebView captures);
+they are sensible for CJK prose generally, and the caps are the first knobs
+to revisit for Latin-script or dense-layout content.
+
 ### Extension Types
 
 Zero-cost compile-time wrappers for coordinate safety:
@@ -353,6 +400,8 @@ A block's identity is a six-dimensional signature:
 | `OverlapResolver` | Spatial NMS with language-aware thresholds |
 | `BlockKeyGenerator` | Position + text dedup keys with fuzzy neighbor matching |
 | `CssSubmapMembership` | Default WebView submap partitioning |
+| `ParagraphGrouper` | CJK-aware block→paragraph grouping (Otsu gap clustering + noise guards) |
+| `otsusThreshold` / `otsusThresholdWithFallback` | Otsu bimodal threshold for 1-D gap distributions (function API) |
 | `RobustStats` | Robust statistics (median, MAD, IQR) |
 | `IqrOutlier` | Tukey-fence outlier detection |
 | `TextDedupUtils` | Levenshtein, Jaccard, CJK detection helpers |

@@ -41,6 +41,8 @@ export 'src/block_meta.dart';
 export 'src/confidence.dart';
 export 'src/default_tracked_block.dart';
 export 'src/ocr_block.dart';
+export 'src/otsu_threshold.dart';
+export 'src/paragraph_grouper.dart';
 export 'src/classification_input.dart';
 export 'src/contextual_invalidation.dart';
 export 'src/css_submap_membership.dart';
