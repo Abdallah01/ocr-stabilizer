@@ -141,14 +141,17 @@ void main() {
       expect(result, lessThan(10.0));
     });
 
-    test('skips internal duplicates when evaluating class boundaries', () {
-      // [1, 1, 1, 2, 2, 2, 10, 10, 10]
-      // Should only evaluate at unique boundaries: (1→2) and (2→10)
-      final result = otsusThreshold(
-          [1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 10.0, 10.0, 10.0]);
+    test('skips internal duplicates when evaluating class boundaries (N >= 10)',
+        () {
+      // [1×4, 2×4, 10×4] (N=12) reaches the genuine Otsu loop — an N=9
+      // fixture would silently pass via the unrelated N<10 heuristic.
+      // Unique class boundaries are (1→2) and (2→10); the (2→10) split
+      // maximizes inter-class variance → threshold = (2+10)/2 = 6.0.
+      final result = otsusThreshold([
+        1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 10.0, 10.0, 10.0, 10.0, //
+      ]);
       expect(result, isNotNull);
-      expect(result!, greaterThan(2.0));
-      expect(result, lessThan(10.0));
+      expect(result!, closeTo(6.0, 1e-9));
     });
 
     // ┌─────────────────────────────────────────────────────────────────────┐
@@ -169,8 +172,7 @@ void main() {
         () {
       // N=8 → heuristic. Sorted: [1.0,1.5,1.8,2.0,2.2,2.5,10.0,11.0]
       // median=(2.0+2.2)/2=2.1, maxGap=11, 11 > 2.1*3=6.3? Yes → (2.1+11)/2
-      final result =
-          otsusThreshold([1.0, 1.5, 1.8, 2.0, 2.2, 2.5, 10.0, 11.0]);
+      final result = otsusThreshold([1.0, 1.5, 1.8, 2.0, 2.2, 2.5, 10.0, 11.0]);
       expect(result, isNotNull);
       expect(result!, closeTo((2.1 + 11.0) / 2, 0.01)); // 6.55
     });
@@ -210,21 +212,40 @@ void main() {
     });
 
     // ┌─────────────────────────────────────────────────────────────────────┐
-    // │ Sorted Input Assumption                                             │
+    // │ Input Ordering                                                      │
     // └─────────────────────────────────────────────────────────────────────┘
 
-    test('assumes input is already sorted (requires pre-sorted)', () {
-      // N=6 → heuristic path. Pre-sorted should produce consistent result.
-      final sorted = [1.0, 2.0, 3.0, 10.0, 11.0, 12.0];
-      final result = otsusThreshold(sorted);
-      expect(result, isNotNull);
+    test('unsorted input yields exactly the same threshold as sorted input',
+        () {
+      // The function normalizes ordering internally: an already-sorted
+      // input is used as-is; an unsorted input is defensively copied and
+      // sorted, so misuse degrades to an O(n log n) copy instead of a
+      // silently wrong threshold.
+      //
+      // This fixture is chosen so the orderings genuinely diverge without
+      // normalization: unsorted, the last element (2.0) masquerades as the
+      // max gap, flipping the N<10 heuristic from the (median+max)/2
+      // branch (15.75) to the median*1.8 branch (2.7).
+      final unsorted = [30.0, 1.0, 1.0, 1.0, 2.0, 2.0];
+      final sorted = [1.0, 1.0, 1.0, 2.0, 2.0, 30.0];
+      final fromSorted = otsusThreshold(sorted);
+      expect(fromSorted, isNotNull);
+      expect(otsusThreshold(unsorted), fromSorted);
     });
 
-    test('behavior with unsorted input (will produce incorrect result)', () {
-      // This test documents that the function ASSUMES sorted input.
+    test(
+        'unsorted input with equal first and last elements is not '
+        'mistaken for all-identical', () {
+      // Unsorted [5,3,5] has first == last; without normalization the
+      // all-identical shortcut would fire and return 6.0. Sorted [3,5,5]
+      // takes the N<5 path: median(5.0) * 1.8 = 9.0.
+      expect(otsusThreshold([5.0, 3.0, 5.0]), closeTo(9.0, 1e-9));
+    });
+
+    test("does not mutate the caller's unsorted list", () {
       final unsorted = [10.0, 1.0, 11.0, 2.0, 12.0, 3.0];
-      final result = otsusThreshold(unsorted);
-      expect(result, anything); // Just verify it completes without crashing
+      otsusThreshold(unsorted);
+      expect(unsorted, [10.0, 1.0, 11.0, 2.0, 12.0, 3.0]);
     });
 
     // ┌─────────────────────────────────────────────────────────────────────┐
@@ -283,7 +304,16 @@ void main() {
       // 20% threshold. All values from a single normal-like distribution
       // with small spread.
       final result = otsusThreshold([
-        10.0, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9,
+        10.0,
+        10.1,
+        10.2,
+        10.3,
+        10.4,
+        10.5,
+        10.6,
+        10.7,
+        10.8,
+        10.9,
       ]);
       // bestVariance/overallVariance will be low for this uniform data.
       // If Otsu still finds a threshold, the 20% gate should reject it.

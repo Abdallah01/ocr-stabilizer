@@ -236,8 +236,7 @@ void main() {
           reason: 'Guard only triggers for single-block paragraphs');
     });
 
-    test('paragraph cap: 4+ consecutive blocks split into multiple groups',
-        () {
+    test('paragraph cap: 4+ consecutive blocks split into multiple groups', () {
       // 5 blocks with small gaps — all would merge without the cap
       final blocks = [
         _makeBlock('第一段', const Rect.fromLTWH(50, 100, 300, 20)),
@@ -286,8 +285,7 @@ void main() {
           reason: 'First group capped at the custom maxParagraphBlocks');
     });
 
-    test('punctuation-aware: sentence-ending 。 applies stricter threshold',
-        () {
+    test('punctuation-aware: sentence-ending 。 applies stricter threshold', () {
       // Block 1 ends with 。(sentence end) — strict threshold (0.6×)
       // Normal adaptive threshold for 20px blocks: max(10, 20*0.75) = 15px
       // Strict: 15 * 0.6 = 9px. Gap of 12px > 9px → should NOT merge.
@@ -319,8 +317,11 @@ void main() {
     });
 
     test('density guard: OCR noise block (few runes, huge box) discarded', () {
-      // Normal block followed by a huge box with 1 rune (OCR artifact)
-      // Density = 1 / (500*500) = 0.000004 < 0.00005 threshold
+      // Normal block followed by a huge box with 1 rune (OCR artifact).
+      // Density = 1 / (500*500) = 0.000004 < 0.00005 threshold.
+      // The artifact's char height (500) is judged against the median of
+      // density-passing blocks only (20px), so the artifact cannot inflate
+      // its own rejection baseline and slip through as "normal".
       final blocks = [
         _makeBlock('正常段落文字', const Rect.fromLTWH(50, 100, 300, 20)),
         _makeBlock('I', const Rect.fromLTWH(50, 125, 500, 500)), // noise
@@ -330,6 +331,13 @@ void main() {
 
       expect(paragraphs, hasLength(1),
           reason: 'OCR noise block should be discarded, not included');
+      expect(paragraphs[0], hasLength(1),
+          reason: 'the noise block must not ride along inside the paragraph');
+      expect(
+        paragraphs.expand((p) => p.map((b) => b.text)),
+        isNot(contains('I')),
+        reason: 'noise text must be absent from ALL output paragraphs',
+      );
       expect(paragraphs[0].first.text, '正常段落文字');
     });
 
@@ -349,8 +357,7 @@ void main() {
 
       final paragraphs = grouper.groupIntoParagraphs(blocks);
 
-      final allTexts =
-          paragraphs.expand((p) => p.map((b) => b.text)).toList();
+      final allTexts = paragraphs.expand((p) => p.map((b) => b.text)).toList();
       expect(allTexts, contains('好'),
           reason: 'Heading should not be filtered by density guard');
     });
@@ -506,6 +513,140 @@ void main() {
       expect(paragraphs, hasLength(3),
           reason: 'Toolbar items on same row should stay separate');
     });
+
+    test('inline peer: left pill arriving after the right pill stays separate',
+        () {
+      // Same-row pills with 2px top jitter so the RIGHT pill sorts first:
+      // the left pill then arrives as a candidate sitting LEFT of the
+      // paragraph. The horizontal-separation check must fire in BOTH
+      // directions, not just candidate-right-of-paragraph.
+      final blocks = [
+        _makeBlock('修仙', const Rect.fromLTWH(110, 200, 60, 24)),
+        _makeBlock('玄幻', const Rect.fromLTWH(30, 202, 60, 24)),
+      ];
+
+      final paragraphs = grouper.groupIntoParagraphs(blocks);
+
+      expect(paragraphs, hasLength(2),
+          reason: 'inline peers must not merge regardless of arrival order');
+    });
+
+    test('inline peer: same-row pills given right-to-left stay separate', () {
+      // The 4-pill row supplied in reversed (right-to-left) input order.
+      // Identical tops tie-break on left edge, so grouping is deterministic
+      // regardless of the order the OCR engine emits same-row blocks.
+      final blocks = [
+        _makeBlock('都市', const Rect.fromLTWH(270, 200, 60, 24)),
+        _makeBlock('历史', const Rect.fromLTWH(190, 200, 60, 24)),
+        _makeBlock('修仙', const Rect.fromLTWH(110, 200, 60, 24)),
+        _makeBlock('玄幻', const Rect.fromLTWH(30, 200, 60, 24)),
+      ];
+
+      final paragraphs = grouper.groupIntoParagraphs(blocks);
+
+      expect(paragraphs, hasLength(4),
+          reason: 'reversed input order must not change the grouping');
+      expect(
+        paragraphs.map((p) => p.first.text).toList(),
+        ['玄幻', '修仙', '历史', '都市'],
+        reason: 'same-row blocks tie-break on left edge, so output document '
+            'order is left-to-right regardless of input order',
+      );
+    });
+
+    // ── Data-driven threshold integration tests ──
+
+    test('docstrum threshold is clamped by the 2x block-height hard ceiling',
+        () {
+      // 12 stacked 10px blocks. The gap distribution [2×8, 25, 60, 60]
+      // (11 gaps, N≥10) drives the genuine Otsu branch, which puts the
+      // class boundary between 25 and 60 → threshold 42.5. That is far
+      // beyond the hard ceiling (2 × 10px avg height = 20), so the 25px
+      // gap must SPLIT; unclamped it would merge (25 < 42.5).
+      final custom = ParagraphGrouper(maxParagraphBlocks: 20);
+      const tops = <double>[0, 12, 24, 36, 48, 60, 72, 84, 96, 131, 201, 271];
+      final blocks = [
+        for (final top in tops)
+          _makeBlock('字', Rect.fromLTWH(50, top, 300, 10)),
+      ];
+
+      final paragraphs = custom.groupIntoParagraphs(blocks);
+
+      expect(paragraphs, hasLength(4),
+          reason: 'gaps beyond 2x avg block height must never merge, even '
+              'when the data-driven Otsu threshold is larger');
+      expect(paragraphs[0], hasLength(9),
+          reason: '2px gaps stay merged under the clamped threshold');
+    });
+
+    test('real bimodal gap distribution drives splits via the Otsu path', () {
+      // 6 clusters of 2 blocks: within-cluster gaps 4px, between-cluster
+      // 30px → 11 gaps [4×6, 30×5], enough (N≥10) for the genuine Otsu
+      // branch (threshold 17.0). 4 < 17 merges; 30 > 17 splits — and with
+      // 2-block clusters under the default 3-block cap, the split decision
+      // is made by the threshold, not masked by the cap.
+      final blocks = <OcrBlock>[];
+      for (int c = 0; c < 6; c++) {
+        final clusterTop = c * 74.0;
+        blocks
+          ..add(_makeBlock('第一行文', Rect.fromLTWH(50, clusterTop, 300, 20)))
+          ..add(
+              _makeBlock('第二行文', Rect.fromLTWH(50, clusterTop + 24, 300, 20)));
+      }
+
+      final paragraphs = grouper.groupIntoParagraphs(blocks);
+
+      expect(paragraphs, hasLength(6),
+          reason: 'Otsu threshold from the bimodal gap distribution should '
+              'merge line gaps (4px) and split paragraph gaps (30px)');
+      for (final p in paragraphs) {
+        expect(p, hasLength(2));
+      }
+    });
+
+    test(
+        'height fence (Tukey IQR) rejects a 2.5x-tall block in an 8-block '
+        'batch that the fixed 3x fallback would allow', () {
+      // 7 stacked 20px blocks + one 50px block (8 total → IQR fence branch
+      // active). The fence rejects the 50px candidate, while the fixed 3x
+      // fallback (50 < 60) would have merged it — so this pins the fence
+      // branch specifically, not just "some guard fired".
+      final blocks = [
+        _makeBlock('第一行字', const Rect.fromLTWH(50, 0, 300, 20)),
+        _makeBlock('第二行字', const Rect.fromLTWH(50, 24, 300, 20)),
+        _makeBlock('第三行字', const Rect.fromLTWH(50, 48, 300, 20)),
+        _makeBlock('第四行字', const Rect.fromLTWH(50, 72, 300, 20)),
+        _makeBlock('第五行字', const Rect.fromLTWH(50, 96, 300, 20)),
+        _makeBlock('第六行字', const Rect.fromLTWH(50, 120, 300, 20)),
+        _makeBlock('第七行字', const Rect.fromLTWH(50, 144, 300, 20)),
+        _makeBlock('高块内容文字', const Rect.fromLTWH(50, 168, 300, 50)),
+      ];
+
+      final paragraphs = grouper.groupIntoParagraphs(blocks);
+
+      expect(paragraphs.last.single.text, '高块内容文字',
+          reason: 'the height-outlier block must end up alone, rejected by '
+              'the IQR fence');
+    });
+
+    test(
+        '2x ceiling takes precedence over the lineGapThreshold floor for '
+        'very small blocks', () {
+      // 4px-tall blocks: floor = 10, ceiling = 4*2 = 8 → effective 8.
+      // A 9px gap sits between ceiling and floor → must SPLIT. Pins the
+      // documented precedence: the anti-merge ceiling outranks the
+      // merge-enabling floor when the two conflict (degenerate tiny-block
+      // batches).
+      final blocks = [
+        _makeBlock('小', const Rect.fromLTWH(100, 100, 50, 4)),
+        _makeBlock('字', const Rect.fromLTWH(100, 113, 50, 4)), // 9px gap
+      ];
+
+      final paragraphs = grouper.groupIntoParagraphs(blocks);
+
+      expect(paragraphs, hasLength(2),
+          reason: 'ceiling (8px) undercuts the floor (10px) and wins');
+    });
   });
 
   group('groupByLines', () {
@@ -546,6 +687,18 @@ void main() {
 
     test('rejects non-finite lineGapThreshold', () {
       expect(() => ParagraphGrouper(lineGapThreshold: double.nan),
+          throwsA(isA<ArgumentError>()));
+    });
+
+    test('rejects infinite lineGapThreshold', () {
+      expect(() => ParagraphGrouper(lineGapThreshold: double.infinity),
+          throwsA(isA<ArgumentError>()));
+    });
+
+    test('rejects non-finite lineGapMultiplier', () {
+      expect(() => ParagraphGrouper(lineGapMultiplier: double.nan),
+          throwsA(isA<ArgumentError>()));
+      expect(() => ParagraphGrouper(lineGapMultiplier: double.infinity),
           throwsA(isA<ArgumentError>()));
     });
   });

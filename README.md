@@ -58,6 +58,14 @@ dependencies:
   ocr_stabilizer: ^1.0.0
 ```
 
+> **What's new in 1.2.0** — `ParagraphGrouper`: CJK-aware grouping of OCR
+> blocks into paragraph-level units (Otsu-thresholded gap clustering,
+> adaptive height-proportional thresholds, sentence-punctuation
+> awareness, Tukey IQR height fences, noise guards, inline-peer
+> detection), plus the exported `otsusThreshold` /
+> `otsusThresholdWithFallback` 1-D gap-clustering utilities. See
+> [ParagraphGrouper](#paragraphgrouper-v120) below.
+
 > **What's new in 1.1.0** — the `agreementWeighted` agreement scale is now
 > **per-block** (#75): 3× the tracked block's own height, replacing the
 > region-median base that small siblings could dilute (a caption's height

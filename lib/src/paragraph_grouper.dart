@@ -20,6 +20,7 @@
 import 'dart:math' as math;
 
 import 'internal/cjk_ideographs.dart';
+import 'iqr_outlier.dart';
 import 'ocr_block.dart';
 import 'otsu_threshold.dart';
 import 'robust_stats.dart';
@@ -46,12 +47,12 @@ class ParagraphGrouper {
     this.maxParagraphRunes = 200,
   }) {
     if (!lineGapThreshold.isFinite || lineGapThreshold < 0) {
-      throw ArgumentError.value(lineGapThreshold, 'lineGapThreshold',
-          'must be finite and >= 0');
+      throw ArgumentError.value(
+          lineGapThreshold, 'lineGapThreshold', 'must be finite and >= 0');
     }
     if (!lineGapMultiplier.isFinite || lineGapMultiplier <= 0) {
-      throw ArgumentError.value(lineGapMultiplier, 'lineGapMultiplier',
-          'must be finite and > 0');
+      throw ArgumentError.value(
+          lineGapMultiplier, 'lineGapMultiplier', 'must be finite and > 0');
     }
     if (maxParagraphBlocks < 1) {
       throw ArgumentError.value(
@@ -67,6 +68,13 @@ class ParagraphGrouper {
   /// them to be merged into the same paragraph. Acts as a floor for the
   /// adaptive threshold and as the horizontal tolerance floor for X-overlap
   /// checks (indentation, jitter).
+  ///
+  /// Precedence note: the 2x-avg-height anti-merge ceiling outranks this
+  /// floor when the two conflict. For very small blocks (average height
+  /// below `lineGapThreshold / 2`) the effective threshold is the ceiling,
+  /// not the floor — a deliberate choice: the ceiling exists to stop
+  /// merge-everything failure modes and must not be re-opened by a floor
+  /// tuned for normal text sizes.
   ///
   /// Cold-start fallback: 10.0 px matches a fixed paragraph gap on a 1x-DPR
   /// layout; the adaptive threshold takes over as soon as block heights are
@@ -92,7 +100,11 @@ class ParagraphGrouper {
   final int maxParagraphRunes;
 
   /// Hard ceiling multiplier — gaps beyond 2× average block height are never
-  /// merged, regardless of [lineGapMultiplier].
+  /// merged, regardless of [lineGapMultiplier]. The ceiling bounds BOTH
+  /// threshold sources: the adaptive height-based fallback (inside
+  /// [_effectiveGapThreshold]) and the data-driven Docstrum/Otsu threshold
+  /// (clamped at the merge decision), so no configuration or gap
+  /// distribution can push the merge threshold past it.
   static const double _kMaxGapMultiplier = 2.0;
 
   /// Height-ratio threshold for tag-row / paragraph split guard.
@@ -151,15 +163,16 @@ class ParagraphGrouper {
   ///
   /// Finds the natural break between intra-paragraph (line spacing) and
   /// inter-paragraph (paragraph spacing) gaps using Otsu's method, which
-  /// maximizes inter-class variance. Returns `null` if fewer than 3 gaps
-  /// or the distribution is unimodal.
+  /// maximizes inter-class variance. Returns `null` if fewer than 3 gaps,
+  /// or — only once the batch is large enough for genuine Otsu (≥10
+  /// gaps) — when the distribution is rejected as unimodal. For 3–9 gaps
+  /// [otsusThreshold]'s small-sample heuristics always produce a value.
   ///
   /// Requires ≥3 gaps for OCR robustness (Otsu's method needs ≥2, but 3
   /// provides safety margin against noise).
   static double? _docstrumGapThreshold(List<double> gaps) {
     if (gaps.length < 3) return null;
-    final sorted = List<double>.from(gaps)..sort();
-    return otsusThreshold(sorted);
+    return otsusThreshold(gaps);
   }
 
   /// Compute the adaptive gap threshold for merging [candidate] into
@@ -170,8 +183,7 @@ class ParagraphGrouper {
   /// This scales with font size / DPR automatically — large text on a
   /// high-DPR device produces taller blocks and therefore a larger
   /// threshold.
-  double _effectiveGapThreshold(
-      List<OcrBlock> paragraph, OcrBlock candidate) {
+  double _effectiveGapThreshold(List<OcrBlock> paragraph, OcrBlock candidate) {
     final avgHeight = _avgBlockHeight(paragraph, candidate);
     final adaptive = avgHeight * lineGapMultiplier;
     final ceiling = avgHeight * _kMaxGapMultiplier;
@@ -179,8 +191,7 @@ class ParagraphGrouper {
   }
 
   /// Mean bounding-box height of [paragraph] blocks and [candidate].
-  static double _avgBlockHeight(
-      List<OcrBlock> paragraph, OcrBlock candidate) {
+  static double _avgBlockHeight(List<OcrBlock> paragraph, OcrBlock candidate) {
     double total = candidate.boundingBox.height;
     for (final b in paragraph) {
       total += b.boundingBox.height;
@@ -192,21 +203,35 @@ class ParagraphGrouper {
   /// proximity.
   ///
   /// Blocks are merged when:
-  /// 1. Their vertical gap is less than the **adaptive threshold** (based on
-  ///    average block height, floored by [lineGapThreshold], capped at 2×
-  ///    block height), AND
-  /// 2. Their X ranges overlap (with a tolerance of 15 % of the current
-  ///    paragraph width, floored by [lineGapThreshold]).
+  /// 1. Their vertical gap is less than the **gap threshold** — the
+  ///    Docstrum/Otsu threshold computed from the batch's own gap
+  ///    distribution when one is available (the common case on real
+  ///    multi-block pages), else the adaptive height-based threshold
+  ///    (average block height × [lineGapMultiplier], floored by
+  ///    [lineGapThreshold]). Both sources are capped by the 2×-avg-height
+  ///    hard ceiling ([_kMaxGapMultiplier]), AND
+  /// 2. Their X ranges overlap, with a tolerance that is the LARGEST of:
+  ///    a 2.5-em font-size-based indent allowance (from the paragraph's
+  ///    first block), 15 % of the current paragraph width, and the
+  ///    [lineGapThreshold] floor.
   ///
   /// The adaptive threshold scales with font size and DPR, so wrapped lines
   /// of Chinese text on high-DPR devices merge correctly without requiring
   /// manual threshold tuning.
   ///
   /// The horizontal overlap check prevents side-by-side elements (carousel
-  /// cards, inline genre links) from being merged into one wide unit.
-  /// The width-proportional tolerance (15 % of paragraph width) accommodates
-  /// standard Chinese 2 em paragraph indentation without merging elements
-  /// in genuinely separate columns.
+  /// cards, inline genre links) from being merged into one wide unit,
+  /// while the em/width-proportional tolerance accommodates standard
+  /// Chinese 2 em paragraph indentation without merging elements in
+  /// genuinely separate columns.
+  ///
+  /// Not every input block appears in the output: blocks with degenerate
+  /// (zero-area) bounding boxes are dropped, and so are OCR-artifact
+  /// blocks rejected by the noise guard (low rune density combined with
+  /// abnormal aspect ratio or char height). Dropping — rather than
+  /// emitting them as single-block paragraphs — is the point: these are
+  /// blocks the OCR engine should not have produced, and passing them
+  /// through would feed garbage to translation/layout consumers.
   List<List<OcrBlock>> groupIntoParagraphs(List<OcrBlock> blocks) {
     // ── Pre-grouping: explode multi-line OcrBlocks at sentence boundaries ──
     // The OCR engine sometimes merges distinct paragraphs into one OcrBlock
@@ -215,6 +240,12 @@ class ParagraphGrouper {
     // Exploded sub-blocks have zero gap (contiguous lines from the same
     // original block), so we emit them as separate groups directly rather
     // than feeding them back into the gap-based grouper.
+    //
+    // Sub-blocks deliberately bypass the noise/aspect/height guards below:
+    // they inherit legitimacy from their parent — a block the engine
+    // recognized as multiple lines of punctuated text is real prose, and
+    // re-guarding its slices (whose aspect ratios and densities differ
+    // from organic blocks) would risk dropping genuine sentences.
     final preGrouped = <List<OcrBlock>>[]; // groups from explosion
     final remaining = <OcrBlock>[]; // blocks for normal grouping
     for (final block in blocks) {
@@ -256,36 +287,23 @@ class ParagraphGrouper {
       }
     }
 
-    final sortedBlocks = [...remaining]
-      ..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
+    // Sort by top edge, tie-breaking on left edge so blocks on the same
+    // row are processed left-to-right regardless of the order the OCR
+    // engine emitted them — grouping must be input-order deterministic.
+    final sortedBlocks = [...remaining]..sort((a, b) {
+        final byTop = a.boundingBox.top.compareTo(b.boundingBox.top);
+        if (byTop != 0) return byTop;
+        return a.boundingBox.left.compareTo(b.boundingBox.left);
+      });
 
     // ── Batch statistics for data-driven guards ──
-    // Compute median character height and IQR upper fence for height
-    // outliers.
-    final charHeights = sortedBlocks
-        .map((b) => b.boundingBox.height / math.max(1, b.lines.length))
-        .toList()
-      ..sort();
-    // True median: averages the two middle elements for even-length input
-    // rather than picking the upper-middle. The latter biases the
-    // height-ratio / inline-peer guards slightly upward on every batch
-    // with an even number of blocks.
-    final medianCharHeight =
-        RobustStats.medianOfSorted(charHeights) ?? 0.0;
-    // Height-ratio: IQR upper fence for block heights (Tukey's fence).
-    final blockHeights = sortedBlocks.map((b) => b.boundingBox.height).toList()
-      ..sort();
-    double? heightUpperFence;
-    if (blockHeights.length >= 8) {
-      final q1 = blockHeights[blockHeights.length ~/ 4];
-      final q3 = blockHeights[(3 * blockHeights.length) ~/ 4];
-      final iqr = q3 - q1;
-      heightUpperFence = q3 + 1.5 * iqr;
-    }
-
-    // ── Docstrum gap threshold (data-driven paragraph separation) ──
-    // Pre-compute inter-block vertical gaps, skipping noise blocks so
-    // they don't pollute the gap distribution.
+    // Median character height, Tukey height fence, and the inter-block gap
+    // distribution are ALL computed over density-passing blocks only:
+    // a low-density OCR artifact must not inflate the very baselines that
+    // are supposed to reject it (a 500px phantom in a small batch would
+    // otherwise drag the char-height median up past its own 2.5x gate).
+    final charHeights = <double>[];
+    final blockHeights = <double>[];
     final allGaps = <double>[];
     OcrBlock? prevValid;
     for (final block in sortedBlocks) {
@@ -293,12 +311,29 @@ class ParagraphGrouper {
       if (area <= 0 || block.text.runes.length / area < _kMinRuneDensity) {
         continue;
       }
+      charHeights
+          .add(block.boundingBox.height / math.max(1, block.lines.length));
+      blockHeights.add(block.boundingBox.height);
       if (prevValid != null) {
         final gap = block.boundingBox.top - prevValid.boundingBox.bottom;
         if (gap > 0) allGaps.add(gap);
       }
       prevValid = block;
     }
+    charHeights.sort();
+    // True median: averages the two middle elements for even-length input
+    // rather than picking the upper-middle. The latter biases the
+    // height-ratio / inline-peer guards slightly upward on every batch
+    // with an even number of blocks.
+    final medianCharHeight = RobustStats.medianOfSorted(charHeights) ?? 0.0;
+    // Height-ratio: Tukey IQR upper fence for block heights, via the same
+    // [IqrOutlier] utility the block classifier uses (median-of-halves
+    // quartiles, adaptive k = 2.2 below N=15, synthetic spread when
+    // IQR = 0). Requires >= 8 blocks; below that (or when all heights are
+    // identical) the per-pair fixed-ratio fallback applies instead.
+    final heightUpperFence = IqrOutlier.upperFence(blockHeights, minSamples: 8);
+
+    // ── Docstrum gap threshold (data-driven paragraph separation) ──
     final docstrumThreshold = _docstrumGapThreshold(allGaps);
 
     final List<List<OcrBlock>> paragraphs = [];
@@ -326,6 +361,9 @@ class ParagraphGrouper {
       // 8:1) + character height variance (< 2.5× median from batch).
       // Secondary: legacy density check as fallback.
       final blockArea = block.boundingBox.width * block.boundingBox.height;
+      // Degenerate bounding box (zero width or height): drop the block
+      // entirely — density is uncomputable and a zero-area box cannot be
+      // meaningfully positioned by any downstream consumer.
       if (blockArea <= 0) continue;
       final aspectRatio = block.boundingBox.width / block.boundingBox.height;
       final badAspect =
@@ -333,19 +371,20 @@ class ParagraphGrouper {
       final charH = block.boundingBox.height / math.max(1, block.lines.length);
       final badCharHeight = medianCharHeight > 0 &&
           charH > medianCharHeight * _kMaxCharHeightFactor;
-      final lowDensity =
-          block.text.runes.length / blockArea < _kMinRuneDensity;
+      final lowDensity = block.text.runes.length / blockArea < _kMinRuneDensity;
       // Discard if density is low AND aspect or char-height is abnormal.
       if (lowDensity && (badAspect || badCharHeight)) {
         continue;
       }
 
       // ── Heuristic 1: Dynamic 2.5-character indentation tolerance ──
-      // Use approximate font size from block height / line count to compute
-      // a CJK-aware indent tolerance (2.5 characters wide) instead of a
-      // fixed percentage of paragraph width. The width-based tolerance
-      // (paragraphWidth × 15%) still changes as blocks widen the paragraph,
-      // but the font-size component is fixed from the first block.
+      // The X-overlap tolerance is the LARGEST of three components: a
+      // CJK-aware indent allowance 2.5 characters wide (from approximate
+      // font size = first block height / line count), the width-based
+      // tolerance (paragraphWidth × 15%), and the lineGapThreshold floor.
+      // The font-size component is fixed from the first block so it does
+      // not shift as later blocks join; the width-based component still
+      // grows as blocks widen the paragraph.
       bool xOverlaps = true;
       if (currentParagraph.isNotEmpty) {
         // Use the FIRST block to establish baseline font size so the
@@ -371,12 +410,20 @@ class ParagraphGrouper {
       // [_kMidSentenceMultiplier]).
       // Use Docstrum threshold if available (data-driven from gap
       // distribution), else fall back to adaptive height-based threshold.
+      // Either way the [_kMaxGapMultiplier] hard ceiling applies: Otsu on
+      // a skewed gap distribution can place the class boundary far beyond
+      // 2x block height, and a gap that large is never intra-paragraph.
       double threshold;
       if (currentParagraph.isEmpty) {
         threshold = docstrumThreshold ?? lineGapThreshold;
       } else {
-        threshold =
-            docstrumThreshold ?? _effectiveGapThreshold(currentParagraph, block);
+        if (docstrumThreshold != null) {
+          final ceiling =
+              _avgBlockHeight(currentParagraph, block) * _kMaxGapMultiplier;
+          threshold = math.min(docstrumThreshold, ceiling);
+        } else {
+          threshold = _effectiveGapThreshold(currentParagraph, block);
+        }
         // Punctuation multipliers still apply on top of Docstrum threshold
         // for fine-tuning sentence-boundary decisions.
         final lastText = currentParagraph.last.text;
@@ -429,10 +476,10 @@ class ParagraphGrouper {
       // ── Heuristic 4: Inline peer detection ──
       // If the candidate sits beside (not below) ANY block in the paragraph
       // — i.e. they overlap vertically but are separated horizontally by
-      // ≥ 0.5 em — they are inline peers (genre tag pills, toolbar items)
-      // and must NOT merge. Checks all paragraph blocks (not just .last)
-      // so the result is deterministic regardless of sort order for blocks
-      // at the same Y position.
+      // ≥ 0.5 em on EITHER side — they are inline peers (genre tag pills,
+      // toolbar items) and must NOT merge. Checks all paragraph blocks
+      // (not just .last) and both horizontal directions, so the result is
+      // deterministic regardless of the order same-row blocks arrive in.
       bool inlinePeerReject = false;
       if (currentParagraph.isNotEmpty) {
         final blockRect = block.boundingBox;
@@ -449,7 +496,9 @@ class ParagraphGrouper {
             final lineCount =
                 paragraphBlock.lines.isEmpty ? 1 : paragraphBlock.lines.length;
             final approxFont = pRect.height / lineCount;
-            if (blockRect.left > pRect.right + approxFont * 0.5) {
+            final separation = approxFont * 0.5;
+            if (blockRect.left > pRect.right + separation ||
+                pRect.left > blockRect.right + separation) {
               inlinePeerReject = true;
               break;
             }
@@ -457,8 +506,8 @@ class ParagraphGrouper {
         }
       }
 
-      final currentRunes = currentParagraph.fold<int>(
-          0, (sum, b) => sum + b.text.runes.length);
+      final currentRunes =
+          currentParagraph.fold<int>(0, (sum, b) => sum + b.text.runes.length);
 
       if (currentParagraph.isEmpty ||
           (currentParagraph.length < maxParagraphBlocks &&

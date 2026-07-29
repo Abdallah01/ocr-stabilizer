@@ -6,18 +6,36 @@
   Otsu-thresholded gap
   clustering, adaptive height-proportional thresholds (DPR/font-size
   invariant), CJK sentence-ending punctuation awareness (。！？… — strict
-  threshold + multi-line block explosion), Tukey IQR height fences,
+  threshold + multi-line block explosion), Tukey IQR height fences (via
+  `IqrOutlier`, the same fence utility `BlockClassifier` uses),
   ICDAR aspect-ratio + rune-density noise guards, and inline-peer
   detection so side-by-side UI elements (tag pills, toolbar items) never
-  merge. The previously hard-coded merge caps are constructor knobs:
+  merge. Merge caps are constructor knobs:
   `maxParagraphBlocks` (default 3) and `maxParagraphRunes` (default 200),
   alongside `lineGapThreshold` (10.0) and `lineGapMultiplier` (0.75).
 - **`otsusThreshold` / `otsusThresholdWithFallback`** — Otsu's method for
   1-D bimodal gap distributions with small-sample guards (N<5 → median
   heuristic, N<10 → max-gap heuristic) and a 20% inter-class-variance
-  floor that rejects unimodal distributions. Used by `ParagraphGrouper`;
-  exported for standalone gap-clustering use (e.g. inline element
-  splitting).
+  floor that rejects unimodal distributions. Accepts input in any order
+  (already-sorted input avoids an internal defensive copy). Used by
+  `ParagraphGrouper`; exported for standalone gap-clustering use (e.g.
+  inline element splitting).
+
+### Design notes (pre-release review hardening)
+The pre-release adversarial review confirmed and closed the following in
+this same release, so none of them ever shipped:
+- The noise guard's char-height baseline (median) and the height fence
+  are computed over density-passing blocks only — an OCR artifact cannot
+  inflate the very statistics meant to reject it.
+- Inline-peer detection is symmetric (candidate left OR right of the
+  paragraph) and same-row blocks are tie-broken left-to-right, so
+  grouping is deterministic regardless of the order the OCR engine emits
+  blocks.
+- The 2×-avg-height hard ceiling clamps the Docstrum/Otsu threshold too,
+  not just the adaptive fallback — no gap distribution can push the merge
+  threshold past it.
+- `otsusThreshold` normalizes input ordering instead of silently
+  returning wrong thresholds on unsorted input.
 
 ## 1.1.0 - 2026-07-24
 

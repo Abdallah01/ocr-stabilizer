@@ -20,7 +20,10 @@ import 'robust_stats.dart';
 /// gap distribution into two classes (small = kerning/line-spacing,
 /// large = separator/paragraph-spacing).
 ///
-/// Expects gaps to be **sorted in ascending order**.
+/// [gaps] may be passed in any order: the algorithm requires ascending
+/// order internally, so an already-sorted input is used as-is while an
+/// unsorted input is defensively copied and sorted (the caller's list is
+/// never mutated). Pre-sorting merely avoids the O(n log n) copy.
 ///
 /// Returns `null` if:
 /// - Fewer than 2 gaps provided
@@ -28,16 +31,29 @@ import 'robust_stats.dart';
 ///
 /// Otherwise returns the midpoint between the last "below" and first "above"
 /// value at the optimal split point.
-double? otsusThreshold(List<double> sortedGaps) {
-  final n = sortedGaps.length;
+double? otsusThreshold(List<double> gaps) {
+  final n = gaps.length;
   if (n < 2) return null;
+
+  // ── Ordering normalization ───────────────────────────────────────────────
+  // Every branch below (the all-identical first/last probe, the "max gap"
+  // read of the final element, cumulative below/above sums) assumes
+  // ascending order; on unsorted input they return silently wrong values
+  // rather than crashing, so normalize here.
+  var sortedGaps = gaps;
+  for (int i = 1; i < n; i++) {
+    if (sortedGaps[i - 1] > sortedGaps[i]) {
+      sortedGaps = List<double>.from(gaps)..sort();
+      break;
+    }
+  }
 
   // ── Small-sample guards ──────────────────────────────────────────────────
   // All gaps identical → zero variance; return gap + 1.0 to avoid degenerate
   // threshold (must check before median computation).
   if (sortedGaps.first == sortedGaps.last) return sortedGaps.first + 1.0;
 
-  final median = RobustStats.median(sortedGaps)!;
+  final median = RobustStats.medianOfSorted(sortedGaps)!;
 
   // N < 5: insufficient data for any statistical method.
   if (n < 5) return median * 1.8;
@@ -99,26 +115,27 @@ double? otsusThreshold(List<double> sortedGaps) {
   return bestThreshold;
 }
 
-/// Convenience wrapper: sorts [gaps] internally and returns the Otsu
-/// threshold, or [fallback] when no threshold can be produced.
+/// Convenience wrapper: returns the Otsu threshold, or [fallback] when no
+/// threshold can be produced.
 ///
 /// [fallback] is returned only when:
 /// - [gaps] is empty
-/// - [otsusThreshold] returns `null` for the sorted data, which occurs when:
+/// - [otsusThreshold] returns `null`, which occurs when:
 ///   - Fewer than 2 gaps are available
 ///   - The distribution is rejected as unimodal / near-uniform
 ///
-/// Note: small-sample heuristics (N<5 → median×1.8, N<10 → gap heuristic,
-/// all-identical → gap+1.0) return non-null values, so [fallback] is NOT
-/// used in those cases.
+/// Note: the small-sample heuristics return non-null values, so [fallback]
+/// is NOT used in those cases. For N < 5 that is median×1.8; for 5 ≤ N < 10
+/// it is `(median + maxGap) / 2` when the max gap exceeds 3× the median and
+/// median×1.8 otherwise; all-identical inputs return gap+1.0.
 ///
-/// Unlike [otsusThreshold], callers need not pre-sort and never receive
-/// `null` — making it suitable for pipeline code that always needs a value.
+/// Unlike [otsusThreshold], callers never receive `null` — making it
+/// suitable for pipeline code that always needs a value. (Both functions
+/// accept unsorted input; see [otsusThreshold].)
 double otsusThresholdWithFallback(
   List<double> gaps, {
   required double fallback,
 }) {
   if (gaps.isEmpty) return fallback;
-  final sorted = List<double>.from(gaps)..sort();
-  return otsusThreshold(sorted) ?? fallback;
+  return otsusThreshold(gaps) ?? fallback;
 }
