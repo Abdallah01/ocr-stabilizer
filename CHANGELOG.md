@@ -2,8 +2,8 @@
 
 ### Added
 - **`ParagraphGrouper`** — CJK-aware grouping of `OcrBlock`s into
-  paragraph-level units, extracted from the originating app's production
-  OCR pipeline together with its oracle test suite. Otsu-thresholded gap
+  paragraph-level units, with an extensive oracle test suite.
+  Otsu-thresholded gap
   clustering, adaptive height-proportional thresholds (DPR/font-size
   invariant), CJK sentence-ending punctuation awareness (。！？… — strict
   threshold + multi-line block explosion), Tukey IQR height fences,

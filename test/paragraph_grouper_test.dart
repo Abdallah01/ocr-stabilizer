@@ -2,9 +2,9 @@
 // PARAGRAPH GROUPER UNIT TESTS
 // =============================================================================
 // Oracle tests for [ParagraphGrouper] — CJK-aware grouping of OCR text blocks
-// into paragraph-level translation units. Ported from the originating app's
-// production suite, where they pinned the same algorithm against real-device
-// regressions (qidian-class CJK novel pages on a high-DPR phone).
+// into paragraph-level translation units. These pin the algorithm against
+// real-device regression shapes: CJK novel pages on high-DPR phones (tag
+// pill rows, indented paragraphs, toolbar rows, phantom OCR blocks).
 // =============================================================================
 
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';
