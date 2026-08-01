@@ -30,7 +30,7 @@ dev_dependencies:
   # (#59). flutter_lints layers Flutter-specific rules on top of this
   # same package, so the effective rule set for pure-Dart code is
   # unchanged.
-  lints: ^4.0.0
+  lints: ">=4.0.0 <7.0.0"
   # Replaces flutter_test (#59): the API surface the suite uses
   # (group/test/expect and core matchers) is identical.
   test: ^1.24.0
