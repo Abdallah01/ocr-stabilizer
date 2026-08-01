@@ -38,7 +38,7 @@ jobs:
           PCT=$(awk -F, '/^DA:/ {t++; if ($2>0) c++} END {if (t) printf "%.1f", 100*c/t; else print "n/a"}' coverage/lcov.info)
           echo "**Line coverage (stable leg): ${PCT}%**" >> "$GITHUB_STEP_SUMMARY"
           echo "line coverage: ${PCT}%"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.sdk == 'stable'
         with:
           name: coverage-lcov
