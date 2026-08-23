@@ -34,6 +34,24 @@ import 'types/geometry.dart';
 /// fence, Otsu gap threshold) from that call's blocks only.
 ///
 /// Configuration is immutable; construct a new instance to change knobs.
+///
+/// ## Deliberate limits (tracked for discussion)
+///
+/// - **Batch-global gap statistics.** The Otsu threshold is derived from
+///   ONE gap distribution spanning the whole batch, so on multi-region
+///   pages (main column + sidebar + tag rows) foreign regions shape the
+///   threshold. The X-overlap, inline-peer, and 2x-height-ceiling guards
+///   bound the damage per merge decision; the single-region assumption
+///   behind the statistic itself is tracked as issue #91.
+/// - **The output unit is a translation unit, not a visual paragraph.**
+///   The defaults ([maxParagraphBlocks] = 3, [maxParagraphRunes] = 200)
+///   size units for bounded translation requests, deliberately splitting
+///   visual paragraphs that wrap over more blocks. The default's semantic
+///   is debated in issue #100; a named strategy API in issue #101.
+/// - **Sentence-end explosion is irreversible.** Multi-line blocks are
+///   split at sentence-ending lines BEFORE grouping, and the pieces never
+///   re-merge (see the pre-grouping pass in [groupIntoParagraphs]).
+///   Configurable punctuation modes are tracked as issue #99.
 class ParagraphGrouper {
   /// Creates a [ParagraphGrouper].
   ///
@@ -92,6 +110,13 @@ class ParagraphGrouper {
   /// Prevents aggressive merging on pages with many consecutive paragraphs
   /// that have small gaps. The default (3) allows wrapped 2-3 line sentences
   /// to merge while capping multi-paragraph mega-blocks.
+  ///
+  /// The default is a TRANSLATION-UNIT policy, not a visual-paragraph one:
+  /// it bounds unit size for downstream translation requests, accepting
+  /// that a visual paragraph wrapped over more than three OCR blocks
+  /// splits. Consumers wanting visual paragraphs should raise this cap and
+  /// let [maxParagraphRunes] do the bounding; whether the DEFAULT should
+  /// change is issue #100.
   final int maxParagraphBlocks;
 
   /// Maximum total runes across all blocks in a merged paragraph.
@@ -246,6 +271,13 @@ class ParagraphGrouper {
     // recognized as multiple lines of punctuated text is real prose, and
     // re-guarding its slices (whose aspect ratios and densities differ
     // from organic blocks) would risk dropping genuine sentences.
+    //
+    // NOTE the asymmetry with the tail-punctuation heuristic further down:
+    // at a paragraph tail, sentence punctuation only TIGHTENS the merge
+    // threshold (x0.6 — advisory); here it is a HARD, irreversible
+    // boundary — a multi-sentence visual paragraph inside one OCR block
+    // always becomes multiple output units. That bias is deliberate
+    // (translation-unit sizing); making it configurable is issue #99.
     final preGrouped = <List<OcrBlock>>[]; // groups from explosion
     final remaining = <OcrBlock>[]; // blocks for normal grouping
     for (final block in blocks) {

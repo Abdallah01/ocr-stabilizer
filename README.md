@@ -487,6 +487,28 @@ to support different input sources:
 | PDF | Custom (page-based submaps) | Custom (page geometry) |
 | Camera | Custom (frame regions) | Custom (camera frame) |
 
+## Design decisions and known limits
+
+Deliberate trade-offs, each with a tracking issue for discussion:
+
+- **Position model calibrated against ML Kit.** The agreement-weighted merge
+  scale was swept on ML-Kit-shaped noise; re-run the replay sweep before
+  trusting it for another OCR engine. Cross-engine validation matrix: [#94](https://github.com/Abdallah01/ocr-stabilizer/issues/94).
+- **Paragraph grouping assumes a single text region.** The Otsu gap threshold
+  is derived batch-globally; multi-column pages are handled by per-merge
+  guards, not per-region statistics. [#91](https://github.com/Abdallah01/ocr-stabilizer/issues/91).
+- **"Paragraphs" are translation units.** `maxParagraphBlocks: 3` +
+  `maxParagraphRunes: 200` size units for bounded translation requests, and
+  sentence-end explosion of multi-line blocks is a hard boundary. Default
+  semantics: [#100](https://github.com/Abdallah01/ocr-stabilizer/issues/100); punctuation modes: [#99](https://github.com/Abdallah01/ocr-stabilizer/issues/99); a named strategy API: [#101](https://github.com/Abdallah01/ocr-stabilizer/issues/101).
+- **One engine instance per continuous visual session.** Construct fresh at
+  document boundaries; there is no engine-wide reset today. [#95](https://github.com/Abdallah01/ocr-stabilizer/issues/95).
+- **`spatialIndex` is a documented unchecked seam.** Out-of-band inserts
+  bypass confidence validation and survive only until the next `stabilize`
+  call. [#96](https://github.com/Abdallah01/ocr-stabilizer/issues/96).
+- **No merge diagnostics yet** ([#92](https://github.com/Abdallah01/ocr-stabilizer/issues/92)), **no dynamic-reflow replay scenarios yet**
+  ([#93](https://github.com/Abdallah01/ocr-stabilizer/issues/93)), **no performance benchmarks yet** ([#97](https://github.com/Abdallah01/ocr-stabilizer/issues/97)).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, conventions, and the
