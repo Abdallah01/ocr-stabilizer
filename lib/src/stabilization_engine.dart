@@ -93,7 +93,10 @@ const int _kWellObservedThreshold = 3;
 /// with every other regime within noise
 /// (`doc/replay/validation/2026-07-perblock-scale/`). Calibrated against
 /// ML-Kit-shaped noise; re-run the sweep (`tool/replay` ab-report) before
-/// trusting it for a different OCR engine's residual distribution.
+/// trusting it for a different OCR engine's residual distribution. The
+/// cross-engine validation matrix that would turn this note into tracked
+/// coverage — and decide whether this constant needs per-engine presets —
+/// is issue #94.
 const double _kAgreementJitterAllowance = 3.0;
 
 /// Maximum text vote entries per block to prevent OOM on noisy edges.
@@ -110,6 +113,19 @@ const int _kMaxTextVotes = 5;
 /// on the very [stabilize] call that observed it — observation counts are
 /// evidence depth for position refinement and caching hints, never a
 /// readiness gate.
+///
+/// ## Lifecycle
+///
+/// One engine instance serves ONE continuous visual session. Construction
+/// is cheap; at a document boundary (navigation, content-source switch, a
+/// layout-root change that makes identity continuity meaningless)
+/// construct a fresh engine rather than reusing the old one: miss-count
+/// retention and drift-propagation state carry the previous document
+/// forward, and only [resetDriftPropagation] is individually resettable
+/// today. Discard consumer-owned state at the same boundary — text votes
+/// and observation history live on the consumer's [TrackedBlock]s, and
+/// the shared [driftTracker] is the consumer's to reset or keep. Whether
+/// an engine-wide reset() should exist instead is issue #95.
 ///
 /// Generic parameters:
 /// - [T] — concrete block type (must implement [ObservableBlock<P>])
@@ -132,6 +148,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// directly can place an invariant-violating block into the engine's
   /// view. Use the named `.from()` constructors on those types (or
   /// [DefaultTrackedBlock]'s ctor) for guarded construction.
+  ///
+  /// Blast-radius bound: the engine rebuilds this index from its own view
+  /// on every [stabilize] call, so an out-of-band insert survives only
+  /// until the next stabilization. Closing or formalizing the seam
+  /// (read-only view / validated insert / loud unchecked API) is issue
+  /// #96.
   final SpatialBlockIndex<T> spatialIndex;
 
   /// Optional context-change detector. When non-null, the engine calls this
