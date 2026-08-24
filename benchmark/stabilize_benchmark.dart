@@ -19,7 +19,7 @@ import 'dart:math';
 
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
-const _sizes = [100, 250, 500, 1000, 2000];
+const _sizes = [25, 50, 100, 250, 500, 1000, 2000];
 
 void main() {
   // VM-wide JIT warmup: without this, the first size's "cold" number
@@ -69,8 +69,9 @@ double _benchStabilizeCold(int size) {
   final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
     merger: (existing, fresh, merge) => existing.applyMerge(merge),
   );
+  final batch = _batch(size, 0); // fixture built OUTSIDE the timer
   final sw = Stopwatch()..start();
-  engine.stabilize(_batch(size, 0));
+  engine.stabilize(batch);
   sw.stop();
   return sw.elapsedMicroseconds.toDouble();
 }

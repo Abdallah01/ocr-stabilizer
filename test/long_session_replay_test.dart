@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 import 'package:test/test.dart';
 
@@ -21,13 +23,19 @@ import 'package:test/test.dart';
 //   times after absences far longer than the retention window.
 //
 // Population ceiling, derived then verified:
-//   visible lines per capture      <= 55   (2,200 / 40, +1 boundary line)
+//   visible lines per capture      <= 54   (a line counts only when it
+//                                           fits FULLY inside the viewport:
+//                                           (2,200 - 30) / 40, and sy is
+//                                           always a multiple of the 40 px
+//                                           spacing — measured max is 54)
 //   steady-state retained          <= 10   (5 lines exit per 200 px step,
 //                                           kept for retention=2 calls)
 //   wrap transient: the whole previous viewport goes missing at once, so
 //   for 2 captures after a wrap    <= 55 retained on top of 55 visible,
 //   plus ~25 short-lived duplicate identities the text churn spawns while
 //   a mismatched line's old identity sits in its retention window.
+//   (55 in the two lines above is the pre-measurement derivation bound;
+//   the fixture's achievable max is 54.)
 //   Measured (deterministic fixture): the per-pass maximum is 132 on the
 //   first pass, then EXACTLY 145 on every later pass — a flat plateau
 //   across 13 passes. Ceiling asserted: 160 (plateau + ~10%). A leak that
@@ -47,10 +55,21 @@ void main() {
     const captures = 900;
     const capsPerPass = 69; // scrollWrap / scrollStep
     const populationCeiling = 160;
-    // Mirrors _kMaxTextVotes (private) in stabilization_engine.dart — a
-    // deliberate pin: if the cap constant changes, this test must be
-    // revisited alongside it.
+    // Mirrors _kMaxTextVotes (private) in stabilization_engine.dart; the
+    // source-parse assert directly below turns the mirror into an
+    // enforced link — if the engine constant changes, this test goes red
+    // here rather than silently pinning a stale value.
     const maxTextVotes = 5;
+    final engineSource =
+        File('lib/src/stabilization_engine.dart').readAsStringSync();
+    final capDecl =
+        RegExp(r'const int _kMaxTextVotes = (\d+);').allMatches(engineSource);
+    expect(capDecl, hasLength(1),
+        reason: 'the _kMaxTextVotes declaration moved or was renamed — '
+            're-anchor this parse AND re-derive the vote-cap fixture');
+    expect(int.parse(capDecl.single.group(1)!), maxTextVotes,
+        reason: 'the engine cap changed; update maxTextVotes and re-check '
+            'the text-churn fixture still exceeds it');
 
     final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
       merger: (existing, fresh, merge) => existing.applyMerge(merge),
@@ -104,14 +123,17 @@ void main() {
 
     // The sharper leak detector: after the first wrap the fixture is
     // perfectly cyclic, so the per-pass population maximum must be FLAT.
-    // Any growth between an early full pass and the last full pass means
-    // state survives that should have expired.
+    // EVERY later full pass is held to pass 1's maximum — a transient
+    // mid-run bump (state surviving longer than its expiry window) trips
+    // this even if it recedes again before the final pass and never
+    // reaches the absolute ceiling.
     final lastFullPass = (captures ~/ capsPerPass) - 1;
-    expect(perPassMax[lastFullPass], lessThanOrEqualTo(perPassMax[1]!),
-        reason: 'per-pass max population grew between pass 1 '
-            '(${perPassMax[1]}) and pass $lastFullPass '
-            '(${perPassMax[lastFullPass]}) — a slow leak, even if still '
-            'under the absolute ceiling');
+    for (var pass = 2; pass <= lastFullPass; pass++) {
+      expect(perPassMax[pass], lessThanOrEqualTo(perPassMax[1]!),
+          reason: 'per-pass max population grew between pass 1 '
+              '(${perPassMax[1]}) and pass $pass (${perPassMax[pass]}) '
+              '— a slow leak, even if still under the absolute ceiling');
+    }
 
     // Positive controls — prove the bounded quantities were actually
     // exercised, so the ceilings above are not vacuously green.
