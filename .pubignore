@@ -11,7 +11,7 @@ pubspec.lock
 .claude/
 tmp/
 
-# Internal process docs (design specs, plans, audits) — repo-only,
-# not part of the published package archive.
-doc/superpowers/
+# Repo-only engineering records — not part of the published package
+# archive.
 doc/audit/
+doc/media/
