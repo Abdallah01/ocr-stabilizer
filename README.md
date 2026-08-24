@@ -509,8 +509,12 @@ Deliberate trade-offs, each with a tracking issue for discussion:
 - **`spatialIndex` is a documented unchecked seam.** Out-of-band inserts
   bypass confidence validation and survive only until the next `stabilize`
   call. [#96](https://github.com/Abdallah01/ocr-stabilizer/issues/96).
-- **No merge diagnostics yet** ([#92](https://github.com/Abdallah01/ocr-stabilizer/issues/92)), **no dynamic-reflow replay scenarios yet**
-  ([#93](https://github.com/Abdallah01/ocr-stabilizer/issues/93)), **no performance benchmarks yet** ([#97](https://github.com/Abdallah01/ocr-stabilizer/issues/97)).
+- **Merge diagnostics shipped in 2.0.0** ([#92](https://github.com/Abdallah01/ocr-stabilizer/issues/92)):
+  `ParagraphGrouper.onMergeDecision` streams a `MergeDecisionDiagnostic`
+  per boundary decision. **Batch-size benchmarks and a long-session
+  bounded-state replay** live in `benchmark/` and `doc/benchmarks/`
+  ([#97](https://github.com/Abdallah01/ocr-stabilizer/issues/97)). **No dynamic-reflow replay scenarios yet**
+  ([#93](https://github.com/Abdallah01/ocr-stabilizer/issues/93)).
 
 ## Contributing
 
