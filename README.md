@@ -410,6 +410,8 @@ A block's identity is a six-dimensional signature:
 | `CarouselInput` | Carousel-specific geometry |
 | `SubmapMembership` | Strategy for coordinate-space partitioning |
 | `ContextualInvalidationCheck` | Callback for context-change detection |
+| `SpatialIndexView<T>` | Read-only spatial-index contract — the type of `engine.spatialIndex` (2.0.0+) |
+| `MergeDecisionCallback` | Callback type of `ParagraphGrouper.onMergeDecision` (2.0.0+) |
 
 ### Components
 
@@ -417,7 +419,7 @@ A block's identity is a six-dimensional signature:
 |------|---------|
 | `StabilizationEngine<T, P>` | SAR-merge, intra-batch dedup, contradiction detection |
 | `DriftTracker` | Regional drift correction with submap isolation |
-| `SpatialBlockIndex` | Grid-cell spatial index for overlap queries |
+| `SpatialBlockIndex` | Grid-cell spatial index for overlap queries (implements `SpatialIndexView`) |
 | `BlockClassifierService` | Classifies blocks into fixed / sticky / carousel / IC / normal |
 | `OverlapResolver` | Spatial NMS with language-aware thresholds |
 | `BlockKeyGenerator` | Position + text dedup keys with fuzzy neighbor matching |
@@ -451,6 +453,7 @@ A block's identity is a six-dimensional signature:
 | `StabilizationResult<T>` | Output of `engine.stabilize()` — stable blocks + bookkeeping |
 | `MergeResult` | Exhaustive engine-computed delta passed to `BlockMerger` |
 | `ClassificationResult` | Output of `BlockClassifierService` |
+| `MergeDecisionDiagnostic` | One grouper boundary decision — verdict, reason set, gap/threshold context (2.0.0+) |
 
 ### Value Types
 
@@ -459,6 +462,7 @@ A block's identity is a six-dimensional signature:
 | `ScrollContext` | Scroll offsets and carousel identity at capture time |
 | `StickyFallback` | Fallback coordinate context for demoted sticky elements |
 | `TextVote` | Accumulated confidence evidence for one text variant |
+| `MergeRejectReason` | 9-value enum naming every grouper rejection guard (2.0.0+) |
 
 ### Extension Types
 
