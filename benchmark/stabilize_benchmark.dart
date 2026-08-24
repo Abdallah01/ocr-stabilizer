@@ -22,6 +22,11 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 const _sizes = [100, 250, 500, 1000, 2000];
 
 void main() {
+  // VM-wide JIT warmup: without this, the first size's "cold" number
+  // measures first-ever-call compilation of the whole engine, not the
+  // engine (observed: 15.3 ms for 100 blocks vs 2.6 ms for 250).
+  _benchStabilizeCold(50);
+  _benchGrouping(50);
   print('| batch | stabilize cold | stabilize warm (median/capture) | '
       'group (median) |');
   print('|---|---|---|---|');
