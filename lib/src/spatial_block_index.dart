@@ -70,8 +70,7 @@ abstract interface class SpatialIndexView<T extends TrackedBlock> {
 /// index.remove(block);
 /// index.rebuild(allBlocks);
 /// ```
-class SpatialBlockIndex<T extends TrackedBlock>
-    implements SpatialIndexView<T> {
+class SpatialBlockIndex<T extends TrackedBlock> implements SpatialIndexView<T> {
   final Map<String, List<T>> _cells = {};
 
   // ── Adaptive bucket dimensions ──

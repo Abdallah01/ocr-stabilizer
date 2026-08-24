@@ -109,5 +109,4 @@ class MergeDecisionDiagnostic {
 }
 
 /// Signature for [ParagraphGrouper.onMergeDecision].
-typedef MergeDecisionCallback = void Function(
-    MergeDecisionDiagnostic decision);
+typedef MergeDecisionCallback = void Function(MergeDecisionDiagnostic decision);

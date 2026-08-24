@@ -592,8 +592,7 @@ class ParagraphGrouper {
             if (gapReject) MergeRejectReason.gapExceedsThreshold,
             if (!xOverlaps) MergeRejectReason.noXOverlap,
             if (heightRatioReject) MergeRejectReason.heightRatio,
-            if (reverseHeightRatioReject)
-              MergeRejectReason.reverseHeightRatio,
+            if (reverseHeightRatioReject) MergeRejectReason.reverseHeightRatio,
             if (inlinePeerReject) MergeRejectReason.inlinePeer,
             if (countReject) MergeRejectReason.blockCountCap,
             if (runeReject) MergeRejectReason.runeCap,
