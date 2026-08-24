@@ -61,12 +61,16 @@ void main() {
       // floors). Primary misses (0.5 < 0.70); only the inclusive `>=`
       // on the band Levenshtein arm admits. Kills the `>=` → `>`
       // boundary mutant surviving the post-0.6.0 sweep.
+      // Pre-seeding goes through an injected index since 2.0.0 (#96) —
+      // engine.spatialIndex is read-only.
+      final index = SpatialBlockIndex<DefaultTrackedBlock<void>>();
       final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
         merger: (existing, fresh, merge) => existing.applyMerge(merge),
         bandFallback: const BandFallbackConfig(mode: BandFallbackMode.admit),
+        spatialIndex: index,
       );
       // Candidate must clear the default candidateObservationFloor (4).
-      engine.spatialIndex.add(DefaultTrackedBlock<void>(
+      index.add(DefaultTrackedBlock<void>(
         absoluteRect: const AbsoluteRect(Rect.fromLTWH(10, 100, 200, 30)),
         payload: null,
         originalText: 'ab',

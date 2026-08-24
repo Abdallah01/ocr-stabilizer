@@ -40,6 +40,7 @@ export 'src/classification_result.dart';
 export 'src/block_meta.dart';
 export 'src/confidence.dart';
 export 'src/default_tracked_block.dart';
+export 'src/merge_decision_diagnostic.dart';
 export 'src/ocr_block.dart';
 export 'src/otsu_threshold.dart';
 export 'src/paragraph_grouper.dart';

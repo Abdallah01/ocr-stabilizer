@@ -11,10 +11,19 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 // fresh VR block could "subsume" cached normal blocks (splitting).
 // =============================================================================
 
-StabilizationEngine<DefaultTrackedBlock<void>, void> _engine() {
-  return StabilizationEngine<DefaultTrackedBlock<void>, void>(
+/// Engine plus its injected index: since 2.0.0 (#96) `engine.spatialIndex`
+/// is read-only, so fixtures pre-seed through the injected instance they
+/// constructed — the injector-owns-mutation pattern.
+({
+  StabilizationEngine<DefaultTrackedBlock<void>, void> engine,
+  SpatialBlockIndex<DefaultTrackedBlock<void>> index,
+}) _engine() {
+  final index = SpatialBlockIndex<DefaultTrackedBlock<void>>();
+  final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
     merger: (existing, fresh, merge) => existing.applyMerge(merge),
+    spatialIndex: index,
   );
+  return (engine: engine, index: index);
 }
 
 DefaultTrackedBlock<void> _block({
@@ -36,7 +45,7 @@ void main() {
   group('detectGroupingContradictions VR guard (#49)', () {
     test('VR cached block is never reported as subdivided by normal blocks',
         () {
-      final engine = _engine();
+      final (:engine, :index) = _engine();
       // Well-observed sticky header at scroll offset 0: its viewport
       // coordinates numerically coincide with page coordinates.
       final vrHeader = _block(
@@ -45,7 +54,7 @@ void main() {
         vr: true,
         observations: 3,
       );
-      engine.spatialIndex.add(vrHeader);
+      index.add(vrHeader);
 
       // Two normal fresh blocks that would "subdivide" it numerically.
       final events = engine.detectGroupingContradictions([
@@ -57,13 +66,13 @@ void main() {
     });
 
     test('positive control: normal cached block still detected', () {
-      final engine = _engine();
+      final (:engine, :index) = _engine();
       final cached = _block(
         text: 'hello world',
         rect: const Rect.fromLTWH(0, 0, 200, 100),
         observations: 3,
       );
-      engine.spatialIndex.add(cached);
+      index.add(cached);
 
       final events = engine.detectGroupingContradictions([
         _block(text: 'hello', rect: const Rect.fromLTWH(0, 0, 200, 40)),
@@ -79,13 +88,13 @@ void main() {
 
   group('detectSplittingContradictions VR guard (#49)', () {
     test('fresh VR block never subsumes cached normal blocks', () {
-      final engine = _engine();
-      engine.spatialIndex.add(_block(
+      final (:engine, :index) = _engine();
+      index.add(_block(
         text: 'hello',
         rect: const Rect.fromLTWH(0, 0, 200, 40),
         observations: 3,
       ));
-      engine.spatialIndex.add(_block(
+      index.add(_block(
         text: 'world',
         rect: const Rect.fromLTWH(0, 50, 200, 40),
         observations: 3,
@@ -103,7 +112,7 @@ void main() {
     });
 
     test('positive control: normal fresh block still detected', () {
-      final engine = _engine();
+      final (:engine, :index) = _engine();
       final cachedA = _block(
         text: 'hello',
         rect: const Rect.fromLTWH(0, 0, 200, 40),
@@ -114,8 +123,8 @@ void main() {
         rect: const Rect.fromLTWH(0, 50, 200, 40),
         observations: 3,
       );
-      engine.spatialIndex.add(cachedA);
-      engine.spatialIndex.add(cachedB);
+      index.add(cachedA);
+      index.add(cachedB);
 
       final fresh = _block(
         text: 'hello world',

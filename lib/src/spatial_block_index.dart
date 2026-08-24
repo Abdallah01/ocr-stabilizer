@@ -21,6 +21,45 @@ import 'types/geometry.dart' show Rect;
 
 import 'tracked_block.dart';
 
+/// Read-only query surface of a [SpatialBlockIndex] (#96).
+///
+/// This is the type `StabilizationEngine.spatialIndex` exposes: consumers
+/// holding only an engine can query but never mutate, so the engine's
+/// confidence-validation guards cannot be bypassed through its index.
+/// Mutation stays on the concrete [SpatialBlockIndex] — available to
+/// whoever CONSTRUCTED the index (e.g. test fixtures injecting a
+/// pre-seeded index through the engine constructor). The injector owns
+/// mutation, and with it the guarded-construction responsibility
+/// (`PositionConfidence.from` / `TextConfidence.from`, or
+/// [DefaultTrackedBlock]'s validating constructor).
+abstract interface class SpatialIndexView<T extends TrackedBlock> {
+  /// Current bucket width (for testing).
+  double get bucketWidth;
+
+  /// Current bucket height (for testing).
+  double get bucketHeight;
+
+  /// Whether the index contains zero blocks. O(1).
+  bool get isEmpty;
+
+  /// All unique blocks in the index (identity-based dedup).
+  Iterable<T> get allBlocks;
+
+  /// Page-absolute cell key for [block], optionally offset by [dCol]/[dRow].
+  String absoluteCellKey(T block, [int dCol, int dRow]);
+
+  /// IC scroller-relative cell key for [block].
+  String icRelativeCellKey(T block, [int dCol, int dRow]);
+
+  /// Yield all non-VR blocks whose page-absolute grid cells overlap
+  /// [region]. See [SpatialBlockIndex.blocksInRegion] for the margin and
+  /// namespace caveats.
+  Iterable<T> blocksInRegion(Rect region);
+
+  /// Yield blocks in the 3×3 grid neighborhood around [block].
+  Iterable<T> candidates(T block);
+}
+
 /// Grid-cell spatial index for fast overlap candidate lookup.
 ///
 /// Usage:
@@ -31,7 +70,8 @@ import 'tracked_block.dart';
 /// index.remove(block);
 /// index.rebuild(allBlocks);
 /// ```
-class SpatialBlockIndex<T extends TrackedBlock> {
+class SpatialBlockIndex<T extends TrackedBlock>
+    implements SpatialIndexView<T> {
   final Map<String, List<T>> _cells = {};
 
   // ── Adaptive bucket dimensions ──
@@ -46,9 +86,11 @@ class SpatialBlockIndex<T extends TrackedBlock> {
   double _bucketHeight = _kBucketDefault;
 
   /// Current bucket width (for testing).
+  @override
   double get bucketWidth => _bucketWidth;
 
   /// Current bucket height (for testing).
+  @override
   double get bucketHeight => _bucketHeight;
 
   /// Update bucket sizes based on current viewport dimensions.
@@ -79,6 +121,7 @@ class SpatialBlockIndex<T extends TrackedBlock> {
   // ── Cell key generation ──
 
   /// Page-absolute cell key for [block], optionally offset by [dCol]/[dRow].
+  @override
   String absoluteCellKey(T block, [int dCol = 0, int dRow = 0]) {
     final r = block.absoluteRect;
     final cx = ((r.left + r.width / 2) / _bucketWidth).round() + dCol;
@@ -87,6 +130,7 @@ class SpatialBlockIndex<T extends TrackedBlock> {
   }
 
   /// IC scroller-relative cell key for [block].
+  @override
   String icRelativeCellKey(T block, [int dCol = 0, int dRow = 0]) {
     final r = block.absoluteRect;
     final cx = ((r.left + r.width / 2) / _bucketWidth).round() + dCol;
@@ -149,6 +193,7 @@ class SpatialBlockIndex<T extends TrackedBlock> {
   /// Whether the index contains zero blocks. O(1) — checks the underlying
   /// cell map. Prefer this over `allBlocks.isEmpty`, which allocates an
   /// identity `Set` and iterates every cell.
+  @override
   bool get isEmpty => _cells.isEmpty;
 
   /// All unique blocks in the index (identity-based dedup).
@@ -157,6 +202,7 @@ class SpatialBlockIndex<T extends TrackedBlock> {
   /// stored in multiple cells (e.g. IC dual-indexed) are deduplicated by
   /// object identity, not by value — two distinct instances with identical
   /// props are both yielded.
+  @override
   Iterable<T> get allBlocks sync* {
     final seen = Set<T>.identity();
     for (final cell in _cells.values) {
@@ -181,6 +227,7 @@ class SpatialBlockIndex<T extends TrackedBlock> {
   ///
   /// VR (viewport-relative) blocks live in a separate cell namespace ("vr:")
   /// and are not returned — they are unaffected by page-content mutations.
+  @override
   Iterable<T> blocksInRegion(Rect region) sync* {
     final cxMin = (region.left / _bucketWidth).floor() - 1;
     final cxMax = (region.right / _bucketWidth).ceil() + 1;
@@ -205,6 +252,7 @@ class SpatialBlockIndex<T extends TrackedBlock> {
   /// Each block is yielded at most once. Like [allBlocks], deduplication is
   /// by object identity: dual-indexed IC blocks reachable from both their
   /// page-absolute cell and their `ic:` cell appear a single time.
+  @override
   Iterable<T> candidates(T block) sync* {
     final seen = Set<T>.identity();
     for (int dc = -1; dc <= 1; dc++) {

@@ -21,6 +21,7 @@ import 'dart:math' as math;
 
 import 'internal/cjk_ideographs.dart';
 import 'iqr_outlier.dart';
+import 'merge_decision_diagnostic.dart';
 import 'ocr_block.dart';
 import 'otsu_threshold.dart';
 import 'robust_stats.dart';
@@ -63,6 +64,7 @@ class ParagraphGrouper {
     this.lineGapMultiplier = 0.75,
     this.maxParagraphBlocks = 3,
     this.maxParagraphRunes = 200,
+    this.onMergeDecision,
   }) {
     if (!lineGapThreshold.isFinite || lineGapThreshold < 0) {
       throw ArgumentError.value(
@@ -123,6 +125,16 @@ class ParagraphGrouper {
   /// Prevents two full paragraphs from merging into one oversized unit.
   /// The default (200) ≈ 3 typical CJK sentences.
   final int maxParagraphRunes;
+
+  /// Optional merge-decision observer (issue #92). When non-null, every
+  /// candidate-vs-paragraph decision and every block drop is reported as a
+  /// [MergeDecisionDiagnostic] with the full set of guards that fired and
+  /// the numbers they compared — the tuning surface `lineGapThreshold` /
+  /// `lineGapMultiplier` adjustments should be driven by.
+  ///
+  /// Null (the default) is the zero-cost path: no diagnostic is allocated.
+  /// The callback must not throw; it runs synchronously inside grouping.
+  final MergeDecisionCallback? onMergeDecision;
 
   /// Hard ceiling multiplier — gaps beyond 2× average block height are never
   /// merged, regardless of [lineGapMultiplier]. The ceiling bounds BOTH
@@ -396,7 +408,15 @@ class ParagraphGrouper {
       // Degenerate bounding box (zero width or height): drop the block
       // entirely — density is uncomputable and a zero-area box cannot be
       // meaningfully positioned by any downstream consumer.
-      if (blockArea <= 0) continue;
+      if (blockArea <= 0) {
+        onMergeDecision?.call(MergeDecisionDiagnostic(
+          accepted: false,
+          reasons: const {MergeRejectReason.degenerateBox},
+          candidate: block,
+          paragraphLength: 0,
+        ));
+        continue;
+      }
       final aspectRatio = block.boundingBox.width / block.boundingBox.height;
       final badAspect =
           aspectRatio < _kMinAspectRatio || aspectRatio > _kMaxAspectRatio;
@@ -406,6 +426,12 @@ class ParagraphGrouper {
       final lowDensity = block.text.runes.length / blockArea < _kMinRuneDensity;
       // Discard if density is low AND aspect or char-height is abnormal.
       if (lowDensity && (badAspect || badCharHeight)) {
+        onMergeDecision?.call(MergeDecisionDiagnostic(
+          accepted: false,
+          reasons: const {MergeRejectReason.noiseGuard},
+          candidate: block,
+          paragraphLength: 0,
+        ));
         continue;
       }
 
@@ -418,6 +444,7 @@ class ParagraphGrouper {
       // not shift as later blocks join; the width-based component still
       // grows as blocks widen the paragraph.
       bool xOverlaps = true;
+      double? xToleranceUsed;
       if (currentParagraph.isNotEmpty) {
         // Use the FIRST block to establish baseline font size so the
         // font-based tolerance doesn't shift as blocks with different
@@ -430,6 +457,7 @@ class ParagraphGrouper {
         final widthBasedTolerance = paragraphWidth * _kXOverlapWidthFraction;
         final xTolerance = math.max(
             lineGapThreshold, math.max(emBasedTolerance, widthBasedTolerance));
+        xToleranceUsed = xTolerance;
         xOverlaps = block.boundingBox.left < paragraphRight + xTolerance &&
             block.boundingBox.right > paragraphLeft - xTolerance;
       }
@@ -541,14 +569,44 @@ class ParagraphGrouper {
       final currentRunes =
           currentParagraph.fold<int>(0, (sum, b) => sum + b.text.runes.length);
 
-      if (currentParagraph.isEmpty ||
-          (currentParagraph.length < maxParagraphBlocks &&
-              gap < threshold &&
-              xOverlaps &&
-              !heightRatioReject &&
-              !reverseHeightRatioReject &&
-              !inlinePeerReject &&
-              currentRunes + block.text.runes.length <= maxParagraphRunes)) {
+      // Named guard verdicts: the merge is their conjunction. Every input
+      // is already computed above, so naming the verdicts costs three
+      // boolean comparisons and lets the diagnostics sink report EVERY
+      // guard that fired instead of the first short-circuit.
+      final countReject = currentParagraph.length >= maxParagraphBlocks;
+      final gapReject = gap >= threshold;
+      final runeReject =
+          currentRunes + block.text.runes.length > maxParagraphRunes;
+      final accepted = !countReject &&
+          !gapReject &&
+          xOverlaps &&
+          !heightRatioReject &&
+          !reverseHeightRatioReject &&
+          !inlinePeerReject &&
+          !runeReject;
+
+      if (currentParagraph.isNotEmpty && onMergeDecision != null) {
+        onMergeDecision!(MergeDecisionDiagnostic(
+          accepted: accepted,
+          reasons: {
+            if (gapReject) MergeRejectReason.gapExceedsThreshold,
+            if (!xOverlaps) MergeRejectReason.noXOverlap,
+            if (heightRatioReject) MergeRejectReason.heightRatio,
+            if (reverseHeightRatioReject)
+              MergeRejectReason.reverseHeightRatio,
+            if (inlinePeerReject) MergeRejectReason.inlinePeer,
+            if (countReject) MergeRejectReason.blockCountCap,
+            if (runeReject) MergeRejectReason.runeCap,
+          },
+          candidate: block,
+          paragraphLength: currentParagraph.length,
+          gap: gap,
+          threshold: threshold,
+          xTolerance: xToleranceUsed,
+        ));
+      }
+
+      if (currentParagraph.isEmpty || accepted) {
         currentParagraph.add(block);
         lastBottom = math.max(lastBottom, block.boundingBox.bottom);
         if (currentParagraph.length == 1) {

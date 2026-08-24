@@ -8,6 +8,13 @@
 // types to their representation `double` in compiled output.
 //
 // Pattern mirrors `lib/src/types/absolute_rect.dart` and `container_id.dart`.
+//
+// CONTRACT (#98 decision): the scalar IS the API. The component signals
+// that shape it along the way — cross-capture agreement, observation
+// depth, drift regime, overlap quality — are internal and refactorable
+// without notice. Consumers must not reverse-engineer components from
+// scalar deltas; if a use case genuinely needs the breakdown, reopen #98
+// with that use case rather than depending on incidental numerics.
 // =============================================================================
 
 import '../internal/confidence_validation.dart';
