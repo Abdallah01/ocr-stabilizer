@@ -491,9 +491,12 @@ to support different input sources:
 
 Deliberate trade-offs, each with a tracking issue for discussion:
 
-- **Position model calibrated against ML Kit.** The agreement-weighted merge
-  scale was swept on ML-Kit-shaped noise; re-run the replay sweep before
-  trusting it for another OCR engine. Cross-engine validation matrix: [#94](https://github.com/Abdallah01/ocr-stabilizer/issues/94).
+- **Position model calibrated against ML Kit, first transfer point proven.**
+  The agreement-weighted merge scale was swept on ML-Kit-shaped noise; a
+  Tesseract 5 matrix entry (2026-08) shows the defaults transfer without
+  retuning in the photometric-jitter regime
+  (`doc/replay/validation/2026-08-tesseract-matrix/`). High-amplitude
+  re-segmentation on other engines remains open: [#94](https://github.com/Abdallah01/ocr-stabilizer/issues/94).
 - **Paragraph grouping assumes a single text region.** The Otsu gap threshold
   is derived batch-globally; multi-column pages are handled by per-merge
   guards, not per-region statistics. [#91](https://github.com/Abdallah01/ocr-stabilizer/issues/91).

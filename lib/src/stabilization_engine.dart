@@ -93,10 +93,13 @@ const int _kWellObservedThreshold = 3;
 /// with every other regime within noise
 /// (`doc/replay/validation/2026-07-perblock-scale/`). Calibrated against
 /// ML-Kit-shaped noise; re-run the sweep (`tool/replay` ab-report) before
-/// trusting it for a different OCR engine's residual distribution. The
-/// cross-engine validation matrix that would turn this note into tracked
-/// coverage — and decide whether this constant needs per-engine presets —
-/// is issue #94.
+/// trusting it for a different OCR engine's residual distribution.
+/// First cross-engine matrix entry (Tesseract 5, synthetic low-amplitude
+/// corpus, 2026-08-24): the default TRANSFERS without retuning in the
+/// photometric-jitter regime — established-chain damping and
+/// regime-discriminating confidence replicate; the high-amplitude
+/// re-segmentation regime remains ML-Kit-only evidence. See
+/// `doc/replay/validation/2026-08-tesseract-matrix/` and issue #94.
 const double _kAgreementJitterAllowance = 3.0;
 
 /// Maximum text vote entries per block to prevent OOM on noisy edges.
