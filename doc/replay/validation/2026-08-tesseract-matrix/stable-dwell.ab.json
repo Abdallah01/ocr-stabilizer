@@ -1,0 +1,95 @@
+{
+  "mode": "ab-report",
+  "input": {
+    "batches": 12,
+    "observations": 360,
+    "skippedLines": 0,
+    "invalidRecords": 0
+  },
+  "legacy": {
+    "mergeCount": 312,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 60,
+        "mean": 0.103,
+        "p50": 0.0,
+        "p90": 0.25,
+        "max": 1.25
+      },
+      "n3-5": {
+        "count": 84,
+        "mean": 0.105,
+        "p50": 0.031,
+        "p90": 0.204,
+        "max": 1.833
+      },
+      "n6-10": {
+        "count": 140,
+        "mean": 0.123,
+        "p50": 0.058,
+        "p90": 0.274,
+        "max": 1.426
+      },
+      "n11+": {
+        "count": 28,
+        "mean": 0.095,
+        "p50": 0.047,
+        "p90": 0.205,
+        "max": 0.446
+      }
+    },
+    "wellObservedPconf": {
+      "count": 196,
+      "mean": 1.0,
+      "p50": 1.0,
+      "p90": 1.0,
+      "max": 1.0
+    },
+    "wellObservedPconfSaturated": 1.0
+  },
+  "agreementWeighted": {
+    "mergeCount": 312,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 60,
+        "mean": 0.096,
+        "p50": 0.0,
+        "p90": 0.25,
+        "max": 1.25
+      },
+      "n3-5": {
+        "count": 84,
+        "mean": 0.036,
+        "p50": 0.006,
+        "p90": 0.063,
+        "max": 0.688
+      },
+      "n6-10": {
+        "count": 140,
+        "mean": 0.021,
+        "p50": 0.005,
+        "p90": 0.047,
+        "max": 0.41
+      },
+      "n11+": {
+        "count": 28,
+        "mean": 0.011,
+        "p50": 0.005,
+        "p90": 0.027,
+        "max": 0.051
+      }
+    },
+    "wellObservedPconf": {
+      "count": 196,
+      "mean": 0.94,
+      "p50": 0.942,
+      "p90": 0.956,
+      "max": 0.958
+    },
+    "wellObservedPconfSaturated": 0.0
+  },
+  "caveats": [
+    "Arms may diverge in pairing over time: positions evolve per model, and matching is spatial+text. Compare mergeCount before reading displacement deltas.",
+    "Replay pairing uses the package funnel, not the consumer's own matching stage; consumer-side `merge` events in live-report give the production-path legacy reference."
+  ]
+}
