@@ -48,7 +48,9 @@ without retuning**:
 - established chains damp dramatically under jitter (n11+ 0.05 vs legacy
   1.18 px/merge — the confidence→weight anchoring loop engages exactly as
   on ML Kit, where it was 3.8 vs 11.8 at 10× the amplitude);
-- young blocks still track (scroll n1-2 ≈ 2.8 px both arms);
+- young blocks still track (scroll n1-2: 2.8 px agreement vs 3.1 px
+  legacy — near-parity, as expected while chains are too young for the
+  anchoring loop to engage);
 - confidence stays regime-discriminating (0.94 stable / 0.91 jitter /
   0.88 scroll) instead of legacy's saturated-flat 1.0.
 
@@ -58,14 +60,22 @@ this regime.**
 
 ## Boundary of what this proves
 
-Tesseract on clean rendered text produces *photometric* jitter (≤3 px
-residuals). It does NOT reproduce ML Kit's high-amplitude
-**re-segmentation** jitter (30–45 px effective residuals from per-frame
-block re-splitting), which is what the 3× constant was actually tuned
-against — so this matrix entry validates transfer in the regime where the
-allowance is generous, not the regime that stresses it. A
-degraded-imagery Tesseract corpus (photographs, low-contrast scans) would
-be the next entry if anyone hits Tesseract re-segmentation churn in
+Tesseract on clean rendered text produces mostly *photometric* jitter:
+the typical re-observation lands under 1 px (scroll p50 0.67 px legacy /
+0.56 px agreement). It is not purely photometric, though — about half of
+the lines observed across several scroll frames show one or two frames
+where the line box's extent flips by ~20 px (a mild, transient form of
+re-segmentation: the box extent changes, not the position). The
+page-absolute lift itself is verified by the same corpus: a line's lifted
+Y is identical across most frames taken at different scroll offsets.
+
+What the corpus does NOT reproduce is ML Kit's *persistent*
+high-amplitude re-segmentation (30–45 px effective residuals from
+per-frame block re-splitting), which is what the 3× constant was
+actually tuned against — so this matrix entry validates transfer in the
+regime where the allowance is generous, not the regime that stresses it.
+A degraded-imagery Tesseract corpus (photographs, low-contrast scans)
+would be the next entry if anyone hits Tesseract re-segmentation churn in
 practice.
 
 ## Reproduce
@@ -73,6 +83,13 @@ practice.
 ```
 winget install UB-Mannheim.TesseractOCR
 # + chi_sim.traineddata (tessdata_fast) into the install's tessdata/
-python gen_corpus.py <tesseract.exe> unused .
+pip install pillow
+python gen_corpus.py <tesseract.exe> .
 dart tool/replay/replay.dart ab-report <scenario>.jsonl
 ```
+
+`gen_corpus.py` renders with `C:\Windows\Fonts\msyh.ttc` (Microsoft
+YaHei, present on stock Windows). On another OS, point the
+`ImageFont.truetype` call at any CJK font — the corpus text is
+synthesized, so any face works, but the OCR boxes (and therefore the
+exact numbers) will differ.

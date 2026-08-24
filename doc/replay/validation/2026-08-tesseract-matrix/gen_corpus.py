@@ -15,7 +15,7 @@
 # the frame's true scrollY, so the residual box jitter is exactly the
 # engine-shaped noise under test.
 #
-# Usage:  python gen_corpus.py <tesseract.exe> <tessdata-dir> <out-dir>
+# Usage:  python gen_corpus.py <tesseract.exe> <out-dir>
 import io
 import json
 import random
@@ -25,7 +25,7 @@ import time
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
-TESS, TESSDATA, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
+TESS, OUT = sys.argv[1], sys.argv[2]
 
 W, MARGIN, FONT_PX, LINE_H, PARA_GAP, WRAP = 1080, 60, 36, 56, 40, 26
 VIEW_H = 2200
@@ -85,7 +85,12 @@ def perturb(img, shift_max, jpeg_q, bright_max):
 
 
 def ocr_lines(img):
-    """Tesseract TSV -> [(l,t,r,b,text,conf01)] at line granularity."""
+    """Tesseract TSV -> ([(l,t,r,b,text,conf01)], raw_line_count).
+
+    raw_line_count is the number of aggregated line boxes BEFORE the
+    sub-noise (<2 chars) filter — schema v1's `raw` field wants the
+    pre-filter count.
+    """
     buf = io.BytesIO()
     img.save(buf, 'PNG')
     # No --tessdata-dir override: the `tsv` output config ships in the
@@ -118,7 +123,7 @@ def ocr_lines(img):
             continue  # sub-noise fragments
         conf01 = max(0.30, min(0.99, (sum(confs) / len(confs)) / 100.0))
         out.append((l, t, rr, b, text, conf01))
-    return out
+    return out, len(lines)
 
 
 def scenario(name, frames, shift_max, jpeg_q, bright_max):
@@ -134,8 +139,9 @@ def scenario(name, frames, shift_max, jpeg_q, bright_max):
         for cap, sy in enumerate(frames, 1):
             crop = page.crop((0, sy, W, min(sy + VIEW_H, PAGE_H)))
             img, _, _ = perturb(crop, shift_max, jpeg_q, bright_max)
+            found, raw_count = ocr_lines(img)
             blocks = []
-            for (l, t, r, b, text, tconf) in ocr_lines(img):
+            for (l, t, r, b, text, tconf) in found:
                 blocks.append({
                     'rect': [float(l), float(t + sy),
                              float(r), float(b + sy)],
@@ -146,7 +152,7 @@ def scenario(name, frames, shift_max, jpeg_q, bright_max):
                 })
             f.write(json.dumps({
                 't': 'obs', 'ts': ts + cap * 700, 'cap': cap,
-                'raw': len(blocks), 'blocks': blocks,
+                'raw': raw_count, 'blocks': blocks,
             }, ensure_ascii=False) + '\n')
             print(f'{name} cap {cap}: {len(blocks)} blocks', flush=True)
     return path
