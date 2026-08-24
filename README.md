@@ -15,6 +15,17 @@ the user scrolls. The engine has no internal clock and no warm-up: a block
 is returned usable from its **first** observation; later captures only
 refine positions (see [Timing model](#timing-model)).
 
+![Demo: raw per-frame OCR boxes jittering on the left; the same stream stabilized on the right](https://raw.githubusercontent.com/Abdallah01/ocr-stabilizer/main/doc/media/stabilizer-demo.gif)
+
+*Real Tesseract output over 12 jittered captures of one viewport (the
+committed [validation corpus](doc/replay/validation/2026-08-tesseract-matrix/)),
+with 3-frame ghost trails under the same drawing rule on both panels.
+Left: the boxes exactly as OCR reports them each frame. Right: the same
+stream through `StabilizationEngine` defaults. Rendered from engine
+output by [`tool/replay/dump_frames.dart`](tool/replay/dump_frames.dart)
++ [`doc/media/render_demo_gif.py`](doc/media/render_demo_gif.py) — not an
+illustration.*
+
 ## The Problem
 
 Live OCR on scrollable content produces a stream of noisy, jittery observations.
@@ -55,8 +66,19 @@ counts are evidence depth, never a readiness ladder:
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^1.0.0
+  ocr_stabilizer: ^2.0.0
 ```
+
+> **What's new in 2.0.0** — merge-decision diagnostics and a read-only
+> spatial index. `ParagraphGrouper.onMergeDecision` streams a
+> `MergeDecisionDiagnostic` — accepted or not, plus every rejection
+> reason from the 9-value `MergeRejectReason` enum — for each boundary
+> decision, at zero cost when unset ([#92](https://github.com/Abdallah01/ocr-stabilizer/issues/92)). **Breaking:**
+> `engine.spatialIndex` is now a read-only `SpatialIndexView`; an app
+> that evicts or restores blocks out-of-band injects its own
+> `SpatialBlockIndex` through the constructor and mutates via its own
+> reference ([#96](https://github.com/Abdallah01/ocr-stabilizer/issues/96)). Grouping and stabilization behavior are unchanged.
+> Migration diff in the [CHANGELOG](CHANGELOG.md).
 
 > **What's new in 1.2.0** — `ParagraphGrouper`: CJK-aware grouping of OCR
 > blocks into paragraph-level units (Otsu-thresholded gap clustering,
@@ -506,9 +528,11 @@ Deliberate trade-offs, each with a tracking issue for discussion:
   semantics: [#100](https://github.com/Abdallah01/ocr-stabilizer/issues/100); punctuation modes: [#99](https://github.com/Abdallah01/ocr-stabilizer/issues/99); a named strategy API: [#101](https://github.com/Abdallah01/ocr-stabilizer/issues/101).
 - **One engine instance per continuous visual session.** Construct fresh at
   document boundaries; there is no engine-wide reset today. [#95](https://github.com/Abdallah01/ocr-stabilizer/issues/95).
-- **`spatialIndex` is a documented unchecked seam.** Out-of-band inserts
-  bypass confidence validation and survive only until the next `stabilize`
-  call. [#96](https://github.com/Abdallah01/ocr-stabilizer/issues/96).
+- **Out-of-band index mutation is injector-owned.** Since 2.0.0
+  `engine.spatialIndex` is a read-only view; external eviction/restore
+  goes through an injected `SpatialBlockIndex`. Such inserts still bypass
+  confidence validation and survive only until the next `stabilize` call
+  rebuilds the index. [#96](https://github.com/Abdallah01/ocr-stabilizer/issues/96).
 - **Merge diagnostics shipped in 2.0.0** ([#92](https://github.com/Abdallah01/ocr-stabilizer/issues/92)):
   `ParagraphGrouper.onMergeDecision` streams a `MergeDecisionDiagnostic`
   per boundary decision. **Batch-size benchmarks and a long-session
