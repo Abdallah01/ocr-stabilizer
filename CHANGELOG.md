@@ -1,3 +1,40 @@
+## 2.0.0 - 2026-08-24
+
+### Breaking
+- **`StabilizationEngine.spatialIndex` is now a read-only
+  `SpatialIndexView`** (#96). The historical "known seam" — a public
+  mutable field whose `add(...)` bypassed the confidence-validation guards
+  on `stabilize`/`merge` — is closed. Consumers holding only the engine
+  can query, never mutate. Pre-seeding and external eviction go through an
+  index YOU construct and inject; the injector owns mutation (and the
+  guarded-construction responsibility that comes with it).
+
+  ```diff
+  - engine.spatialIndex.add(block);
+  + final index = SpatialBlockIndex<MyBlock>();
+  + final engine = StabilizationEngine(..., spatialIndex: index);
+  + index.add(block);   // mutate YOUR reference; the engine exposes a view
+  ```
+
+  Query call sites (`allBlocks`, `blocksInRegion`, `candidates`, bucket
+  getters, cell keys) are unchanged.
+
+### Added
+- **`ParagraphGrouper.onMergeDecision`** (#92) — optional merge-decision
+  diagnostics. Every candidate-vs-paragraph decision and every block drop
+  is reported as a `MergeDecisionDiagnostic` carrying the FULL set of
+  `MergeRejectReason`s that fired (no short-circuit masking) plus the
+  numbers the guards compared (`gap`, `threshold`, `xTolerance`). Null
+  (the default) is the zero-cost path; grouping output is identical with
+  and without a callback.
+- **`SpatialIndexView`** — the read-only query interface implemented by
+  `SpatialBlockIndex` (#96).
+
+### Documentation
+- Confidence scalars are the API contract; the component signals that
+  shape them are internal and refactorable (#98 decision, recorded in
+  `types/confidence_types.dart`).
+
 ## 1.2.0 - 2026-07-29
 
 ### Added

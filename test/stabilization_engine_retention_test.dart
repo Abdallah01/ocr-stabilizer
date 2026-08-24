@@ -13,10 +13,12 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
 StabilizationEngine<DefaultTrackedBlock<void>, void> _engine({
   int retention = 0,
+  SpatialBlockIndex<DefaultTrackedBlock<void>>? index,
 }) {
   return StabilizationEngine<DefaultTrackedBlock<void>, void>(
     merger: (existing, fresh, merge) => existing.applyMerge(merge),
     missedFrameRetention: retention,
+    spatialIndex: index,
   );
 }
 
@@ -98,16 +100,19 @@ void main() {
     test(
         'a block removed from the index externally does not keep a stale '
         'miss count when later re-inserted (PR #61 review)', () {
-      final engine = _engine(retention: 2);
+      // Since 2.0.0 (#96) external eviction goes through the INJECTED
+      // index — engine.spatialIndex is read-only.
+      final index = SpatialBlockIndex<DefaultTrackedBlock<void>>();
+      final engine = _engine(retention: 2, index: index);
       final first = engine.stabilize([_hello()]).stableBlocks.single;
       engine.stabilize(const []); // miss 1 — retained
 
-      // App-side eviction through the public index seam.
-      engine.spatialIndex.remove(first);
+      // App-side eviction through the injected index.
+      index.remove(first);
       engine.stabilize(const []); // block absent — its counter must drop
 
       // App-side re-insertion (e.g. an external cache restoring it).
-      engine.spatialIndex.add(first);
+      index.add(first);
       engine.stabilize(const []); // must count as miss 1, not miss 3
       engine.stabilize(const []); // miss 2 — still inside the window
 

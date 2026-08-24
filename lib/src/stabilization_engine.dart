@@ -139,22 +139,17 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Spatial index rebuilt by the engine on each [stabilize] call; the app
   /// may query it between calls for rendering lookups.
   ///
-  /// **Known seam**: this is a public field, so a consumer can call
-  /// `spatialIndex.add(...)` directly with arbitrary [TrackedBlock]
-  /// instances. The confidence-validation guards on
-  /// [stabilize] and [merge] do NOT cover this path — a consumer who
-  /// constructs a block via the unchecked `PositionConfidence(double)` /
-  /// `TextConfidence(double)` primary constructors and inserts it
-  /// directly can place an invariant-violating block into the engine's
-  /// view. Use the named `.from()` constructors on those types (or
-  /// [DefaultTrackedBlock]'s ctor) for guarded construction.
-  ///
-  /// Blast-radius bound: the engine rebuilds this index from its own view
-  /// on every [stabilize] call, so an out-of-band insert survives only
-  /// until the next stabilization. Closing or formalizing the seam
-  /// (read-only view / validated insert / loud unchecked API) is issue
-  /// #96.
-  final SpatialBlockIndex<T> spatialIndex;
+  /// Read-only since 2.0.0 (#96): the historical "known seam" — a public
+  /// mutable field whose `add(...)` bypassed the confidence-validation
+  /// guards on [stabilize] and [merge] — is closed. Consumers holding
+  /// only the engine can query, never mutate. Mutation remains available
+  /// to whoever CONSTRUCTED the index and injected it through the engine
+  /// constructor (the test-fixture pre-seeding pattern); the injector owns
+  /// mutation and with it the guarded-construction responsibility
+  /// (`PositionConfidence.from` / `TextConfidence.from`, or
+  /// [DefaultTrackedBlock]'s validating constructor).
+  SpatialIndexView<T> get spatialIndex => _spatialIndex;
+  final SpatialBlockIndex<T> _spatialIndex;
 
   /// Optional context-change detector. When non-null, the engine calls this
   /// to determine if a fresh block's context has changed relative to the
@@ -220,7 +215,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   })  : _merger = merger,
         driftTracker =
             driftTracker ?? DriftTracker(submapMembership: submapMembership),
-        spatialIndex = spatialIndex ?? SpatialBlockIndex<T>(),
+        _spatialIndex = spatialIndex ?? SpatialBlockIndex<T>(),
         _contextualCheck = contextualCheck {
     _validateBandFallbackConfig(bandFallback);
     if (missedFrameRetention < 0) {
@@ -442,14 +437,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     _validatePositiveFinite('viewportWidth', viewportWidth);
     _validatePositiveFinite('viewportHeight', viewportHeight);
     if (scale != null) _validatePositiveFinite('scale', scale);
-    final cached = spatialIndex.allBlocks.toList();
-    spatialIndex.updateBucketSizes(
+    final cached = _spatialIndex.allBlocks.toList();
+    _spatialIndex.updateBucketSizes(
       viewportWidth: viewportWidth,
       viewportHeight: viewportHeight,
     );
-    spatialIndex.rebuild(cached);
-    _bucketWidth = spatialIndex.bucketWidth;
-    _bucketHeight = spatialIndex.bucketHeight;
+    _spatialIndex.rebuild(cached);
+    _bucketWidth = _spatialIndex.bucketWidth;
+    _bucketHeight = _spatialIndex.bucketHeight;
     if (scale != null) _scale = scale;
   }
 
@@ -587,7 +582,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // blocks are dropped along with their miss counter.
     //
     // The counter map is REBUILT from the current index contents each
-    // call rather than mutated incrementally: [spatialIndex] is a public
+    // call rather than mutated incrementally: [spatialIndex] is a queryable
     // field the app may rebuild, clear, or remove blocks from between
     // calls, and an incrementally-maintained map would keep strong
     // references (and stale counts) for every instance that left the
@@ -596,7 +591,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final retained = <T>[];
     if (missedFrameRetention > 0) {
       final nextMissCounts = Map<T, int>.identity();
-      for (final cached in spatialIndex.allBlocks) {
+      for (final cached in _spatialIndex.allBlocks) {
         if (matchedExisting.contains(cached)) continue;
         final misses = (_missCounts[cached] ?? 0) + 1;
         if (misses <= missedFrameRetention) {
@@ -612,7 +607,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     }
 
     // Rebuild the spatial index so callers cannot get it wrong (#13).
-    spatialIndex.rebuild([...stableBlocks, ...retained]);
+    _spatialIndex.rebuild([...stableBlocks, ...retained]);
 
     return StabilizationResult<T>(
       stableBlocks: stableBlocks,
@@ -662,7 +657,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Returns blocks from the spatial index matching the criteria. The app
   /// should shift each block's absoluteRect by `-delta` and rebuild.
   List<T> uncorrectedBlocksForKey(SpaceKey spaceKey) {
-    return spatialIndex.allBlocks
+    return _spatialIndex.allBlocks
         .where(
           (b) =>
               driftTracker.spaceKeyFor(b) == spaceKey && b.observationCount < 3,
@@ -715,7 +710,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // sit more than one cell apart is not considered overlapping — the
     // same locality contract the inter-capture matching path already
     // uses via [SpatialBlockIndex.candidates].
-    final batchIndex = SpatialBlockIndex<T>()..adoptBucketSizes(spatialIndex);
+    final batchIndex = SpatialBlockIndex<T>()..adoptBucketSizes(_spatialIndex);
 
     for (final b in blocks) {
       // 1. Noise filter: skip blocks with empty/whitespace-only text
@@ -835,7 +830,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// AND band text floors is admitted ([BandFallbackMode.admit]) or tallied
   /// ([BandFallbackMode.observeOnly]).
   ({T? match, bool wasBandFallback}) _findMatch(T fresh) {
-    final candidates = spatialIndex.candidates(fresh);
+    final candidates = _spatialIndex.candidates(fresh);
     final shouldRunBand = bandFallback.mode != BandFallbackMode.off;
 
     T? primaryMatch;
@@ -1261,7 +1256,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // [stabilize] path passes the batch grid `_dedup` already built for
     // NMS instead of constructing a second one per capture (#55).
     if (freshBlocks.length < 2) return const [];
-    final freshIndex = SpatialBlockIndex<T>()..adoptBucketSizes(spatialIndex);
+    final freshIndex = SpatialBlockIndex<T>()..adoptBucketSizes(_spatialIndex);
     freshIndex.rebuild(freshBlocks);
     return _detectGroupingContradictions(freshBlocks, freshIndex);
   }
@@ -1275,7 +1270,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final events = <ContradictionEvent<T>>[];
 
     // Scan all cached blocks via the engine's spatial index
-    for (final cached in spatialIndex.allBlocks) {
+    for (final cached in _spatialIndex.allBlocks) {
       if (cached.observationCount < _kMinObsForContradiction) continue;
 
       // VR blocks live in a different coordinate contract (viewport-
@@ -1359,7 +1354,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       if (fRect.width <= 0 || fRect.height <= 0) continue;
 
       // O(cells) query against existing cached spatial index
-      final nearby = spatialIndex.blocksInRegion(fRect);
+      final nearby = _spatialIndex.blocksInRegion(fRect);
 
       final subsumed = <T>[];
       for (final cached in nearby) {
