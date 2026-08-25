@@ -52,7 +52,11 @@ def panel(frames, idx, key, color):
 
 
 def main():
-    dump = json.load(open(sys.argv[1], encoding='utf-8'))
+    if len(sys.argv) != 3:
+        print('usage: python render_demo_gif.py <dump.json> <out.gif>')
+        raise SystemExit(64)
+    with open(sys.argv[1], encoding='utf-8') as f:
+        dump = json.load(f)
     frames = dump['frames']
     try:
         font = ImageFont.truetype('arial.ttf', 15)

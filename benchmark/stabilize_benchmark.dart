@@ -42,10 +42,9 @@ String _fmt(double micros) => micros >= 1000
     ? '${(micros / 1000).toStringAsFixed(1)} ms'
     : '${micros.round()} µs';
 
-double _median(List<double> xs) {
-  final s = [...xs]..sort();
-  return s[s.length ~/ 2];
-}
+// Delegates to the package's own median so the benchmark's "median"
+// matches RobustStats everywhere else (true midpoint on even N).
+double _median(List<double> xs) => RobustStats.median(xs)!;
 
 /// A column of [size] distinct text lines; [jitterSeed] > 0 perturbs every
 /// rect by up to ±1.5 px, the amplitude of real screenshot jitter the

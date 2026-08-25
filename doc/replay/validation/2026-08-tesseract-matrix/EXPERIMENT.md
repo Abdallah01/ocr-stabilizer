@@ -31,8 +31,8 @@ ab-report` per scenario, unmodified.
 |---|---|---|---|---|---|
 | stable-dwell | agreement | 0.04 | 0.02 | **0.01** | 0.94 / 0.94 |
 | stable-dwell | legacy | 0.10 | 0.12 | 0.10 | 1.0 (saturated) |
-| ocr-jitter | agreement | 0.68 | 0.33 | **0.05** | 0.91 / 0.92 |
-| ocr-jitter | legacy | 1.51 | 1.71 | 1.18 | 1.0 (saturated) |
+| ocr-jitter-dwell | agreement | 0.68 | 0.33 | **0.05** | 0.91 / 0.92 |
+| ocr-jitter-dwell | legacy | 1.51 | 1.71 | 1.18 | 1.0 (saturated) |
 | scroll | agreement | **1.52** | — | — | 0.88 / 0.89 |
 | scroll | legacy | 3.61 | — | — | 1.0 (saturated) |
 
@@ -87,6 +87,11 @@ pip install pillow
 python gen_corpus.py <tesseract.exe> .
 dart tool/replay/replay.dart ab-report <scenario>.jsonl
 ```
+
+Confirm `tesseract --version` reports 5.4.0 with tessdata_fast
+`chi_sim` — the committed corpus's engine. The script does not pin the
+version; a different Tesseract produces different boxes and therefore
+different numbers.
 
 `gen_corpus.py` renders with `C:\Windows\Fonts\msyh.ttc` (Microsoft
 YaHei, present on stock Windows). On another OS, point the

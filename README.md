@@ -15,7 +15,7 @@ the user scrolls. The engine has no internal clock and no warm-up: a block
 is returned usable from its **first** observation; later captures only
 refine positions (see [Timing model](#timing-model)).
 
-![Demo: raw per-frame OCR boxes jittering on the left; the same stream stabilized on the right](https://raw.githubusercontent.com/Abdallah01/ocr-stabilizer/main/doc/media/stabilizer-demo.gif)
+![Demo: raw per-frame OCR boxes jittering on the left; the same stream stabilized on the right](https://raw.githubusercontent.com/Abdallah01/ocr-stabilizer/6d6c04a/doc/media/stabilizer-demo.gif)
 
 *Real Tesseract output over 12 jittered captures of one viewport (the
 committed [validation corpus](doc/replay/validation/2026-08-tesseract-matrix/)),
@@ -543,6 +543,12 @@ Deliberate trade-offs, each with a tracking issue for discussion:
   bounded-state replay** live in `benchmark/` and `doc/benchmarks/`
   ([#97](https://github.com/Abdallah01/ocr-stabilizer/issues/97)). **No dynamic-reflow replay scenarios yet**
   ([#93](https://github.com/Abdallah01/ocr-stabilizer/issues/93)).
+
+## Docs
+
+The `doc/` tree has its own one-page map — validation entries (which
+engine, which numbers), benchmarks, the replay tool, and the v0.5.0
+audit: [`doc/README.md`](doc/README.md).
 
 ## Contributing
 
