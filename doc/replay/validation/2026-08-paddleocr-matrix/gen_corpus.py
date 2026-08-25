@@ -4,7 +4,7 @@
 # engine for PaddleOCR PP-OCRv6 (lang='ch', detection at line granularity),
 # and serializes capture schema v1 JSONL.
 #
-# Usage: paddle-venv/Scripts/python gen_corpus_paddle.py <out-dir>
+# Usage: paddle-venv/Scripts/python gen_corpus.py <out-dir>
 import io
 import json
 import random
@@ -132,15 +132,6 @@ def scenario(name, frames, shift_max, jpeg_q, bright_max):
             print(f'{name} cap {cap}: {len(blocks)} blocks', flush=True)
     return path
 
-
-if len(sys.argv) > 2 and sys.argv[2] == 'smoke':
-    crop = page.crop((0, 800, W, 800 + VIEW_H))
-    img, _, _ = perturb(crop, 0.3, 90, 0.02)
-    found, raw = ocr_lines(img)
-    print(f'smoke: {len(found)} lines (raw {raw});')
-    for row in found[:3]:
-        print(' ', [round(v, 1) for v in row[:4]], row[5])
-    sys.exit(0)
 
 t0 = time.time()
 scenario('stable-dwell', [800] * 12, 0.3, 90, 0.02)

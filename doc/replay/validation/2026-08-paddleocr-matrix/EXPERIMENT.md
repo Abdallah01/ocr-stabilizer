@@ -59,12 +59,14 @@ entries.
 ```
 # Python 3.12 (paddlepaddle has no 3.13+/3.14 wheels yet):
 uv venv paddle-venv --python 3.12
-uv pip install --python paddle-venv paddleocr paddlepaddle Pillow
+uv pip install --python paddle-venv paddleocr==3.7.0 paddlepaddle==3.3.0 Pillow
 paddle-venv/Scripts/python gen_corpus.py .
 dart tool/replay/replay.dart ab-report <scenario>.jsonl
 ```
 
 First run downloads the PP-OCRv6_medium models (~ tens of MB) into
-`~/.paddlex/`. The same font note as the Tesseract entry applies
+`~/.paddlex/`. The install pins match the versions the corpus was
+generated with; an unpinned install may fetch a newer engine whose
+default `lang='ch'` models differ. The same font note as the Tesseract entry applies
 (`C:\Windows\Fonts\msyh.ttc`; substitute any CJK face on another OS and
 expect different boxes and therefore different numbers).
