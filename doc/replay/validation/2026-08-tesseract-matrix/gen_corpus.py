@@ -129,6 +129,9 @@ def ocr_lines(img):
 def scenario(name, frames, shift_max, jpeg_q, bright_max):
     """frames: list of scrollY. Writes <name>.jsonl in schema v1."""
     path = f'{OUT}/{name}.jsonl'
+    # Arbitrary fixed epoch: the stream is synthetic and deterministic,
+    # so ts is a sequencing field, not a capture date (schema only needs
+    # monotonic timestamps).
     ts = 1756000000000
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps({

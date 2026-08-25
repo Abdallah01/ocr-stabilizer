@@ -508,7 +508,7 @@ changes from 0.4.x — `^0.5.0` is a safe upgrade.
 - `BandFallbackMode` enum (`off` | `observeOnly` | `admit`) configures the
   band-relaxed fallback path inside `StabilizationEngine._findMatch`.
   Default is `off`; switch to `observeOnly` to read `BandFallbackStats`
-  before committing to `admit`. Design and default provenance: #20 / #27.
+  before committing to `admit`. Design and default provenance: (#20).
 - `BandFallbackConfig` value type wraps the band thresholds, candidate
   observation floor, provisional-capture grant, and spatial confirmation
   predicate. Constructor `assert`s on out-of-range values (preserves

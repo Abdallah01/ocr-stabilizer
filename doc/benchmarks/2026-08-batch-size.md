@@ -1,11 +1,19 @@
 # Batch-size benchmarks — 2026-08-24 (#97)
 
 `dart run benchmark/stabilize_benchmark.dart` on an Intel Core Ultra 9
-275HX, Dart 3.12.2 (JIT, windows_x64). Median of 20 seeded runs
-(stabilize) / 15 runs (grouping); the harness does a VM-wide JIT warmup
-first, so "cold" measures a fresh engine, not compiler startup, and both
-stabilize paths build their fixtures outside the timed region. See the
-script header for the exact method.
+275HX, Dart 3.12.2 (JIT, windows_x64). "Warm" is the median of 20 timed
+seeded captures and "group" the median of 15 timed runs; "cold" is a
+SINGLE seeded first-capture run (a cold engine is consumed by measuring
+it). The harness does a VM-wide JIT warmup first, so cold measures a
+fresh engine, not compiler startup, and every path builds its fixture
+outside the timed region. See the script header for the exact method.
+
+Provenance: the table was recorded 2026-08-24 on an idle machine. The
+script's median helper was later delegated to `RobustStats.median`
+(true midpoint on even N, where the recorded runs used the upper-middle
+sample) — the difference is far below run-to-run noise, so the table
+stands. Re-running on a loaded machine inflates every cell; treat only
+idle-machine runs as comparable.
 
 | batch | stabilize cold | stabilize warm (median/capture) | group (median) |
 |---|---|---|---|

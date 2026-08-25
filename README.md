@@ -15,7 +15,7 @@ the user scrolls. The engine has no internal clock and no warm-up: a block
 is returned usable from its **first** observation; later captures only
 refine positions (see [Timing model](#timing-model)).
 
-![Demo: raw per-frame OCR boxes jittering on the left; the same stream stabilized on the right](https://raw.githubusercontent.com/Abdallah01/ocr-stabilizer/main/doc/media/stabilizer-demo.gif)
+![Demo: raw per-frame OCR boxes jittering on the left; the same stream stabilized on the right](https://raw.githubusercontent.com/Abdallah01/ocr-stabilizer/6d6c04a/doc/media/stabilizer-demo.gif)
 
 *Real Tesseract output over 12 jittered captures of one viewport (the
 committed [validation corpus](doc/replay/validation/2026-08-tesseract-matrix/)),
