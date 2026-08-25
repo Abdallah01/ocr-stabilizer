@@ -4,6 +4,7 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 import 'package:test/test.dart';
 
 import '../tool/replay/src/capture_stream.dart';
+import '../tool/replay/src/replay_session.dart';
 
 // =============================================================================
 // README DEMO-GIF PROVENANCE (#106 review)
@@ -17,7 +18,51 @@ import '../tool/replay/src/capture_stream.dart';
 // is swapped, the default model changes, or stabilization stops damping
 // this stream, the caption is false and this test goes red.
 void main() {
-  test('demo GIF: corpus jitter is real and engine-damped in-region', () {
+  test(
+      'hero GIF (ML Kit): dwell stream shows real jitter the default '
+      'model damps on established chains', () {
+    // The README hero GIF renders from this committed on-device stream
+    // (doc/replay/validation/2026-08-mlkit-on-device/). Its caption
+    // claims real ML Kit jitter and a steady stabilized panel; the
+    // engine half of that claim is asserted here by replaying the
+    // stream through both position models (same construction as
+    // ab-report).
+    final stream = CaptureStream.parse(
+      File('doc/replay/validation/2026-08-mlkit-on-device/dwell.jsonl')
+          .readAsLinesSync(),
+    );
+    expect(stream.batches, hasLength(19),
+        reason: 'the caption says 19 captures');
+
+    double establishedDisp(PositionMergeModel model) {
+      final merges = replay(stream, model: model)
+          .merges
+          .where((m) => m.obsNBefore >= 3)
+          .toList();
+      expect(merges, isNotEmpty,
+          reason: 'the dwell fixture must produce established chains');
+      return merges.map((m) => m.displacement).reduce((a, b) => a + b) /
+          merges.length;
+    }
+
+    final legacy = establishedDisp(PositionMergeModel.legacy);
+    final agreement = establishedDisp(PositionMergeModel.agreementWeighted);
+    expect(legacy, greaterThanOrEqualTo(8),
+        reason: 'raw ML Kit jitter on established chains must be real '
+            '(measured ~15 px/merge at render time) — if this drops, the '
+            'corpus changed and the GIF no longer shows what the caption '
+            'says');
+    expect(agreement, lessThanOrEqualTo(6),
+        reason: 'the stabilized panel must actually hold steady '
+            '(measured ~4.2 px/merge at render time)');
+    expect(agreement * 2, lessThan(legacy),
+        reason: 'the visible raw-vs-stabilized contrast is the point of '
+            'the demo');
+  });
+
+  test(
+      'secondary GIF (Tesseract): corpus jitter is real and '
+      'engine-damped in-region', () {
     final stream = CaptureStream.parse(
       File(
         'doc/replay/validation/2026-08-tesseract-matrix/'

@@ -52,9 +52,25 @@ def panel(frames, idx, key, color):
 
 
 def main():
-    if len(sys.argv) != 3:
-        print('usage: python render_demo_gif.py <dump.json> <out.gif>')
+    global REGION, SCALE
+    if len(sys.argv) not in (3, 5):
+        print('usage: python render_demo_gif.py <dump.json> <out.gif> '
+              '[<region l,t,r,b> <scale>]')
         raise SystemExit(64)
+    if len(sys.argv) == 5:
+        parts = sys.argv[3].split(',')
+        if len(parts) != 4:
+            print('region must be 4 comma-separated numbers: l,t,r,b')
+            raise SystemExit(64)
+        try:
+            REGION = tuple(float(v) for v in parts)
+            SCALE = float(sys.argv[4])
+        except ValueError as e:
+            print(f'bad region/scale value: {e}')
+            raise SystemExit(64)
+        if REGION[2] <= REGION[0] or REGION[3] <= REGION[1] or SCALE <= 0:
+            print('region must have r>l and b>t; scale must be > 0')
+            raise SystemExit(64)
     with open(sys.argv[1], encoding='utf-8') as f:
         dump = json.load(f)
     frames = dump['frames']
@@ -65,7 +81,10 @@ def main():
     out = []
     for i in range(len(frames)):
         left = panel(frames, i, 'raw', RAW)
-        right = panel(frames, i, 'stable', STAB)
+        # Prefer the engine's persistent tracked state for the stabilized
+        # panel (falls back for dumps predating the 'tracked' field).
+        skey = 'tracked' if 'tracked' in frames[i] else 'stable'
+        right = panel(frames, i, skey, STAB)
         w = left.width + right.width + 30
         canvas = Image.new('RGB', (w, HDR + left.height + 10), (250, 250, 250))
         dr = ImageDraw.Draw(canvas)

@@ -1,0 +1,67 @@
+{
+  "mode": "ab-report",
+  "input": {
+    "batches": 14,
+    "observations": 424,
+    "skippedLines": 0,
+    "invalidRecords": 0
+  },
+  "legacy": {
+    "mergeCount": 322,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 171,
+        "mean": 2.102,
+        "p50": 0.375,
+        "p90": 1.25,
+        "max": 152.751
+      },
+      "n3-5": {
+        "count": 151,
+        "mean": 2.374,
+        "p50": 0.248,
+        "p90": 0.7,
+        "max": 101.37
+      }
+    },
+    "wellObservedPconf": {
+      "count": 25,
+      "mean": 1.0,
+      "p50": 1.0,
+      "p90": 1.0,
+      "max": 1.0
+    },
+    "wellObservedPconfSaturated": 1.0
+  },
+  "agreementWeighted": {
+    "mergeCount": 322,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 171,
+        "mean": 1.932,
+        "p50": 0.319,
+        "p90": 1.25,
+        "max": 152.751
+      },
+      "n3-5": {
+        "count": 151,
+        "mean": 0.957,
+        "p50": 0.108,
+        "p90": 0.282,
+        "max": 51.07
+      }
+    },
+    "wellObservedPconf": {
+      "count": 25,
+      "mean": 0.9,
+      "p50": 0.908,
+      "p90": 0.912,
+      "max": 0.913
+    },
+    "wellObservedPconfSaturated": 0.0
+  },
+  "caveats": [
+    "Arms may diverge in pairing over time: positions evolve per model, and matching is spatial+text. Compare mergeCount before reading displacement deltas.",
+    "Replay pairing uses the package funnel, not the consumer's own matching stage; consumer-side `merge` events in live-report give the production-path legacy reference."
+  ]
+}
