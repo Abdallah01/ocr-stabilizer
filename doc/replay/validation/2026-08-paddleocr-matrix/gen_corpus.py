@@ -1,7 +1,7 @@
 # PaddleOCR capture-corpus generator for the cross-engine validation matrix
 # (issue #94/#108 follow-on). Renders the IDENTICAL synthetic CJK page the
 # Tesseract entry uses (same seed 94, same perturbation schedule), swaps the
-# engine for PaddleOCR PP-OCRv5 (lang='ch', detection at line granularity),
+# engine for PaddleOCR PP-OCRv6 (lang='ch', detection at line granularity),
 # and serializes capture schema v1 JSONL.
 #
 # Usage: paddle-venv/Scripts/python gen_corpus_paddle.py <out-dir>
@@ -108,7 +108,7 @@ def scenario(name, frames, shift_max, jpeg_q, bright_max):
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps({
             't': 'meta', 'v': 1, 'ts': ts,
-            'note': f'synthetic paddleocr corpus (#108): {name}; '
+            'note': f'synthetic paddleocr corpus (#94): {name}; '
                     f'shift<={shift_max}px jpeg={jpeg_q} bright±{bright_max}'
         }) + '\n')
         for cap, sy in enumerate(frames, 1):

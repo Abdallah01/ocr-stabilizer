@@ -58,8 +58,19 @@ def main():
               '[<region l,t,r,b> <scale>]')
         raise SystemExit(64)
     if len(sys.argv) == 5:
-        REGION = tuple(float(v) for v in sys.argv[3].split(','))
-        SCALE = float(sys.argv[4])
+        parts = sys.argv[3].split(',')
+        if len(parts) != 4:
+            print('region must be 4 comma-separated numbers: l,t,r,b')
+            raise SystemExit(64)
+        try:
+            REGION = tuple(float(v) for v in parts)
+            SCALE = float(sys.argv[4])
+        except ValueError as e:
+            print(f'bad region/scale value: {e}')
+            raise SystemExit(64)
+        if REGION[2] <= REGION[0] or REGION[3] <= REGION[1] or SCALE <= 0:
+            print('region must have r>l and b>t; scale must be > 0')
+            raise SystemExit(64)
     with open(sys.argv[1], encoding='utf-8') as f:
         dump = json.load(f)
     frames = dump['frames']

@@ -25,7 +25,12 @@ void main(List<String> args) {
         'usage: dump_frames.dart <capture.jsonl> <out.json> [retention]');
     exit(64);
   }
-  final retention = args.length == 3 ? int.parse(args[2]) : 0;
+  final retention = args.length == 3 ? int.tryParse(args[2]) : 0;
+  if (retention == null || retention < 0) {
+    stderr.writeln('[retention] must be a non-negative integer '
+        '(got: ${args[2]})');
+    exit(64);
+  }
   final stream = CaptureStream.parse(File(args[0]).readAsLinesSync());
   final engine = StabilizationEngine<ReplayBlock, Object>(
     positionMergeModel: PositionMergeModel.agreementWeighted,
