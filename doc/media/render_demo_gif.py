@@ -4,6 +4,9 @@
 # panels — the comparison is honest by construction.
 #
 # Usage: python render_demo_gif.py <dump.json> <out.gif>
+#            [<region l,t,r,b> <scale> [<maxFrames>]]
+# <maxFrames> renders only the first N captures of the dump — for a stream
+# whose tail leaves the fixed region (the ML Kit dwell's closing fling).
 import json
 import sys
 
@@ -53,11 +56,21 @@ def panel(frames, idx, key, color):
 
 def main():
     global REGION, SCALE
-    if len(sys.argv) not in (3, 5):
+    if len(sys.argv) not in (3, 5, 6):
         print('usage: python render_demo_gif.py <dump.json> <out.gif> '
-              '[<region l,t,r,b> <scale>]')
+              '[<region l,t,r,b> <scale> [<maxFrames>]]')
         raise SystemExit(64)
-    if len(sys.argv) == 5:
+    max_frames = None
+    if len(sys.argv) == 6:
+        try:
+            max_frames = int(sys.argv[5])
+        except ValueError:
+            print(f'maxFrames must be an integer (got: {sys.argv[5]})')
+            raise SystemExit(64)
+        if max_frames < 1:
+            print('maxFrames must be >= 1')
+            raise SystemExit(64)
+    if len(sys.argv) >= 5:
         parts = sys.argv[3].split(',')
         if len(parts) != 4:
             print('region must be 4 comma-separated numbers: l,t,r,b')
@@ -74,6 +87,8 @@ def main():
     with open(sys.argv[1], encoding='utf-8') as f:
         dump = json.load(f)
     frames = dump['frames']
+    if max_frames is not None:
+        frames = frames[:max_frames]
     try:
         font = ImageFont.truetype('arial.ttf', 15)
     except OSError:

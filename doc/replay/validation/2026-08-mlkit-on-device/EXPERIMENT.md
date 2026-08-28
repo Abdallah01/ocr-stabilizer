@@ -20,16 +20,28 @@ Translation mode `mlkit`, overlay display, DOM extraction off (forcing
 the OCR arm). Rects are page-absolute CSS px (viewport 360 px wide,
 device pixel ratio 3).
 
-| stream | shape | batches / obs |
+| stream | shape (measured from the stream's own scroll stamps) | batches / obs |
 |---|---|---|
-| `dwell.jsonl` | one viewport, 14 micro-scroll oscillations (±20 CSS px) at ~2 s cadence | 19 / 98 |
+| `dwell.jsonl` | captures 0–18: one viewport under scripted micro-scrolls whose recorded scroll offset moves 0–297 CSS px between captures (one excursion to 662 px at capture 9); captures 19–24: a momentum fling from 735 to 3,328 px | 19 / 98 |
 | `scroll.jsonl` | 14-step downward ladder (~200 CSS px per step) | 15 / 84 |
+
+**Correction (2026-08-29).** This table first described the dwell as
+"14 micro-scroll oscillations (±20 CSS px)" — the script's intent, not
+the data. Reading the `sc[0]` field of every block shows the shape above.
+Two consequences: (1) the scroll offset the producer stamps on a capture
+can lag the screenshot by 100–150 px during motion (the app reads it from
+a pushed vitals frame, not at screenshot time —
+https://github.com/Abdallah01/ocr_translate_demo/issues/2552), so the same
+text line is reported at page-absolute positions that differ by that much
+between captures; (2) the last five captures are a fling, not a dwell,
+and the README demo GIF uses captures 0–18 only.
 
 Unlike the Tesseract corpus (rendered frames, photometric perturbation),
 the noise here is the real production stack end to end: WebView
-rasterization, screenshot compression, ML Kit segmentation, and the
-app's own grouping — including genuine per-frame **misrecognitions**
-(e.g. 于是→王是), which exercise the text-vote path.
+rasterization, screenshot compression, ML Kit segmentation, the app's own
+grouping, and the producer's scroll-stamp lag described above — including
+genuine per-frame **misrecognitions** (e.g. 于是→王是), which exercise
+the text-vote path.
 
 ## Result (`ab-report`, committed alongside)
 
@@ -46,11 +58,19 @@ app's own grouping — including genuine per-frame **misrecognitions**
 
 This is the **high-amplitude regime the 3× allowance was tuned for**,
 now on distributable data: raw ML Kit boxes move ~11–21 px per merge on
-established chains under a mere ±20 px oscillation. The agreement model
-damps established chains 2.8–4.8× (11.31→4.07, 20.74→4.30) while young
-blocks stay at parity (13.75 vs 13.62) — the same shape as the 2026-07
-production sweeps (3.8 vs 11.8 at n11+) and the Tesseract entry, and
-confidence stays informative (0.911) instead of saturating.
+established chains. Two sources feed that number, and this entry cannot
+separate them: genuine OCR re-segmentation, and the producer's
+scroll-stamp lag (same text, 100–150 px apart between captures — see the
+correction above). For a static page the true position is fixed, so
+holding an established block still is the right response to BOTH; what
+the lag additionally produces is a young block admitted in the lagged
+frame next to an established block held in the true frame, i.e. two
+coordinate frames in one tracked state (visible as box-on-box overlaps
+in the demo). The agreement model damps established chains 2.8–4.8×
+(11.31→4.07, 20.74→4.30) while young blocks stay at parity (13.75 vs
+13.62) — the same shape as the 2026-07 production sweeps (3.8 vs 11.8 at
+n11+) and the Tesseract entry, and confidence stays informative (0.911)
+instead of saturating.
 
 The scroll ladder is young-blocks-only (no chain survives to depth 3 in
 14 one-directional steps) and shows parity, as designed — the anchoring
@@ -59,11 +79,14 @@ loop has nothing to anchor.
 ## Boundary of what this proves
 
 Small n (19+15 batches, ~5 paragraph-level blocks per viewport at this
-zoom); one device, one page style; the dwell oscillation is scripted,
-not human. Statistical weight stays with the 2026-07 production sweeps —
-this entry's value is **provenance** (committed streams, regenerable
-end-to-end analysis) and **demo material**: the README's hero GIF
-renders from `dwell.jsonl`.
+zoom); one device, one page style; the dwell motion is scripted, not
+human, and its scroll stamps lag the screenshot (correction above), so
+the "raw movement" it measures is an upper bound on OCR jitter, not OCR
+jitter alone. The last five dwell captures are a fling and contribute
+young-block merges only. Statistical weight stays with the 2026-07
+production sweeps — this entry's value is **provenance** (committed
+streams, regenerable end-to-end analysis) and **demo material**: the
+README's hero GIF renders from `dwell.jsonl` captures 0–18.
 
 ## Reproduce
 
@@ -77,7 +100,7 @@ adb reverse tcp:8907 tcp:8907
 # <documentsDir>/stab-capture/*.jsonl
 dart tool/replay/replay.dart ab-report dwell.jsonl
 dart tool/replay/dump_frames.dart dwell.jsonl dump.json 2
-python doc/media/render_demo_gif.py dump.json demo.gif "0,250,360,860" 1.25
+python doc/media/render_demo_gif.py dump.json demo.gif "0,250,360,860" 1.25 14   # the 14 frames = captures 0-18
 ```
 
 The capture app is any consumer wiring the recorder documented in
