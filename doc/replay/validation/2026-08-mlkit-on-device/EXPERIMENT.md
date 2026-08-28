@@ -22,8 +22,8 @@ device pixel ratio 3).
 
 | stream | shape (measured from the stream's own scroll stamps) | batches / obs |
 |---|---|---|
-| `dwell.jsonl` | captures 0–18: one viewport under scripted micro-scrolls whose recorded scroll offset moves 0–297 CSS px between captures (one excursion to 662 px at capture 9); captures 19–24: a momentum fling from 735 to 3,328 px | 19 / 98 |
-| `scroll.jsonl` | 14-step downward ladder (~200 CSS px per step) | 15 / 84 |
+| `dwell.jsonl` | captures 0–18: one viewport under scripted micro-scrolls whose recorded scroll offset moves 0–297 CSS px between captures (one excursion to 662 px at capture 9); the five captures after 18 (ids 19, 20, 22, 23, 24 — the recorder skips ids): a momentum fling from 735 to 3,328 px | 19 / 98 |
+| `scroll.jsonl` | 14 steps down the page, 0 to 3,920 px: the recorded scroll offset advances 274–316 CSS px per step for the first twelve steps (median 303 px), then 159 and 153 px for the last two | 15 / 84 |
 
 **Correction (2026-08-29).** This table first described the dwell as
 "14 micro-scroll oscillations (±20 CSS px)" — the script's intent, not
