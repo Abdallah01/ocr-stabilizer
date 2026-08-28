@@ -15,14 +15,17 @@ the user scrolls. The engine has no internal clock and no warm-up: a block
 is returned usable from its **first** observation; later captures only
 refine positions (see [Timing model](#timing-model)).
 
-![Demo: raw per-frame ML Kit boxes jittering on the left; the same stream stabilized on the right](https://raw.githubusercontent.com/Abdallah01/ocr-stabilizer/63f1e29/doc/media/stabilizer-demo-mlkit.gif)
+![Demo: raw per-frame ML Kit boxes jittering on the left; the same stream stabilized on the right](https://raw.githubusercontent.com/Abdallah01/ocr-stabilizer/0509f95/doc/media/stabilizer-demo-mlkit.gif)
 
 *Real **ML Kit** output, captured on a Galaxy S25 over a synthetic page
 (the committed [on-device corpus](doc/replay/validation/2026-08-mlkit-on-device/)):
-19 captures of one dwelling viewport, 3-frame ghost trails, the same
-drawing rule on both panels. Left: the boxes exactly as the production
-pipeline reports them each frame. Right: the engine's tracked state
-(`StabilizationEngine` defaults plus `missedFrameRetention: 2`).
+14 captures over one viewport under scripted micro-scrolls (the stream's
+last five captures are a momentum fling and are cut from the demo — see
+the entry's correction note), 3-frame ghost trails, the same drawing rule
+on both panels. Left: the boxes exactly as the production pipeline reports
+them each frame, including the producer's scroll-stamp lag. Right: the
+engine's tracked state (`StabilizationEngine` defaults plus
+`missedFrameRetention: 2`).
 Rendered from engine output by
 [`tool/replay/dump_frames.dart`](tool/replay/dump_frames.dart) +
 [`doc/media/render_demo_gif.py`](doc/media/render_demo_gif.py) — not an

@@ -32,7 +32,14 @@ void main() {
           .readAsLinesSync(),
     );
     expect(stream.batches, hasLength(19),
-        reason: 'the caption says 19 captures');
+        reason: 'the committed stream has 19 captures');
+    // The caption renders the first 14 of them (captures 0-18); the
+    // remaining five are the closing fling that leaves the GIF's fixed
+    // page region (entry correction note, 2026-08-29).
+    expect(stream.batches.take(14).last.captureId, 18,
+        reason: 'the demo cut must end at capture 18');
+    expect(stream.batches[14].captureId, greaterThan(18),
+        reason: 'everything after the cut is the fling');
 
     double establishedDisp(PositionMergeModel model) {
       final merges = replay(stream, model: model)
