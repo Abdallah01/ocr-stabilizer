@@ -18,7 +18,12 @@ stream recorder enabled (`--dart-define=STAB_CAPTURE=true`, capture
 schema v1 — the same recorder that produced the 2026-07 streams).
 Translation mode `mlkit`, overlay display, DOM extraction off (forcing
 the OCR arm). Rects are page-absolute CSS px (viewport 360 px wide,
-device pixel ratio 3).
+device pixel ratio 3). The recorder did not write the `vp` viewport
+field at capture time (rig 2.1.0 added it): the 360×587 CSS px value in
+both headers was read from the recording WebView over the Chrome
+DevTools Protocol during the same 2026-08-25 session and stamped into
+the headers on 2026-08-29. The recorder-side writer is tracked in the
+same consumer issue as the scroll-stamp lag below (2552).
 
 | stream | shape (measured from the stream's own scroll stamps) | batches / obs |
 |---|---|---|
@@ -74,11 +79,23 @@ page the true position is fixed, so holding an established block still
 is the right response to BOTH; what the lag additionally produces is a
 young block admitted in the lagged frame next to an established block
 held in the true frame, i.e. two coordinate frames in one tracked state
-(the box-on-box overlaps in the 2.0.0 demo; 2.1.0's cross-frame
-supersession evicts a retained box once a fresh box covers it, which
-cut overlapping tracked-box pairs across the 14 demo frames from 32 to
-14 — the pairs that remain are a paragraph box and the line boxes the
-producer reports inside it in other frames, kept on purpose). The
+(the box-on-box overlaps in the 2.0.0 demo). 2.1.0's cross-frame
+supersession evicts a retained box once one fresh box covers at least
+half of its own area; on the 14 demo frames that cuts overlapping pairs
+of tracked boxes from 32 to 23 (`doc/media/count_overlap_pairs.py` over
+the `dump_frames.dart` output — any two tracked boxes with a positive
+intersection, per frame, summed). Of the 23 that remain, 8 are a
+paragraph box with one of its own lines inside it (ML Kit reports the
+same text as a paragraph in one frame and as one line in the next; the
+line's text is a prefix of the paragraph's and scores under the
+whole-string match gate, so it is admitted as new — and the rule keeps
+the paragraph on purpose), 14 are the lag — captures 16–18 arrive 21 to
+150 px off the earlier frames, so different text lands on an established
+box; capture 18 shifts every block by ~150 px at once — and 1 is a
+segmentation split. The app's own dedup cascade runs after the engine
+and absorbs most of these (its recorded `dedup` events for captures 16,
+17 and 18 add 3, 0 and 2 of 8, 5 and 7 incoming blocks), so the demo
+overstates what the app's overlay shows. The
 agreement model damps established chains 2.8× at n3-5 (11.31→4.07; the
 four n6-10 merges go 0.79→0.19) while young blocks stay at parity (8.85
 vs 8.71) — the same shape as the 2026-07 production sweeps (3.8 vs 11.8

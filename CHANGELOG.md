@@ -2,41 +2,67 @@
 
 ### Added
 - **Cross-frame supersession under `missedFrameRetention`.** A cached
-  block that is not matched this capture, but whose region a fresh block
-  of this capture covers, is evicted instead of retained. Coverage is
-  measured against the CACHED block's own area at the resolver's
-  size-adaptive overlap threshold, so a single line reported inside a
-  retained paragraph does not evict the paragraph. Before this, the old
-  box stayed in the tracked state for the whole retention window and a
-  consumer drawing from `spatialIndex.allBlocks` painted it on top of the
-  new one (the box-on-box overlaps in the 2.0.0 hero GIF). Retention 0 —
-  the default — is untouched: the rule runs only inside the retention
-  branch, so no default-configuration number moves because of it.
+  block that is not matched this capture, but half or more of whose own
+  area ONE fresh block of this capture covers, is evicted instead of
+  retained. The bar is measured against the CACHED block's area, so a
+  single line reported inside a retained paragraph does not evict the
+  paragraph; the resolver's per-script NMS threshold applies only where
+  it is stricter (short Latin snippets, 0.65) — it is not reused as-is,
+  because its CJK value (0.35) would let a sliver evict a CJK block that
+  an equal Latin block survives. Blocks from different carousels, and
+  viewport-relative vs page-absolute blocks, never supersede each other;
+  the candidate search spans the fresh block's whole rect, not just the
+  cells around its centre. Before this, the old box stayed in the
+  tracked state for the whole retention window and a consumer drawing
+  from `spatialIndex.allBlocks` painted it on top of the new one (the
+  box-on-box overlaps in the 2.0.0 hero GIF). This is a deliberate trade
+  of identity for a clean frame: a wrongly placed fresh block (a lagged
+  scroll stamp) evicts a correct retained one, which re-enters as new.
+  Retention 0 — the default — is untouched: the rule runs only inside
+  the retention branch, so no default-configuration number moves because
+  of it; a consumer that runs its own matching through `merge()` never
+  reaches it.
 - **The replay rig honours the producer viewport.** Capture schema v1
   gains an additive `meta.vp` = `[cssWidth, cssHeight]`; `replay()`,
   `freeze-report`, `ab-report` and `dump_frames.dart` call
-  `updateViewport` with it — the same call every real consumer makes —
-  instead of replaying on the engine's 200 px default buckets.
-  `--viewport=WxH` overrides; with neither, the rig warns on stderr. The
-  reports record the viewport under `input.viewport`. All eight committed
-  streams carry `vp` and their `.ab.json` were regenerated: the
-  dwell-only synthetic streams are unchanged; the ML Kit streams lose the
-  cross-neighbourhood matches production geometry never offers (dwell
-  34→30 merges; n6-10 legacy 20.74→0.79 px); the Tesseract and PaddleOCR
-  scroll streams move by 0.1–1.6 px per bucket. The three validation
-  entries carry a dated note.
+  `updateViewport` with it — the viewport-derived bucket geometry a
+  consumer configures through `updateViewport` or through
+  `SpatialBlockIndex.updateBucketSizes` on an injected index — instead
+  of replaying on the engine's 200 px default buckets. `--viewport=WxH`
+  overrides (finite positive values only); with neither, the rig warns
+  on stderr. Reports record the viewport actually applied under
+  `input.viewport`. All eight committed streams carry `vp` and their
+  `.ab.json` were regenerated: the dwell-only synthetic streams are
+  unchanged; the ML Kit streams lose the cross-neighbourhood matches
+  production geometry never offers (dwell 34→30 merges; n6-10 legacy
+  20.74→0.79 px); the Tesseract and PaddleOCR scroll streams move by
+  0.1–1.6 px per bucket. The synthetic corpora write `vp` from their
+  `gen_corpus.py`; the two on-device ML Kit streams were recorded before
+  the field existed and carry a value (360×587) read from the recording
+  WebView during the capture session and stamped into the header
+  afterwards — their entry says so, and the recorder-side writer is
+  tracked in the consumer's issue cited there. The three validation
+  entries carry a dated note. `tool/replay/src/replay_session.dart`
+  lists what the rig still does not model: a consumer's own matching
+  stage, bucket adaptation beyond the viewport formula, `contextualCheck`,
+  a consumer-supplied `DriftTracker`.
 
 ### Changed
 - Hero demo GIF re-rendered from the viewport-honouring dump (captures
   0–18, `missedFrameRetention: 2`): overlapping tracked-box pairs across
-  the 14 frames drop from 32 to 14; the pairs that remain are a paragraph
-  box and the line boxes the producer reports inside it in other frames,
-  which the supersession rule keeps on purpose.
+  the 14 frames drop from 32 to 23, counted by
+  `doc/media/count_overlap_pairs.py` (any two tracked boxes with a
+  positive intersection, per frame). Of the 23 that remain, 8 are a
+  paragraph box with one of its own lines inside it (a grouping flip the
+  rule keeps on purpose) and 14 are the producer's scroll-stamp lag
+  placing different text over an established box, which no engine rule
+  can tell from real new text.
 - `test/long_session_replay_test.dart`: the text-churn modulus is now 23
-  (divides the 69-capture pass), so the fixture is truly periodic (period
-  two passes, by parity) and the flatness detector compares same-phase
-  passes by equality. Supersession made the population phase-sensitive,
-  which exposed that the old modulus (11) drifted ~3 captures per pass.
+  (divides the 69-capture pass) and the fixture asserts its own
+  periodicity (period two passes, by parity); the flatness detector
+  compares same-phase passes by equality. Supersession made the
+  population phase-sensitive, which exposed that the old modulus (11)
+  drifted ~3 captures per pass.
 
 ## 2.0.0 - 2026-08-24
 
