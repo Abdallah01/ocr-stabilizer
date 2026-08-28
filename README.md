@@ -15,7 +15,7 @@ the user scrolls. The engine has no internal clock and no warm-up: a block
 is returned usable from its **first** observation; later captures only
 refine positions (see [Timing model](#timing-model)).
 
-![Demo: raw per-frame ML Kit boxes jittering on the left; the same stream stabilized on the right](https://raw.githubusercontent.com/Abdallah01/ocr-stabilizer/017567e/doc/media/stabilizer-demo-mlkit.gif)
+![Demo: raw per-frame ML Kit boxes jittering on the left; the same stream stabilized on the right](https://raw.githubusercontent.com/Abdallah01/ocr-stabilizer/9e8df3f/doc/media/stabilizer-demo-mlkit.gif)
 
 *Real **ML Kit** output, captured on a Galaxy S25 over a synthetic page
 (the committed [on-device corpus](doc/replay/validation/2026-08-mlkit-on-device/)):
