@@ -257,6 +257,36 @@ void main() {
           'medianHeight');
     });
 
+    test('ab-report keeps nested-fragment confirmations out of the '
+        'displacement buckets (#112): counted, not averaged', () {
+      // cap 1: paragraph. cap 2: the same paragraph 10 px lower -> one
+      // position merge, displacement 10. cap 3: its first line alone ->
+      // one nested confirmation, displacement 0 by construction. The
+      // n1-2 bucket must hold ONE sample with mean 10 — not two with
+      // mean 5 (mutation-verified: exclusion removed -> red).
+      String para(int cap, int top) =>
+          '{"t": "obs", "cap": $cap, "raw": 1, "blocks": ['
+          '{"rect": [33, $top, 333, ${top + 52}], '
+          '"otext": "The quick brown fox jumps over the lazy dog near the '
+          'river bank", "pconf": 0.5, "tconf": 0.5, "obsN": 1, '
+          '"prov": false, "provN": 0}]}';
+      const line = '{"t": "obs", "cap": 3, "raw": 1, "blocks": ['
+          '{"rect": [33, 768, 313, 786], "otext": "The quick brown fox jumps", '
+          '"pconf": 0.5, "tconf": 0.5, "obsN": 1, "prov": false, "provN": 0}]}';
+      final s = CaptureStream.parse([meta, para(1, 754), para(2, 764), line]);
+      final ab = abReport(s);
+      for (final arm in ['legacy', 'agreementWeighted']) {
+        final a = ab[arm] as Map<String, Object?>;
+        expect(a['mergeCount'], 2, reason: arm);
+        expect(a['nestedFragmentMerges'], 1, reason: arm);
+        final buckets = a['displacementByObsN'] as Map<String, Object?>;
+        final n12 = buckets['n1-2'] as Map<String, Object?>;
+        expect(n12['count'], 1, reason: '$arm: the confirmation is excluded');
+        expect(n12['mean'], greaterThan(4.0),
+            reason: '$arm: a zero-displacement sample would halve the mean');
+      }
+    });
+
     test('--buckets parsing', () {
       expect(bucketPolicyFromArg('--buckets=auto'), BucketPolicy.auto);
       expect(bucketPolicyFromArg('--buckets=formula'),

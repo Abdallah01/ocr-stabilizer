@@ -42,6 +42,20 @@ DefaultTrackedBlock<void> _at(
       isViewportRelative: viewportRelative,
     );
 
+/// An index that ignores the viewport-relative cell namespace and offers
+/// every block as a candidate — isolates the engine's own VR guard.
+class _MixedNamespaceIndex
+    extends SpatialBlockIndex<DefaultTrackedBlock<void>> {
+  @override
+  Iterable<DefaultTrackedBlock<void>> candidates(
+          DefaultTrackedBlock<void> block) =>
+      allBlocks;
+
+  @override
+  Iterable<DefaultTrackedBlock<void>> blocksInRegion(Rect region) =>
+      allBlocks;
+}
+
 // Geometry from the committed ML Kit dwell stream: a two-line paragraph and
 // its first line reported alone in a later frame.
 const Rect kPara = Rect.fromLTWH(33, 754, 300, 52);
@@ -209,6 +223,23 @@ void main() {
       expect(r.stableBlocks.single.observationCount, 1);
     });
 
+    test('...even through an index that mixes the two namespaces (the '
+        'engine-side guard, not only the index cell namespace)', () {
+      // The default index files viewport-relative blocks under a separate
+      // "vr:" namespace, so the previous test passes without the engine's
+      // own check. An injected index that returns every block as a
+      // candidate isolates the guard (mutation-verified: guard removed ->
+      // this test goes red).
+      final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
+        merger: (existing, fresh, merge) => existing.applyMerge(merge),
+        spatialIndex: _MixedNamespaceIndex(),
+      );
+      engine.stabilize([_at(kPara, kParaText, viewportRelative: true)]);
+      final r = engine.stabilize([_at(kLine, kLineText)]);
+      expect(r.stableBlocks.single.originalText, kLineText);
+      expect(r.stableBlocks.single.observationCount, 1);
+    });
+
     test('paragraph AND its line in the SAME frame: one merged block, never '
         'two copies (measured: three identical tracked boxes before the fix)',
         () {
@@ -241,19 +272,29 @@ void main() {
     });
 
     test('the tightest host wins when a fragment sits inside two established '
-        'blocks', () {
+        'blocks, whichever was indexed first', () {
       // A page-wide block whose text happens to contain the same words,
       // and the paragraph itself: the smaller (paragraph) absorbs the line.
-      final engine = _engine();
+      // Both insertion orders, so a "first candidate wins" regression
+      // cannot pass by iteration-order luck.
       const wide = Rect.fromLTWH(0, 700, 400, 200);
       const wideText = 'Header The quick brown fox jumps over the lazy dog '
           'near the river bank and a footer';
-      for (var i = 0; i < 2; i++) {
-        engine.stabilize([_at(wide, wideText), _at(kPara, kParaText)]);
+      for (final wideFirst in [true, false]) {
+        final engine = _engine();
+        final batch = wideFirst
+            ? [_at(wide, wideText), _at(kPara, kParaText)]
+            : [_at(kPara, kParaText), _at(wide, wideText)];
+        engine.stabilize(batch);
+        engine.stabilize(batch);
+        final r = engine.stabilize([_at(kLine, kLineText)]);
+        // Only the line was observed this frame, so the frame's stable set
+        // holds exactly the host it confirmed — which must be the
+        // paragraph, not the wide block.
+        expect(r.stableBlocks.single.originalText, kParaText,
+            reason: 'order wideFirst=$wideFirst: the paragraph absorbs it');
+        expect(r.stableBlocks.single.observationCount, 3);
       }
-      final r = engine.stabilize([_at(kLine, kLineText)]);
-      final para = r.stableBlocks.singleWhere((b) => b.originalText == kParaText);
-      expect(para.observationCount, 3);
     });
   });
 

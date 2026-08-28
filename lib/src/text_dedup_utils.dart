@@ -84,8 +84,10 @@ class TextDedupUtils {
   /// 0.0 — never a match — when the fragment carries fewer than
   /// [minFragmentChars] significant characters (short fragments match
   /// inside almost anything) or is LONGER than the whole (then it is not a
-  /// fragment; the whole-string path owns that case). Equal lengths reduce
-  /// to the whole-string score. Exact substrings return 1.0 early.
+  /// fragment; the whole-string path owns that case — the length guard is
+  /// an early exit, the window loop below would also yield 0.0). Equal
+  /// lengths reduce to the whole-string score. Exact substrings return
+  /// 1.0 early.
   ///
   /// Cost: O((n − m + 1) · m²) on significant-character counts; callers
   /// gate it behind a cheap geometric test.
