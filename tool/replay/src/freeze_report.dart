@@ -11,9 +11,13 @@ import 'stats.dart';
 /// `admit` mode and report what the provisional freeze actually does —
 /// freeze frequency, evidence lost, promotion latency — as computed by the
 /// package's own funnel.
+///
+/// [viewport] (2.1.0) is applied via `updateViewport` and recorded in the
+/// report's `input` block; null means the engine's default buckets.
 Map<String, Object?> freezeReport(
   CaptureStream stream, {
   int? candidateObservationFloor,
+  Viewport? viewport,
 }) {
   final result = replay(
     stream,
@@ -21,6 +25,7 @@ Map<String, Object?> freezeReport(
       mode: BandFallbackMode.admit,
       candidateObservationFloor: candidateObservationFloor,
     ),
+    viewport: viewport,
   );
 
   final freezes = result.freezes.toList();
@@ -37,6 +42,9 @@ Map<String, Object?> freezeReport(
       'observations': result.observations,
       'skippedLines': stream.skippedLines,
       'invalidRecords': stream.invalidRecords,
+      'viewport': viewport == null
+          ? null
+          : {'width': viewport.width, 'height': viewport.height},
     },
     'funnel': {
       'primaryMatchesAdmitted': s.primaryMatchesAdmitted,

@@ -107,7 +107,7 @@ def scenario(name, frames, shift_max, jpeg_q, bright_max):
     ts = 1756000000000  # arbitrary deterministic epoch (sequencing only)
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps({
-            't': 'meta', 'v': 1, 'ts': ts,
+            't': 'meta', 'v': 1, 'ts': ts, 'vp': [W, VIEW_H],
             'note': f'synthetic paddleocr corpus (#94): {name}; '
                     f'shift<={shift_max}px jpeg={jpeg_q} bright±{bright_max}'
         }) + '\n')

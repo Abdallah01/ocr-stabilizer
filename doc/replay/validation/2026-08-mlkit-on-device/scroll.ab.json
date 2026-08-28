@@ -4,16 +4,20 @@
     "batches": 15,
     "observations": 84,
     "skippedLines": 0,
-    "invalidRecords": 0
+    "invalidRecords": 0,
+    "viewport": {
+      "width": 360.0,
+      "height": 587.0
+    }
   },
   "legacy": {
-    "mergeCount": 19,
+    "mergeCount": 18,
     "displacementByObsN": {
       "n1-2": {
-        "count": 19,
-        "mean": 6.571,
+        "count": 18,
+        "mean": 5.461,
         "p50": 0.218,
-        "p90": 8.491,
+        "p90": 8.38,
         "max": 69.168
       }
     },
@@ -27,13 +31,13 @@
     "wellObservedPconfSaturated": null
   },
   "agreementWeighted": {
-    "mergeCount": 19,
+    "mergeCount": 18,
     "displacementByObsN": {
       "n1-2": {
-        "count": 19,
-        "mean": 6.235,
+        "count": 18,
+        "mean": 5.461,
         "p50": 0.218,
-        "p90": 8.491,
+        "p90": 8.38,
         "max": 69.168
       }
     },

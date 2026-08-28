@@ -123,6 +123,74 @@ void main() {
     });
   });
 
+  // 2.1.0 — cross-frame supersession. Retention keeps an unmatched block
+  // as a match candidate; it must NOT keep it when a fresh block this
+  // capture now covers most of its region with different text (the region
+  // has visibly changed, or the old box was placed in a lagged coordinate
+  // frame). Without this, a consumer rendering the tracked state draws the
+  // old box on top of the new one for the whole retention window.
+  group('cross-frame supersession (2.1.0)', () {
+    DefaultTrackedBlock<void> at(Rect r, String text) =>
+        DefaultTrackedBlock<void>(
+          absoluteRect: AbsoluteRect(r),
+          payload: null,
+          originalText: text,
+        );
+
+    test('a fresh block covering a retained block with other text evicts it',
+        () {
+      final engine = _engine(retention: 2);
+      engine.stabilize([_hello()]); // hello world @ (10,100,200x30)
+      final r = engine.stabilize([
+        at(const Rect.fromLTWH(10, 100, 200, 30), 'completely unrelated'),
+      ]);
+      expect(r.stableBlocks.single.originalText, 'completely unrelated',
+          reason: 'no text match: the fresh block is a new block');
+      expect(engine.spatialIndex.allBlocks, hasLength(1),
+          reason: 'the superseded block must not be retained');
+      expect(engine.spatialIndex.allBlocks.single.originalText,
+          'completely unrelated');
+
+      final back = engine.stabilize([_hello()]);
+      expect(back.stableBlocks.single.observationCount, 1,
+          reason: 'identity of the evicted block is gone');
+    });
+
+    test('a fresh block elsewhere leaves the retained block alone', () {
+      final engine = _engine(retention: 2);
+      engine.stabilize([_hello()]);
+      engine.stabilize([
+        at(const Rect.fromLTWH(10, 400, 200, 30), 'completely unrelated'),
+      ]);
+      expect(engine.spatialIndex.allBlocks, hasLength(2),
+          reason: 'no overlap: retention keeps the missed block');
+    });
+
+    test('a small fresh line inside a retained paragraph does not evict it',
+        () {
+      // Supersession is measured against the RETAINED block's area: a
+      // re-segmentation frame that reports one line of a paragraph covers
+      // little of the paragraph, so the paragraph keeps its identity.
+      final engine = _engine(retention: 2);
+      final paragraph = at(const Rect.fromLTWH(10, 100, 300, 120), 'para');
+      engine.stabilize([paragraph]);
+      engine.stabilize([
+        at(const Rect.fromLTWH(10, 100, 300, 18), 'one line of it'),
+      ]);
+      expect(engine.spatialIndex.allBlocks, hasLength(2),
+          reason: 'an 18 px line covers 15% of a 120 px paragraph');
+    });
+
+    test('retention 0 is unaffected (nothing is retained to evict)', () {
+      final engine = _engine();
+      engine.stabilize([_hello()]);
+      engine.stabilize([
+        at(const Rect.fromLTWH(10, 100, 200, 30), 'completely unrelated'),
+      ]);
+      expect(engine.spatialIndex.allBlocks, hasLength(1));
+    });
+  });
+
   group('updateViewport re-keys the populated index (PR #61 review)', () {
     test('cached blocks deep in the page survive a bucket-size change', () {
       final engine = _engine();

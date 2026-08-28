@@ -87,11 +87,23 @@ class ReplayResult {
 /// [band] and [model]; collect per-merge samples and provisional-chain
 /// outcomes via the merger callback (the engine's own computation, not a
 /// reimplementation).
+///
+/// Viewport (2.1.0): every real consumer calls `engine.updateViewport`
+/// with the device viewport, which sets the spatial index's bucket sizes;
+/// the rig must make the same call or it replays on the 200 px default
+/// buckets — not production geometry. [viewport] overrides; otherwise the
+/// stream's `meta.vp` is used when [useStreamViewport] is true (the
+/// default). With neither, the engine keeps its defaults (callers that
+/// report numbers should warn — see replay.dart).
 ReplayResult replay(
   CaptureStream stream, {
   BandFallbackConfig band = const BandFallbackConfig(),
   PositionMergeModel model = PositionMergeModel.legacy,
+  Viewport? viewport,
+  bool useStreamViewport = true,
 }) {
+  final effectiveViewport =
+      viewport ?? (useStreamViewport ? stream.viewport : null);
   final merges = <MergeSample>[];
   final chains = <ProvisionalOutcome>[];
   // Latest merged instance of each open chain → its outcome record.
@@ -142,6 +154,13 @@ ReplayResult replay(
       return merged;
     },
   );
+
+  if (effectiveViewport != null) {
+    engine.updateViewport(
+      viewportWidth: effectiveViewport.width,
+      viewportHeight: effectiveViewport.height,
+    );
+  }
 
   for (final batch in stream.batches) {
     currentCapture = batch.captureId;

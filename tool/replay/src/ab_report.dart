@@ -11,10 +11,15 @@ import 'stats.dart';
 /// position-merge models (band off) and compare positional stickiness and
 /// confidence informativeness. Same input for both arms — a cleaner A/B
 /// than two separate live sessions could provide.
-Map<String, Object?> abReport(CaptureStream stream) {
-  final legacy = replay(stream, model: PositionMergeModel.legacy);
-  final agreement =
-      replay(stream, model: PositionMergeModel.agreementWeighted);
+///
+/// [viewport] (2.1.0) is applied to both arms via `updateViewport` and
+/// recorded in the report's `input` block, so a committed `.ab.json` says
+/// which geometry produced its numbers; null means default buckets.
+Map<String, Object?> abReport(CaptureStream stream, {Viewport? viewport}) {
+  final legacy =
+      replay(stream, model: PositionMergeModel.legacy, viewport: viewport);
+  final agreement = replay(stream,
+      model: PositionMergeModel.agreementWeighted, viewport: viewport);
 
   return {
     'mode': 'ab-report',
@@ -23,6 +28,9 @@ Map<String, Object?> abReport(CaptureStream stream) {
       'observations': stream.observationCount,
       'skippedLines': stream.skippedLines,
       'invalidRecords': stream.invalidRecords,
+      'viewport': viewport == null
+          ? null
+          : {'width': viewport.width, 'height': viewport.height},
     },
     'legacy': _arm(legacy),
     'agreementWeighted': _arm(agreement),

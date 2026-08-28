@@ -22,6 +22,11 @@ class ObsBatch {
 
 /// A parsed capture file: the observation stream plus the consumer-side
 /// lifecycle events (schema: doc/replay/capture_schema.md).
+/// The producer's CSS-pixel viewport, from the meta record's `vp` field
+/// (2.1.0). The rig passes it to `StabilizationEngine.updateViewport` so
+/// replayed geometry matches what a real consumer configures.
+typedef Viewport = ({double width, double height});
+
 class CaptureStream {
   CaptureStream({
     required this.batches,
@@ -29,9 +34,15 @@ class CaptureStream {
     required this.schemaVersion,
     required this.skippedLines,
     this.invalidRecords = 0,
+    this.viewport,
   });
 
   final List<ObsBatch> batches;
+
+  /// `meta.vp` — null when the stream predates the field (the rig then
+  /// warns and runs on the engine's default buckets, which is NOT
+  /// production geometry).
+  final Viewport? viewport;
 
   /// Non-`obs`, non-`meta` records verbatim (merge/freeze/band_*/cluster_*).
   final List<Map<String, Object?>> events;
@@ -53,6 +64,7 @@ class CaptureStream {
     final batches = <ObsBatch>[];
     final events = <Map<String, Object?>>[];
     int? version;
+    Viewport? viewport;
     var skipped = 0;
     var invalidRecords = 0;
 
@@ -71,6 +83,13 @@ class CaptureStream {
           final v = record['v'];
           version = v is num ? v.toInt() : version;
           if (v is! num) skipped++;
+          if (record.containsKey('vp')) {
+            final vp = _parseViewport(record['vp']);
+            // A present-but-malformed vp is a recorder bug (the field is
+            // written by code, not typed by hand): keep it loud.
+            if (vp == null) invalidRecords++;
+            viewport = vp ?? viewport;
+          }
         case 'obs':
           try {
             batches.add(_parseObs(record));
@@ -94,7 +113,22 @@ class CaptureStream {
       schemaVersion: version,
       skippedLines: skipped,
       invalidRecords: invalidRecords,
+      viewport: viewport,
     );
+  }
+
+  /// `vp` must be `[width, height]` of finite, positive CSS px.
+  static Viewport? _parseViewport(Object? raw) {
+    if (raw is! List || raw.length != 2) return null;
+    final w = raw[0];
+    final h = raw[1];
+    if (w is! num || h is! num) return null;
+    final width = w.toDouble();
+    final height = h.toDouble();
+    if (!width.isFinite || !height.isFinite || width <= 0 || height <= 0) {
+      return null;
+    }
+    return (width: width, height: height);
   }
 
   static ObsBatch _parseObs(Map<String, Object?> record) => ObsBatch(

@@ -37,6 +37,69 @@ void main() {
       expect(b.carouselIdVotes, {-1: 1},
           reason: 'absent carVotes must map to the phantom sentinel');
     });
+
+    // 2.1.0 — the meta record may carry the producer's CSS viewport so the
+    // rig can make the same updateViewport() call every real consumer
+    // makes. Without it the engine's spatial index runs on its 200 px
+    // default buckets, which is NOT production geometry (a 360 px phone
+    // viewport buckets at 80x88 px) and changes which cached blocks are
+    // match candidates.
+    group('meta.vp (viewport, 2.1.0)', () {
+      test('absent on the legacy fixture -> null', () {
+        expect(loadFixture().viewport, isNull);
+      });
+
+      test('parses [width, height] CSS px', () {
+        final s = CaptureStream.parse([
+          '{"t":"meta","v":1,"ts":1,"note":"x","vp":[360,587]}',
+        ]);
+        expect(s.viewport, isNotNull);
+        expect(s.viewport!.width, 360.0);
+        expect(s.viewport!.height, 587.0);
+        expect(s.invalidRecords, 0);
+      });
+
+      test('malformed vp is a recorder bug: counted, viewport null', () {
+        for (final bad in [
+          '{"t":"meta","v":1,"vp":"360x587"}',
+          '{"t":"meta","v":1,"vp":[360]}',
+          '{"t":"meta","v":1,"vp":[360,"tall"]}',
+          '{"t":"meta","v":1,"vp":[0,587]}',
+          '{"t":"meta","v":1,"vp":[360,-1]}',
+        ]) {
+          final s = CaptureStream.parse([bad]);
+          expect(s.viewport, isNull, reason: bad);
+          expect(s.invalidRecords, 1, reason: bad);
+          expect(s.schemaVersion, 1,
+              reason: 'a bad vp must not discard the version: $bad');
+        }
+      });
+    });
+  });
+
+  group('replay() applies the stream viewport (2.1.0)', () {
+    // The committed on-device dwell stream carries vp:[360,587] (read from
+    // the recording WebView via CDP). Under production buckets two
+    // long-distance text matches no longer find each other, so the merge
+    // count is lower than under the 200 px default. This pins that the
+    // header is HONOURED automatically, and that an explicit override wins.
+    test('header viewport changes candidate geometry; override wins', () {
+      final stream = CaptureStream.parse(
+          File('doc/replay/validation/2026-08-mlkit-on-device/dwell.jsonl')
+              .readAsLinesSync());
+      expect(stream.viewport, isNotNull,
+          reason: 'the committed on-device stream must carry vp');
+      final auto = replay(stream).merges.length;
+      final explicit =
+          replay(stream, viewport: (width: 360, height: 587)).merges.length;
+      final defaults = replay(stream, viewport: null, useStreamViewport: false)
+          .merges
+          .length;
+      expect(auto, explicit, reason: 'header value honoured by default');
+      expect(defaults, greaterThan(auto),
+          reason: '200 px default buckets admit two extra long-distance '
+              'text matches on this stream');
+    });
   });
 
   group('freeze-report (#57)', () {

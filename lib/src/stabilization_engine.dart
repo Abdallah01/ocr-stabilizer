@@ -244,6 +244,15 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// and expiry evicts it. Retained blocks are **not** included in
   /// [StabilizationResult.stableBlocks] — the result remains "what this
   /// capture produced"; retention only affects future matching.
+  ///
+  /// Since 2.1.0 a retained block is also evicted early when a fresh
+  /// block of THIS capture covers its region (measured against the
+  /// retained block's own area, at the resolver's size-adaptive overlap
+  /// threshold) without matching it: the region has visibly changed, and
+  /// keeping the old box would have a consumer of the tracked state draw
+  /// it on top of the new one for the rest of the window. With retention
+  /// 0 nothing is retained, so default-configuration behavior is
+  /// unchanged.
   final int missedFrameRetention;
 
   /// Consecutive-miss counter per retained block (identity-keyed; block
@@ -595,9 +604,27 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // currently-retained set (PR #61 review).
     final retained = <T>[];
     if (missedFrameRetention > 0) {
+      // Cross-frame supersession (2.1.0): a cached block that was NOT
+      // matched this capture, but whose region a fresh block now covers
+      // (measured against the CACHED block's own area, so a single line
+      // reported inside a retained paragraph does not evict the
+      // paragraph), is not retained. The region has visibly changed — or
+      // the old box sat in a lagged coordinate frame — and retaining it
+      // makes a consumer of the tracked state draw the old box on top of
+      // the new one for the whole retention window. Batch-scoped NMS in
+      // `_dedup` never sees cached blocks; this is the only cross-frame
+      // rule. Retention 0 is untouched: nothing is retained to evict.
+      final superseded = Set<T>.identity();
+      for (final fresh in stableBlocks) {
+        for (final cached in _spatialIndex.candidates(fresh)) {
+          if (matchedExisting.contains(cached)) continue;
+          if (_coversRetained(fresh, cached)) superseded.add(cached);
+        }
+      }
       final nextMissCounts = Map<T, int>.identity();
       for (final cached in _spatialIndex.allBlocks) {
         if (matchedExisting.contains(cached)) continue;
+        if (superseded.contains(cached)) continue;
         final misses = (_missCounts[cached] ?? 0) + 1;
         if (misses <= missedFrameRetention) {
           nextMissCounts[cached] = misses;
@@ -818,6 +845,26 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       if (match != null) return match;
     }
     return null;
+  }
+
+  /// Cross-frame supersession test (2.1.0): does [fresh] cover enough of
+  /// [cached]'s OWN area to say the cached region has been replaced?
+  ///
+  /// Deliberately not the smaller-area ratio `checkOverlap` uses for
+  /// batch NMS: there a small fresh box inside a large cached one would
+  /// score 1.0 and evict a paragraph because one of its lines was
+  /// reported. The threshold is the resolver's size-adaptive one for the
+  /// cached block; no drift margin is applied (a margin only makes
+  /// eviction easier, and the fail-safe direction here is to retain).
+  bool _coversRetained(T fresh, T cached) {
+    final f = fresh.absoluteRect.raw;
+    final c = cached.absoluteRect.raw;
+    final cachedArea = c.width * c.height;
+    if (!(cachedArea > 0)) return false;
+    final inter = f.intersect(c);
+    if (inter.isEmpty) return false;
+    final covered = inter.width * inter.height;
+    return covered / cachedArea >= _resolver.overlapThresholdFor(cached);
   }
 
   /// Find a matching existing block for [fresh] in the spatial index.

@@ -36,13 +36,19 @@ import 'package:test/test.dart';
 //   a mismatched line's old identity sits in its retention window.
 //   (55 in the two lines above is the pre-measurement derivation bound;
 //   the fixture's achievable max is 54.)
-//   Measured (deterministic fixture): the per-pass maximum is 132 on the
-//   first pass, then EXACTLY 145 on every later pass — a flat plateau
-//   across 13 passes. Ceiling asserted: 160 (plateau + ~10%). A leak that
-//   never expires blocks reaches ~400 tracked identities within two
-//   passes, so the assert still discriminates by ~2.5×. The flatness
-//   itself is asserted separately below — that is the sharper
-//   monotonic-growth detector.
+//   Measured (deterministic fixture): the per-pass maximum is 70 on the
+//   first pass, then EXACTLY 114 / 112 alternating with the parity of
+//   the pass (see the churn note in the loop) on every later pass — a
+//   flat two-pass cycle across 13 passes. Before 2.1.0's cross-frame
+//   supersession the plateau was a flat 145 regardless of churn phase:
+//   every duplicate identity sat out its full retention window. Now a
+//   duplicate whose region a fresh block covers is evicted at once, so
+//   the maximum tracks the phase. Ceiling asserted: 160 (the derived
+//   wrap-transient bound of ~135 plus margin; the plateau sits well
+//   under it). A leak that never expires blocks reaches ~400 tracked
+//   identities within two passes, so the assert still discriminates by
+//   ~2.5×. The flatness itself is asserted separately below — that is
+//   the sharper monotonic-growth detector.
 void main() {
   test('900-capture continuous scroll keeps engine state bounded', () {
     const lineCount = 400;
@@ -90,7 +96,13 @@ void main() {
         // carries a capture-dependent suffix, so a long-lived identity sees
         // more than [maxTextVotes] DISTINCT texts inside one pass and the
         // vote cap is actually exercised (not vacuously satisfied).
-        final suffix = (cap + i).isEven ? '~${cap % 11}' : '';
+        // The modulus DIVIDES capsPerPass (69 = 3 × 23) so the suffix
+        // pattern repeats exactly every pass; the parity term flips each
+        // pass (69 is odd), so the fixture's true period is TWO passes.
+        // (A modulus of 11 let the churn phase drift ~3 captures per
+        // pass; the flatness assert below could not see that until
+        // 2.1.0's supersession made the population phase-sensitive.)
+        final suffix = (cap + i).isEven ? '~${cap % 23}' : '';
         batch.add(DefaultTrackedBlock<void>(
           absoluteRect: AbsoluteRect(Rect.fromLTWH(60, y, 800, lineHeight)),
           payload: null,
@@ -122,18 +134,27 @@ void main() {
     }
 
     // The sharper leak detector: after the first wrap the fixture is
-    // perfectly cyclic, so the per-pass population maximum must be FLAT.
-    // EVERY later full pass is held to pass 1's maximum — a transient
-    // mid-run bump (state surviving longer than its expiry window) trips
-    // this even if it recedes again before the final pass and never
-    // reaches the absolute ceiling.
+    // perfectly periodic with a period of TWO passes (parity — see the
+    // churn note), so the per-pass population maximum must be FLAT per
+    // phase. EVERY later full pass is held to the maximum of the
+    // same-phase pass two earlier — a transient mid-run bump (state
+    // surviving longer than its expiry window) trips this even if it
+    // recedes again before the final pass and never reaches the absolute
+    // ceiling. Equality, not <=: a DROP between same-phase passes is as
+    // much a lost-periodicity surprise as a rise.
     final lastFullPass = (captures ~/ capsPerPass) - 1;
-    for (var pass = 2; pass <= lastFullPass; pass++) {
-      expect(perPassMax[pass], lessThanOrEqualTo(perPassMax[1]!),
-          reason: 'per-pass max population grew between pass 1 '
-              '(${perPassMax[1]}) and pass $pass (${perPassMax[pass]}) '
-              '— a slow leak, even if still under the absolute ceiling');
+    for (var pass = 3; pass <= lastFullPass; pass++) {
+      expect(perPassMax[pass], equals(perPassMax[pass - 2]),
+          reason: 'per-pass max population changed between pass '
+              '${pass - 2} (${perPassMax[pass - 2]}) and same-phase pass '
+              '$pass (${perPassMax[pass]}) — a slow leak, even if still '
+              'under the absolute ceiling');
     }
+    // Both phases must sit under the pre-2.1.0 plateau (145): the
+    // per-phase equality above would also accept a population that
+    // leaked once, early, and then held.
+    expect(perPassMax[1], lessThan(145));
+    expect(perPassMax[2], lessThan(145));
 
     // Positive controls — prove the bounded quantities were actually
     // exercised, so the ceilings above are not vacuously green.
