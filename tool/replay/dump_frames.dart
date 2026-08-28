@@ -28,8 +28,16 @@ import 'src/replay_session.dart';
 void main(List<String> args) {
   final positional = <String>[];
   Viewport? viewportOverride;
+  var bucketPolicy = BucketPolicy.auto;
   for (final a in args) {
-    if (a.startsWith('--viewport')) {
+    if (a.startsWith('--buckets')) {
+      final p = bucketPolicyFromArg(a);
+      if (p == null) {
+        stderr.writeln('--buckets must be auto|formula|median (got: $a)');
+        exit(64);
+      }
+      bucketPolicy = p;
+    } else if (a.startsWith('--viewport')) {
       // Same constraint as meta.vp: finite, positive CSS px.
       final v = a.startsWith('--viewport=')
           ? viewportFromWxH(a.substring('--viewport='.length))
@@ -73,7 +81,27 @@ void main(List<String> args) {
     );
   }
   final frames = <Map<String, Object>>[];
+  // Same bucket policy as replay() (2.2.0, #113): the stream's `bk` where
+  // present (auto), or the reference consumer's median-height emulation.
+  Buckets? current;
+  final applied = <Buckets>[];
+  void apply(Buckets b) {
+    if (b == current) return;
+    engine.updateBucketSizes(bucketWidth: b.width, bucketHeight: b.height);
+    current = b;
+    applied.add(b);
+  }
+
   for (final batch in stream.batches) {
+    switch (bucketPolicy) {
+      case BucketPolicy.auto:
+        if (batch.buckets != null) apply(batch.buckets!);
+      case BucketPolicy.medianHeight:
+        final m = medianHeightBuckets(engine.spatialIndex.allBlocks);
+        if (m != null) apply(m);
+      case BucketPolicy.viewportFormula:
+        break;
+    }
     final result = engine.stabilize(batch.blocks);
     Map<String, Object> enc(ReplayBlock b) => {
           'rect': [
@@ -103,6 +131,10 @@ void main(List<String> args) {
         ? null
         : {'width': viewport.width, 'height': viewport.height},
     'retention': retention,
+    'bucketPolicy': bucketPolicy.name,
+    'bucketsApplied': [
+      for (final b in applied) {'width': b.width, 'height': b.height},
+    ],
     'frames': frames,
   }));
   stdout.writeln('${frames.length} frames -> ${positional[1]}');

@@ -21,6 +21,7 @@ Map<String, Object?> freezeReport(
   CaptureStream stream, {
   int? candidateObservationFloor,
   Viewport? viewport,
+  BucketPolicy bucketPolicy = BucketPolicy.auto,
 }) {
   final effective = viewport ?? stream.viewport;
   final result = replay(
@@ -31,6 +32,7 @@ Map<String, Object?> freezeReport(
     ),
     viewport: effective,
     useStreamViewport: false,
+    bucketPolicy: bucketPolicy,
   );
 
   final freezes = result.freezes.toList();
@@ -49,6 +51,8 @@ Map<String, Object?> freezeReport(
       'invalidRecords': stream.invalidRecords,
       'viewport': viewportJson(effective),
       'positionMergeModel': 'legacy',
+      'bucketPolicy': bucketPolicy.name,
+      'bucketsApplied': bucketsJson(result),
     },
     'funnel': {
       'primaryMatchesAdmitted': s.primaryMatchesAdmitted,

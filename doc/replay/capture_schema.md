@@ -32,7 +32,20 @@ Two families of records coexist in one file:
 // `vp` counts as an invalid record. A recorder that predates the field
 // may have its streams stamped after the fact from an out-of-band
 // reading of the same viewport — the stream's entry must say so.
+//
+// `bk` (rig 2.2.0, additive): the spatial-index bucket sizes the consumer
+// was ACTUALLY using, [width, height] in CSS px — its own policy's output
+// (the reference consumer moves from the viewport formula to 2× the
+// median block height once it has enough blocks). A consumer writes a
+// `meta` record carrying `vp` + `bk` (note "viewport") whenever either
+// changes, and the value applies to every `obs` that follows until the
+// next one. The rig (`--buckets=auto`, the default) calls
+// `StabilizationEngine.updateBucketSizes` with it at exactly that point;
+// a stream without `bk` stays on the viewport formula and the report
+// says so (`bucketPolicy: viewportFormula`). Same constraints as `vp`:
+// finite, > 0; a malformed `bk` counts as an invalid record.
 {"t":"meta", "v":1, "ts":<epochMs>, "note":"<free text>", "vp":[<cssW>, <cssH>]}
+{"t":"meta", "v":1, "ts":<epochMs>, "note":"viewport", "vp":[<cssW>, <cssH>], "bk":[<bucketW>, <bucketH>]}
 
 {"t":"obs", "ts":..., "cap":<captureId>, "raw":<count before empty-text filter>,
  "blocks":[<block>, ...]}

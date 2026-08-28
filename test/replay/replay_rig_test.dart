@@ -137,6 +137,137 @@ void main() {
     });
   });
 
+  group('bucket policy (#113, 2.2.0)', () {
+    // Inline stream: five 50 px-tall blocks per capture so the median
+    // policy warms up (>= 4 tracked blocks) after the first capture.
+    String block(int i) =>
+        '{"rect": [0, ${i * 100}, 300, ${i * 100 + 50}], '
+        '"otext": "paragraph number $i", "pconf": 0.5, "tconf": 0.5, '
+        '"obsN": 1, "prov": false, "provN": 0}';
+    String obs(int cap) =>
+        '{"t": "obs", "ts": $cap, "cap": $cap, "raw": 5, "blocks": ['
+        '${[for (var i = 0; i < 5; i++) block(i)].join(', ')}]}';
+    const meta = '{"t": "meta", "v": 1, "ts": 0, "vp": [360, 587]}';
+
+    test('loader: meta.bk is carried onto every later batch, and a change '
+        'lands exactly where the producer applied it', () {
+      final s = CaptureStream.parse([
+        meta,
+        obs(1),
+        '{"t": "meta", "v": 1, "ts": 1, "vp": [360, 587], '
+            '"bk": [80, 88], "note": "viewport"}',
+        obs(2),
+        obs(3),
+        '{"t": "meta", "v": 1, "ts": 2, "vp": [360, 587], '
+            '"bk": [120, 120], "note": "viewport"}',
+        obs(4),
+      ]);
+      expect(s.batches.map((b) => b.buckets).toList(), [
+        null,
+        (width: 80.0, height: 88.0),
+        (width: 80.0, height: 88.0),
+        (width: 120.0, height: 120.0),
+      ]);
+      expect(s.invalidRecords, 0);
+    });
+
+    test('loader: malformed bk is a recorder bug — counted, not applied', () {
+      final s = CaptureStream.parse([
+        '{"t": "meta", "v": 1, "ts": 0, "bk": [0, 88]}',
+        '{"t": "meta", "v": 1, "ts": 0, "bk": [80]}',
+        '{"t": "meta", "v": 1, "ts": 0, "bk": "80x88"}',
+        obs(1),
+      ]);
+      expect(s.invalidRecords, 3);
+      expect(s.batches.single.buckets, isNull);
+    });
+
+    test('auto: the stream bk is applied where it appears; without bk the '
+        'result says viewportFormula', () {
+      final withBk = CaptureStream.parse([
+        meta,
+        obs(1),
+        '{"t": "meta", "v": 1, "bk": [80, 88]}',
+        obs(2),
+        '{"t": "meta", "v": 1, "bk": [120, 120]}',
+        obs(3),
+      ]);
+      final r = replay(withBk);
+      expect(r.bucketPolicy, 'stream');
+      expect(r.bucketsApplied,
+          [(width: 80.0, height: 88.0), (width: 120.0, height: 120.0)]);
+
+      final without = CaptureStream.parse([meta, obs(1), obs(2)]);
+      final r2 = replay(without);
+      expect(r2.bucketPolicy, 'viewportFormula');
+      expect(r2.bucketsApplied, isEmpty);
+    });
+
+    test('viewportFormula ignores bk (the 2.1.0 comparison arm)', () {
+      final s = CaptureStream.parse(
+          [meta, obs(1), '{"t": "meta", "v": 1, "bk": [80, 88]}', obs(2)]);
+      final r = replay(s, bucketPolicy: BucketPolicy.viewportFormula);
+      expect(r.bucketPolicy, 'viewportFormula');
+      expect(r.bucketsApplied, isEmpty);
+    });
+
+    test('medianHeight: warms up on the tracked state, then 2x median '
+        'clamped to 80-220 on both sides', () {
+      final s = CaptureStream.parse([meta, obs(1), obs(2), obs(3)]);
+      final r = replay(s, bucketPolicy: BucketPolicy.medianHeight);
+      expect(r.bucketPolicy, 'medianHeight');
+      // Capture 1: nothing tracked yet -> formula. Capture 2 onward: five
+      // 50 px blocks tracked -> 100 x 100.
+      expect(r.bucketsApplied, [(width: 100.0, height: 100.0)]);
+    });
+
+    test('medianHeightBuckets: null below warm-up, clamp at both ends', () {
+      DefaultTrackedBlock<Object> h(double height) =>
+          DefaultTrackedBlock<Object>(
+            absoluteRect: AbsoluteRect(Rect.fromLTWH(0, 0, 100, height)),
+            payload: const Object(),
+            originalText: 'x',
+          );
+      expect(medianHeightBuckets([h(50), h(50), h(50)]), isNull);
+      expect(medianHeightBuckets([h(10), h(10), h(10), h(10)]),
+          (width: 80.0, height: 80.0));
+      expect(medianHeightBuckets([h(500), h(500), h(500), h(500)]),
+          (width: 220.0, height: 220.0));
+      // Upper-middle element, like the consumer's heights[n ~/ 2].
+      expect(medianHeightBuckets([h(20), h(40), h(60), h(80)]),
+          (width: 120.0, height: 120.0));
+    });
+
+    test('ab-report and freeze-report record the policy and the sizes', () {
+      final s = CaptureStream.parse(
+          [meta, obs(1), '{"t": "meta", "v": 1, "bk": [80, 88]}', obs(2)]);
+      final ab = abReport(s);
+      final input = ab['input'] as Map<String, Object?>;
+      expect(input['bucketPolicy'], 'auto');
+      final applied = input['bucketsApplied'] as Map<String, Object?>;
+      final legacy = applied['legacy'] as Map<String, Object?>;
+      expect(legacy['policy'], 'stream');
+      expect(legacy['sizes'], [
+        {'width': 80.0, 'height': 88.0}
+      ]);
+      final fr = freezeReport(s, bucketPolicy: BucketPolicy.medianHeight);
+      final fi = fr['input'] as Map<String, Object?>;
+      expect(fi['bucketPolicy'], 'medianHeight');
+      expect((fi['bucketsApplied'] as Map<String, Object?>)['policy'],
+          'medianHeight');
+    });
+
+    test('--buckets parsing', () {
+      expect(bucketPolicyFromArg('--buckets=auto'), BucketPolicy.auto);
+      expect(bucketPolicyFromArg('--buckets=formula'),
+          BucketPolicy.viewportFormula);
+      expect(
+          bucketPolicyFromArg('--buckets=median'), BucketPolicy.medianHeight);
+      expect(bucketPolicyFromArg('--buckets=huge'), isNull);
+      expect(bucketPolicyFromArg('--buckets'), isNull);
+    });
+  });
+
   group('freeze-report (#57)', () {
     test('band-admit replay measures freeze frequency, evidence, latency',
         () {

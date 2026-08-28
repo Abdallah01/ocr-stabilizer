@@ -11,6 +11,7 @@ class ObsBatch {
     required this.captureId,
     required this.rawCount,
     required this.blocks,
+    this.buckets,
   });
 
   final int captureId;
@@ -18,7 +19,20 @@ class ObsBatch {
 
   /// Engine-ready blocks (payload is an opaque shared const).
   final List<DefaultTrackedBlock<Object>> blocks;
+
+  /// The spatial-index buckets the producer was using when this batch
+  /// was recorded — the latest `meta.bk` that preceded it in the stream
+  /// (2.2.0, #113); null for streams that predate the field. Carried
+  /// forward batch to batch so the rig can apply a change exactly where
+  /// the producer applied it.
+  final Buckets? buckets;
 }
+
+/// Spatial-index bucket sizes in CSS px, from the meta record's `bk`
+/// field (2.2.0). The rig passes them to
+/// `StabilizationEngine.updateBucketSizes` so replayed geometry matches
+/// the consumer's actual bucket policy, not only the viewport formula.
+typedef Buckets = ({double width, double height});
 
 /// A parsed capture file: the observation stream plus the consumer-side
 /// lifecycle events (schema: doc/replay/capture_schema.md).
@@ -78,6 +92,7 @@ class CaptureStream {
     final events = <Map<String, Object?>>[];
     int? version;
     Viewport? viewport;
+    Buckets? buckets; // latest `meta.bk`, carried onto each later batch
     var skipped = 0;
     var invalidRecords = 0;
 
@@ -103,9 +118,14 @@ class CaptureStream {
             if (vp == null) invalidRecords++;
             viewport = vp ?? viewport;
           }
+          if (record.containsKey('bk')) {
+            final bk = _parsePair(record['bk']);
+            if (bk == null) invalidRecords++;
+            buckets = bk ?? buckets;
+          }
         case 'obs':
           try {
-            batches.add(_parseObs(record));
+            batches.add(_parseObs(record, buckets: buckets));
           } on Object {
             // A malformed batch must not abort the whole stream — but a
             // block that *parses* and still throws is an invariant
@@ -131,7 +151,10 @@ class CaptureStream {
   }
 
   /// `vp` must be `[width, height]` of finite, positive CSS px.
-  static Viewport? _parseViewport(Object? raw) {
+  static Viewport? _parseViewport(Object? raw) => _parsePair(raw);
+
+  /// `vp` and `bk` share one shape: `[width, height]`, finite positive.
+  static ({double width, double height})? _parsePair(Object? raw) {
     if (raw is! List || raw.length != 2) return null;
     final w = raw[0];
     final h = raw[1];
@@ -144,9 +167,11 @@ class CaptureStream {
     return (width: width, height: height);
   }
 
-  static ObsBatch _parseObs(Map<String, Object?> record) => ObsBatch(
+  static ObsBatch _parseObs(Map<String, Object?> record, {Buckets? buckets}) =>
+      ObsBatch(
         captureId: (record['cap'] as num).toInt(),
         rawCount: (record['raw'] as num?)?.toInt() ?? -1,
+        buckets: buckets,
         blocks: [
           for (final b in record['blocks'] as List)
             blockFromJson(b as Map<String, Object?>)

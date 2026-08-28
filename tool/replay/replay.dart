@@ -7,6 +7,12 @@
 //   dart tool/replay/replay.dart ab-report     <capture.jsonl>
 //   dart tool/replay/replay.dart live-report   <capture.jsonl>
 //
+// Options: --viewport=WxH (2.1.0) overrides the stream's `meta.vp`;
+// --buckets=auto|formula|median (2.2.0, #113) picks the bucket policy —
+// `auto` (default) applies the stream's `meta.bk` where present, `formula`
+// is the 2.1.0 viewport formula only, `median` emulates the reference
+// consumer's 2× median block height rule.
+//
 // Output is a single JSON document on stdout (pipe to `jq`/a file).
 // Schema contract: doc/replay/capture_schema.md.
 
@@ -17,6 +23,7 @@ import 'src/ab_report.dart';
 import 'src/capture_stream.dart';
 import 'src/freeze_report.dart';
 import 'src/live_report.dart';
+import 'src/replay_session.dart' show BucketPolicy, bucketPolicyFromArg;
 
 Future<void> main(List<String> args) async {
   if (args.length < 2) {
@@ -37,9 +44,19 @@ Future<void> main(List<String> args) async {
 
   int? floor;
   Viewport? viewportOverride;
+  var bucketPolicy = BucketPolicy.auto;
   for (final a in args.skip(2)) {
     final m = RegExp(r'^--floor=(\d+)$').firstMatch(a);
     if (m != null) floor = int.parse(m.group(1)!);
+    if (a.startsWith('--buckets')) {
+      final p = bucketPolicyFromArg(a);
+      if (p == null) {
+        stderr.writeln('--buckets must be auto|formula|median (got: $a)');
+        exitCode = 64;
+        return;
+      }
+      bucketPolicy = p;
+    }
     if (a.startsWith('--viewport')) {
       // Same constraint as meta.vp: finite, positive CSS px (PR #111
       // review — a zero viewport reached updateViewport before).
@@ -77,9 +94,11 @@ Future<void> main(List<String> args) async {
   switch (command) {
     case 'freeze-report':
       report = freezeReport(stream,
-          candidateObservationFloor: floor, viewport: viewport);
+          candidateObservationFloor: floor,
+          viewport: viewport,
+          bucketPolicy: bucketPolicy);
     case 'ab-report':
-      report = abReport(stream, viewport: viewport);
+      report = abReport(stream, viewport: viewport, bucketPolicy: bucketPolicy);
     case 'live-report':
       report = liveReport(stream);
     default:

@@ -14,6 +14,46 @@ typedef ReplayBlock = DefaultTrackedBlock<Object>;
 Map<String, double>? viewportJson(Viewport? v) =>
     v == null ? null : {'width': v.width, 'height': v.height};
 
+/// How the rig sizes the engine's spatial-index buckets after the
+/// viewport formula (2.2.0, #113).
+enum BucketPolicy {
+  /// The stream's own `meta.bk` when present, applied before the first
+  /// batch it precedes and again wherever it changes — the buckets the
+  /// producer actually used. A stream without `bk` stays on the viewport
+  /// formula, and the report says so (`bucketPolicy: viewportFormula`).
+  auto,
+
+  /// The viewport formula only (`updateViewport`), as rig 2.1.0 did;
+  /// ignores `bk`. For comparing against the 2.1.0 committed numbers.
+  viewportFormula,
+
+  /// Emulate the reference consumer's adaptive rule from the stream
+  /// alone: before each capture, once the tracked state holds at least
+  /// [kMedianWarmUpBlocks] blocks, both bucket sides become
+  /// `clamp(2 × median tracked-block height, 80, 220)`; the viewport
+  /// formula until then. The consumer takes its median over its whole
+  /// cache (many captures deep); the rig's nearest population is the
+  /// engine's tracked state, so this is an emulation, not a replay of
+  /// recorded buckets — prefer [auto] on a stream that carries `bk`.
+  medianHeight,
+}
+
+/// Warm-up for [BucketPolicy.medianHeight]: the reference consumer needs
+/// this many cached blocks before it trusts a median.
+const int kMedianWarmUpBlocks = 4;
+
+/// [BucketPolicy.medianHeight] for one capture: null before warm-up.
+/// Median = the upper-middle element of the sorted heights (the
+/// consumer's `heights[n ~/ 2]`), doubled, clamped to the consumer's
+/// 80–220 px range.
+Buckets? medianHeightBuckets(Iterable<TrackedBlock> tracked) {
+  final heights = [for (final b in tracked) b.absoluteRect.raw.height]
+    ..sort();
+  if (heights.length < kMedianWarmUpBlocks) return null;
+  final size = (heights[heights.length ~/ 2] * 2).clamp(80.0, 220.0);
+  return (width: size, height: size);
+}
+
 /// One merge observed during replay (recorded inside the merger callback,
 /// i.e. exactly what the engine computed).
 class MergeSample {
@@ -27,9 +67,16 @@ class MergeSample {
     required this.freshTconf,
     required this.textDiffers,
     required this.remainingAfter,
+    this.nestedFragment = false,
   });
 
   final int captureId;
+
+  /// The engine reported this merge as a nested-fragment confirmation
+  /// (2.2.0, #112): existing geometry kept, count incremented. Zero
+  /// displacement by construction — reports keep these out of the
+  /// position statistics.
+  final bool nestedFragment;
 
   /// Existing block's observation count at merge time.
   final int obsNBefore;
@@ -76,6 +123,8 @@ class ReplayResult {
     required this.merges,
     required this.chains,
     required this.stats,
+    this.bucketPolicy = 'viewportFormula',
+    this.bucketsApplied = const [],
   });
 
   final int batches;
@@ -84,8 +133,37 @@ class ReplayResult {
   final List<ProvisionalOutcome> chains;
   final BandFallbackStats stats;
 
+  /// The bucket policy that actually took effect (2.2.0, #113):
+  /// `viewportFormula` when nothing beyond the viewport formula was
+  /// applied (no `bk` in the stream under [BucketPolicy.auto], or the
+  /// median never warmed up), else `stream` or `medianHeight`.
+  final String bucketPolicy;
+
+  /// Every distinct bucket size applied after the viewport formula, in
+  /// order. Empty when the viewport formula was all that ran.
+  final List<Buckets> bucketsApplied;
+
   Iterable<MergeSample> get freezes => merges.where((m) => m.wasFrozen);
   Iterable<MergeSample> get admissions => merges.where((m) => m.wasAdmission);
+}
+
+/// JSON for a report's `input.bucketsApplied` (or per-arm) block.
+Map<String, Object?> bucketsJson(ReplayResult r) => {
+      'policy': r.bucketPolicy,
+      'sizes': [
+        for (final b in r.bucketsApplied) {'width': b.width, 'height': b.height},
+      ],
+    };
+
+/// Parse a `--buckets=auto|formula|median` argument; null when malformed.
+BucketPolicy? bucketPolicyFromArg(String arg) {
+  if (!arg.startsWith('--buckets=')) return null;
+  return switch (arg.substring('--buckets='.length)) {
+    'auto' => BucketPolicy.auto,
+    'formula' => BucketPolicy.viewportFormula,
+    'median' => BucketPolicy.medianHeight,
+    _ => null,
+  };
 }
 
 /// Feed every `obs` batch, in order, through a fresh engine configured with
@@ -110,9 +188,13 @@ class ReplayResult {
 ///   `engine.merge` from its own dedup cascade and never `stabilize()`,
 ///   so `stabilize()`-only behaviour (retention, supersession) is not on
 ///   its path at all;
-/// - bucket adaptation beyond the viewport formula: the reference
-///   consumer switches to 2× the median block height once it has enough
-///   blocks; the rig uses the viewport formula only;
+/// - bucket adaptation beyond the viewport formula is modelled since
+///   2.2.0 (#113) — [BucketPolicy.auto] applies the stream's recorded
+///   `meta.bk`, [BucketPolicy.medianHeight] emulates the reference
+///   consumer's 2× median rule from the tracked state — but the
+///   emulation's population (the engine's tracked state) is not the
+///   consumer's whole cache, and a stream without `bk` still replays on
+///   the viewport formula;
 /// - `contextualCheck` (group-signature invalidation): the schema carries
 ///   no group signatures;
 /// - a consumer-supplied `DriftTracker` / `SubmapMembership`: defaults
@@ -127,6 +209,7 @@ ReplayResult replay(
   PositionMergeModel model = PositionMergeModel.legacy,
   Viewport? viewport,
   bool useStreamViewport = true,
+  BucketPolicy bucketPolicy = BucketPolicy.auto,
 }) {
   final effectiveViewport =
       viewport ?? (useStreamViewport ? stream.viewport : null);
@@ -160,6 +243,7 @@ ReplayResult replay(
         freshTconf: fresh.textConfidence.raw,
         textDiffers: fresh.originalText != existing.originalText,
         remainingAfter: m.provisionalCapturesRemaining,
+        nestedFragment: m.isNestedFragment,
       ));
 
       if (wasAdmission) {
@@ -188,8 +272,33 @@ ReplayResult replay(
     );
   }
 
+  // Bucket policy (2.2.0, #113): the viewport formula above is the floor;
+  // `auto` applies the stream's own `bk` exactly where the producer
+  // applied it, `medianHeight` re-derives the reference consumer's rule
+  // from the tracked state before each capture.
+  var policyUsed = 'viewportFormula';
+  final applied = <Buckets>[];
+  Buckets? current;
+  void apply(Buckets b, String source) {
+    if (b == current) return;
+    engine.updateBucketSizes(bucketWidth: b.width, bucketHeight: b.height);
+    current = b;
+    applied.add(b);
+    policyUsed = source;
+  }
+
   for (final batch in stream.batches) {
     currentCapture = batch.captureId;
+    switch (bucketPolicy) {
+      case BucketPolicy.auto:
+        final bk = batch.buckets;
+        if (bk != null) apply(bk, 'stream');
+      case BucketPolicy.medianHeight:
+        final m = medianHeightBuckets(engine.spatialIndex.allBlocks);
+        if (m != null) apply(m, 'medianHeight');
+      case BucketPolicy.viewportFormula:
+        break;
+    }
     engine.stabilize(batch.blocks);
   }
 
@@ -199,5 +308,7 @@ ReplayResult replay(
     merges: merges,
     chains: chains,
     stats: engine.bandStats,
+    bucketPolicy: policyUsed,
+    bucketsApplied: applied,
   );
 }

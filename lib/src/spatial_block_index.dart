@@ -107,6 +107,32 @@ class SpatialBlockIndex<T extends TrackedBlock> implements SpatialIndexView<T> {
     );
   }
 
+  /// Set the bucket dimensions directly (2.2.0, #113).
+  ///
+  /// For consumers whose bucket policy is not the viewport formula — the
+  /// reference consumer switches to 2× the median block height once it
+  /// has enough blocks — and for the replay rig applying the buckets a
+  /// capture stream recorded (`meta.bk`). Values are used as given (no
+  /// clamp): the caller's policy owns the range. Throws [ArgumentError]
+  /// on non-finite or non-positive values; nothing changes on failure.
+  /// Callers holding populated indexes must re-key them afterwards
+  /// (`rebuild`) — `StabilizationEngine.updateBucketSizes` does.
+  void setBucketSizes({
+    required double bucketWidth,
+    required double bucketHeight,
+  }) {
+    for (final (name, v) in [
+      ('bucketWidth', bucketWidth),
+      ('bucketHeight', bucketHeight),
+    ]) {
+      if (!v.isFinite || v <= 0) {
+        throw ArgumentError('$name must be a finite double > 0 (got $v)');
+      }
+    }
+    _bucketWidth = bucketWidth;
+    _bucketHeight = bucketHeight;
+  }
+
   /// Copy [other]'s current bucket dimensions.
   ///
   /// For auxiliary short-lived grids (e.g. the engine's per-batch NMS

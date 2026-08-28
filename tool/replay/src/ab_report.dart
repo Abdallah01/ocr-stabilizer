@@ -18,16 +18,22 @@ import 'stats.dart';
 /// produced its numbers (null = the engine's default buckets). Recording
 /// the parameter alone printed null for a replay that ran on the header
 /// viewport (PR #111 review).
-Map<String, Object?> abReport(CaptureStream stream, {Viewport? viewport}) {
+Map<String, Object?> abReport(
+  CaptureStream stream, {
+  Viewport? viewport,
+  BucketPolicy bucketPolicy = BucketPolicy.auto,
+}) {
   final effective = viewport ?? stream.viewport;
   final legacy = replay(stream,
       model: PositionMergeModel.legacy,
       viewport: effective,
-      useStreamViewport: false);
+      useStreamViewport: false,
+      bucketPolicy: bucketPolicy);
   final agreement = replay(stream,
       model: PositionMergeModel.agreementWeighted,
       viewport: effective,
-      useStreamViewport: false);
+      useStreamViewport: false,
+      bucketPolicy: bucketPolicy);
 
   return {
     'mode': 'ab-report',
@@ -37,6 +43,14 @@ Map<String, Object?> abReport(CaptureStream stream, {Viewport? viewport}) {
       'skippedLines': stream.skippedLines,
       'invalidRecords': stream.invalidRecords,
       'viewport': viewportJson(effective),
+      // 2.2.0 (#113): requested policy, and what each arm actually
+      // applied after the viewport formula (per arm — the medianHeight
+      // emulation reads the tracked state, which evolves per model).
+      'bucketPolicy': bucketPolicy.name,
+      'bucketsApplied': {
+        'legacy': bucketsJson(legacy),
+        'agreementWeighted': bucketsJson(agreement),
+      },
     },
     'legacy': _arm(legacy),
     'agreementWeighted': _arm(agreement),
@@ -52,17 +66,26 @@ Map<String, Object?> abReport(CaptureStream stream, {Viewport? viewport}) {
 }
 
 Map<String, Object?> _arm(ReplayResult r) {
+  // Nested-fragment confirmations (2.2.0, #112) keep the existing geometry
+  // by construction: a zero-displacement, unchanged-pconf sample. Folding
+  // them into the buckets would pull every mean toward 0 without a single
+  // box having moved — so they are counted, and excluded from the
+  // position statistics.
+  final nested = r.merges.where((m) => m.nestedFragment).length;
+  final positional = r.merges.where((m) => !m.nestedFragment).toList();
   final byBucket = <String, List<MergeSample>>{};
-  for (final m in r.merges) {
+  for (final m in positional) {
     byBucket.putIfAbsent(_bucket(m.obsNBefore), () => []).add(m);
   }
   final wellObserved =
-      r.merges.where((m) => m.obsNBefore >= 5).toList();
+      positional.where((m) => m.obsNBefore >= 5).toList();
   return {
     'mergeCount': r.merges.length,
+    'nestedFragmentMerges': nested,
     // Jitter: displacement of the merged position per re-observation,
     // bucketed by how well-observed the block already was. A stabilizing
-    // model should push displacement toward 0 as n grows.
+    // model should push displacement toward 0 as n grows. Over the
+    // `mergeCount − nestedFragmentMerges` position merges.
     'displacementByObsN': {
       for (final e in byBucket.entries)
         e.key: NumStats([for (final m in e.value) m.displacement]).toJson(),
