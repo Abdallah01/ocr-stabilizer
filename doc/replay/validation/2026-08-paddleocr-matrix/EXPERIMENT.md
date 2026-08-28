@@ -29,10 +29,16 @@ polygons reduced to axis-aligned rects, confidence clamped to the same
 | stable-dwell | legacy | 0.21 | 0.24 | 0.22 | 1.0 (saturated) |
 | ocr-jitter | agreement | 0.20 | 0.11 | **0.08** | 0.929 |
 | ocr-jitter | legacy | 0.51 | 0.59 | 0.54 | 1.0 (saturated) |
-| scroll | agreement | **0.96** | — | — | 0.900 |
-| scroll | legacy | 2.37 | — | — | 1.0 (saturated) |
+| scroll | agreement | **1.08** | — | — | 0.900 |
+| scroll | legacy | 2.70 | — | — | 1.0 (saturated) |
 
 Merge rates: 330/330/322 over the three streams — no retention anomaly.
+
+Scroll rows regenerated 2026-08-29 with rig 2.1.0, which configures the
+engine with the corpus viewport (`meta.vp` = 1080×2200 CSS px) instead
+of the 200 px default buckets; merge counts are unchanged and the two
+dwell scenarios (no motion between captures) produce identical numbers
+either way.
 
 ## Reading
 
@@ -42,7 +48,7 @@ the matrix so far:
 - established chains damp ~5–7× under jitter (n11+ 0.08 vs 0.54
   px/merge) and the anchoring loop engages exactly as on ML Kit and
   Tesseract;
-- young blocks track at near-parity (scroll n1-2: 1.93 vs 2.10);
+- young blocks track at near-parity (scroll n1-2: 2.12 vs 2.34);
 - confidence stays regime-discriminating (0.93 dwell / 0.90 scroll)
   instead of legacy's saturated 1.0.
 

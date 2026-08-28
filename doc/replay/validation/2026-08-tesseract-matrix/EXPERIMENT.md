@@ -33,12 +33,18 @@ ab-report` per scenario, unmodified.
 | stable-dwell | legacy | 0.10 | 0.12 | 0.10 | 1.0 (saturated) |
 | ocr-jitter-dwell | agreement | 0.68 | 0.33 | **0.05** | 0.91 / 0.92 |
 | ocr-jitter-dwell | legacy | 1.51 | 1.71 | 1.18 | 1.0 (saturated) |
-| scroll | agreement | **1.52** | — | — | 0.88 / 0.89 |
-| scroll | legacy | 3.61 | — | — | 1.0 (saturated) |
+| scroll | agreement | **1.08** | — | — | 0.87 / 0.89 |
+| scroll | legacy | 1.99 | — | — | 1.0 (saturated) |
 
 Merge/match rates: 312/308/312 merges over the three streams (~94% of
 re-observation opportunities in the dwell scenarios) — no retention
 anomaly.
+
+Scroll rows regenerated 2026-08-29 with rig 2.1.0, which configures the
+engine with the corpus viewport (`meta.vp` = 1080×2200 CSS px) instead
+of the 200 px default buckets; merge counts are unchanged and the two
+dwell scenarios (no motion between captures) produce identical numbers
+either way.
 
 ## Reading
 
@@ -48,11 +54,11 @@ without retuning**:
 - established chains damp dramatically under jitter (n11+ 0.05 vs legacy
   1.18 px/merge — the confidence→weight anchoring loop engages exactly as
   on ML Kit, where it was 3.8 vs 11.8 at 10× the amplitude);
-- young blocks still track (scroll n1-2: 2.8 px agreement vs 3.1 px
-  legacy — near-parity, as expected while chains are too young for the
+- young blocks still track (scroll n1-2: 2.9 px agreement vs 2.9 px
+  legacy — parity, as expected while chains are too young for the
   anchoring loop to engage);
 - confidence stays regime-discriminating (0.94 stable / 0.91 jitter /
-  0.88 scroll) instead of legacy's saturated-flat 1.0.
+  0.87 scroll) instead of legacy's saturated-flat 1.0.
 
 **Verdict: the 3× allowance and the agreementWeighted default carry to
 Tesseract in the low-amplitude regime. No engine-specific knob needed for

@@ -36,9 +36,24 @@ Future<void> main(List<String> args) async {
   }
 
   int? floor;
+  Viewport? viewportOverride;
   for (final a in args.skip(2)) {
     final m = RegExp(r'^--floor=(\d+)$').firstMatch(a);
     if (m != null) floor = int.parse(m.group(1)!);
+    if (a.startsWith('--viewport')) {
+      // Same constraint as meta.vp: finite, positive CSS px (PR #111
+      // review — a zero viewport reached updateViewport before).
+      final v = a.startsWith('--viewport=')
+          ? viewportFromWxH(a.substring('--viewport='.length))
+          : null;
+      if (v == null) {
+        stderr.writeln('--viewport must be WxH in finite positive CSS px, '
+            'e.g. --viewport=360x587 (got: $a)');
+        exitCode = 64;
+        return;
+      }
+      viewportOverride = v;
+    }
   }
 
   final stream = CaptureStream.parse(file.readAsLinesSync());
@@ -48,13 +63,23 @@ Future<void> main(List<String> args) async {
     exitCode = 65;
     return;
   }
+  // 2.1.0 — never replay on default buckets silently: a real consumer
+  // always calls updateViewport, so numbers reported without a viewport
+  // are not production geometry.
+  final viewport = viewportOverride ?? stream.viewport;
+  if (viewport == null && command != 'live-report') {
+    stderr.writeln('warning: no viewport (meta.vp absent and no '
+        '--viewport=WxH) — replaying on the engine\'s 200 px default '
+        'buckets, which is NOT production geometry');
+  }
 
   final Map<String, Object?> report;
   switch (command) {
     case 'freeze-report':
-      report = freezeReport(stream, candidateObservationFloor: floor);
+      report = freezeReport(stream,
+          candidateObservationFloor: floor, viewport: viewport);
     case 'ab-report':
-      report = abReport(stream);
+      report = abReport(stream, viewport: viewport);
     case 'live-report':
       report = liveReport(stream);
     default:

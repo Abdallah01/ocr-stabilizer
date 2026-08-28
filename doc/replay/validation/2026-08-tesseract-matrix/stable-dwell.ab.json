@@ -4,7 +4,11 @@
     "batches": 12,
     "observations": 360,
     "skippedLines": 0,
-    "invalidRecords": 0
+    "invalidRecords": 0,
+    "viewport": {
+      "width": 1080.0,
+      "height": 2200.0
+    }
   },
   "legacy": {
     "mergeCount": 312,

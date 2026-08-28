@@ -123,6 +123,153 @@ void main() {
     });
   });
 
+  // 2.1.0 — cross-frame supersession. Retention keeps an unmatched block
+  // as a match candidate; it must NOT keep it when a fresh block this
+  // capture now covers most of its region with different text (the region
+  // has visibly changed, or the old box was placed in a lagged coordinate
+  // frame). Without this, a consumer rendering the tracked state draws the
+  // old box on top of the new one for the whole retention window.
+  group('cross-frame supersession (2.1.0)', () {
+    DefaultTrackedBlock<void> at(Rect r, String text) =>
+        DefaultTrackedBlock<void>(
+          absoluteRect: AbsoluteRect(r),
+          payload: null,
+          originalText: text,
+        );
+
+    test('a fresh block covering a retained block with other text evicts it',
+        () {
+      final engine = _engine(retention: 2);
+      engine.stabilize([_hello()]); // hello world @ (10,100,200x30)
+      final r = engine.stabilize([
+        at(const Rect.fromLTWH(10, 100, 200, 30), 'completely unrelated'),
+      ]);
+      expect(r.stableBlocks.single.originalText, 'completely unrelated',
+          reason: 'no text match: the fresh block is a new block');
+      expect(engine.spatialIndex.allBlocks, hasLength(1),
+          reason: 'the superseded block must not be retained');
+      expect(engine.spatialIndex.allBlocks.single.originalText,
+          'completely unrelated');
+
+      final back = engine.stabilize([_hello()]);
+      expect(back.stableBlocks.single.observationCount, 1,
+          reason: 'identity of the evicted block is gone');
+    });
+
+    test('a fresh block elsewhere leaves the retained block alone', () {
+      final engine = _engine(retention: 2);
+      engine.stabilize([_hello()]);
+      engine.stabilize([
+        at(const Rect.fromLTWH(10, 400, 200, 30), 'completely unrelated'),
+      ]);
+      expect(engine.spatialIndex.allBlocks, hasLength(2),
+          reason: 'no overlap: retention keeps the missed block');
+    });
+
+    test('a small fresh line inside a retained paragraph does not evict it',
+        () {
+      // Supersession is measured against the RETAINED block's area: a
+      // re-segmentation frame that reports one line of a paragraph covers
+      // little of the paragraph, so the paragraph keeps its identity.
+      final engine = _engine(retention: 2);
+      final paragraph = at(const Rect.fromLTWH(10, 100, 300, 120), 'para');
+      engine.stabilize([paragraph]);
+      engine.stabilize([
+        at(const Rect.fromLTWH(10, 100, 300, 18), 'one line of it'),
+      ]);
+      expect(engine.spatialIndex.allBlocks, hasLength(2),
+          reason: 'an 18 px line covers 15% of a 120 px paragraph');
+    });
+
+    test('retention 0 is unaffected (nothing is retained to evict)', () {
+      final engine = _engine();
+      engine.stabilize([_hello()]);
+      engine.stabilize([
+        at(const Rect.fromLTWH(10, 100, 200, 30), 'completely unrelated'),
+      ]);
+      expect(engine.spatialIndex.allBlocks, hasLength(1));
+    });
+
+    // Review fix batch (PR #111): the coverage floor is script-independent.
+    // The resolver's per-script NMS threshold gives CJK-dominant text the
+    // LOOSEST value (0.35); reusing it verbatim let a sliver covering 40%
+    // of a CJK block evict it while an equal Latin block survived.
+    test('a sliver covering 40% of a retained CJK block does not evict it',
+        () {
+      final engine = _engine(retention: 2);
+      final cjk = at(const Rect.fromLTWH(10, 100, 200, 30), '这是一段中文正文');
+      engine.stabilize([cjk]);
+      engine.stabilize([
+        // 200 px wide × 12 px tall inside the block: 2,400 of 6,000 px².
+        at(const Rect.fromLTWH(10, 100, 200, 12), 'unrelated latin sliver'),
+      ]);
+      expect(engine.spatialIndex.allBlocks, hasLength(2),
+          reason: '40% coverage is under the 50% floor, whatever the script');
+    });
+
+    test('a fresh block fully covering a retained CJK block evicts it', () {
+      final engine = _engine(retention: 2);
+      engine.stabilize([
+        at(const Rect.fromLTWH(10, 100, 200, 30), '这是一段中文正文'),
+      ]);
+      engine.stabilize([
+        at(const Rect.fromLTWH(10, 100, 200, 30), 'completely unrelated'),
+      ]);
+      expect(engine.spatialIndex.allBlocks, hasLength(1),
+          reason: 'CJK is not immune — full coverage still supersedes');
+    });
+
+    // checkOverlap refuses to match blocks from different carousels; the
+    // supersession test must refuse the same way.
+    DefaultTrackedBlock<void> carousel(int index, String text) =>
+        DefaultTrackedBlock<void>(
+          absoluteRect: AbsoluteRect(const Rect.fromLTWH(10, 100, 200, 30)),
+          payload: null,
+          originalText: text,
+          isHorizontalScrollChild: true,
+          scrollContext: ScrollContext(
+            scrollY: 0,
+            scrollX: 0,
+            hzScrollerIndex: index,
+          ),
+        );
+
+    test('a block from another carousel never evicts a retained one', () {
+      final engine = _engine(retention: 2);
+      engine.stabilize([carousel(0, 'slide one caption')]);
+      engine.stabilize([carousel(1, 'completely unrelated')]);
+      expect(engine.spatialIndex.allBlocks, hasLength(2),
+          reason: 'different carousels never overlap-match (checkOverlap '
+              'rule) — the same must hold for supersession');
+    });
+
+    test('a block from the same carousel does evict a retained one', () {
+      final engine = _engine(retention: 2);
+      engine.stabilize([carousel(0, 'slide one caption')]);
+      engine.stabilize([carousel(0, 'completely unrelated')]);
+      expect(engine.spatialIndex.allBlocks, hasLength(1));
+    });
+
+    // The candidate search must span the FRESH block's whole rect, not the
+    // 3×3 cells around its centre: a tall paragraph covers a small cached
+    // block near its top edge whose cell is far from the paragraph's
+    // centre cell.
+    test('a tall fresh paragraph evicts a covered block near its far edge',
+        () {
+      final engine = _engine(retention: 2); // default 200 px buckets
+      engine.stabilize([
+        at(const Rect.fromLTWH(10, 55, 200, 20), 'hello world'), // centre y 65
+      ]);
+      engine.stabilize([
+        // centre y 300: cells around it do not include the y≈65 cell.
+        at(const Rect.fromLTWH(10, 50, 300, 500), 'an unrelated paragraph'),
+      ]);
+      expect(engine.spatialIndex.allBlocks, hasLength(1),
+          reason: 'fully covered, so it must be superseded even though it '
+              'sits outside the 3×3 neighbourhood of the paragraph centre');
+    });
+  });
+
   group('updateViewport re-keys the populated index (PR #61 review)', () {
     test('cached blocks deep in the page survive a bucket-size change', () {
       final engine = _engine();

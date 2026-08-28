@@ -18,7 +18,12 @@ stream recorder enabled (`--dart-define=STAB_CAPTURE=true`, capture
 schema v1 — the same recorder that produced the 2026-07 streams).
 Translation mode `mlkit`, overlay display, DOM extraction off (forcing
 the OCR arm). Rects are page-absolute CSS px (viewport 360 px wide,
-device pixel ratio 3).
+device pixel ratio 3). The recorder did not write the `vp` viewport
+field at capture time (rig 2.1.0 added it): the 360×587 CSS px value in
+both headers was read from the recording WebView over the Chrome
+DevTools Protocol during the same 2026-08-25 session and stamped into
+the headers on 2026-08-29. The recorder-side writer is tracked in the
+same consumer issue as the scroll-stamp lag below (2552).
 
 | stream | shape (measured from the stream's own scroll stamps) | batches / obs |
 |---|---|---|
@@ -47,30 +52,55 @@ the text-vote path.
 
 | stream | arm | disp n1-2 | disp n3-5 | disp n6-10 | wellObs pconf |
 |---|---|---|---|---|---|
-| dwell | agreement | 13.62 | **4.07** | **4.30** | 0.911 |
-| dwell | legacy | 13.75 | 11.31 | 20.74 | 1.0 (saturated) |
-| scroll | agreement | 6.24 | — | — | — (no chain reaches 3) |
-| scroll | legacy | 6.57 | — | — | — |
+| dwell | agreement | 8.71 | **4.07** | **0.19** | 0.918 |
+| dwell | legacy | 8.85 | 11.31 | 0.79 | 1.0 (saturated) |
+| scroll | agreement | 5.46 | — | — | — (no chain reaches 3) |
+| scroll | legacy | 5.46 | — | — | — |
 
-(px per merge, means; counts in the `.ab.json` files.)
+(px per merge, means; counts in the `.ab.json` files. Regenerated
+2026-08-29 with rig 2.1.0, which configures the engine with the stream's
+own viewport — `meta.vp` = 360×587 CSS px, i.e. 80×88 px spatial-index
+buckets — instead of the 200 px default buckets the earlier numbers were
+produced on. Four dwell merges and one scroll merge disappear (34→30,
+19→18): matches whose partner sits outside the 3×3 cell neighbourhood at
+production bucket size. They were the large-displacement ones — the
+n6-10 legacy mean falls from 20.74 to 0.79 px over the four merges that
+remain, and n1-2 from 13.75 to 8.85.)
 
 ## Reading
 
 This is the **high-amplitude regime the 3× allowance was tuned for**,
-now on distributable data: raw ML Kit boxes move ~11–21 px per merge on
-established chains. Two sources feed that number, and this entry cannot
-separate them: genuine OCR re-segmentation, and the producer's
-scroll-stamp lag (same text, 100–150 px apart between captures — see the
-correction above). For a static page the true position is fixed, so
-holding an established block still is the right response to BOTH; what
-the lag additionally produces is a young block admitted in the lagged
-frame next to an established block held in the true frame, i.e. two
-coordinate frames in one tracked state (visible as box-on-box overlaps
-in the demo). The agreement model damps established chains 2.8–4.8×
-(11.31→4.07, 20.74→4.30) while young blocks stay at parity (13.75 vs
-13.62) — the same shape as the 2026-07 production sweeps (3.8 vs 11.8 at
-n11+) and the Tesseract entry, and confidence stays informative (0.911)
-instead of saturating.
+now on distributable data: raw ML Kit boxes move ~11 px per merge on
+n3-5 chains (n6-10 sits under 1 px, on four merges). Two sources feed
+that number, and this entry cannot separate them: genuine OCR
+re-segmentation, and the producer's scroll-stamp lag (same text, 100–150
+px apart between captures — see the correction above). For a static
+page the true position is fixed, so holding an established block still
+is the right response to BOTH; what the lag additionally produces is a
+young block admitted in the lagged frame next to an established block
+held in the true frame, i.e. two coordinate frames in one tracked state
+(the box-on-box overlaps in the 2.0.0 demo). 2.1.0's cross-frame
+supersession evicts a retained box once one fresh box covers at least
+half of its own area; on the 14 demo frames that cuts overlapping pairs
+of tracked boxes from 32 to 23 (`doc/media/count_overlap_pairs.py` over
+the `dump_frames.dart` output — any two tracked boxes with a positive
+intersection, per frame, summed). Of the 23 that remain, 8 are a
+paragraph box with one of its own lines inside it (ML Kit reports the
+same text as a paragraph in one frame and as one line in the next; the
+line's text is a prefix of the paragraph's and scores under the
+whole-string match gate, so it is admitted as new — and the rule keeps
+the paragraph on purpose), 14 are the lag — captures 16–18 arrive 21 to
+150 px off the earlier frames, so different text lands on an established
+box; capture 18 shifts every block by ~150 px at once — and 1 is a
+segmentation split. The app's own dedup cascade runs after the engine
+and absorbs most of these (its recorded `dedup` events for captures 16,
+17 and 18 add 3, 0 and 2 of 8, 5 and 7 incoming blocks), so the demo
+overstates what the app's overlay shows. The
+agreement model damps established chains 2.8× at n3-5 (11.31→4.07; the
+four n6-10 merges go 0.79→0.19) while young blocks stay at parity (8.85
+vs 8.71) — the same shape as the 2026-07 production sweeps (3.8 vs 11.8
+at n11+) and the Tesseract entry, and confidence stays informative
+(0.918) instead of saturating.
 
 The scroll ladder is young-blocks-only (no chain survives to depth 3 in
 14 one-directional steps) and shows parity, as designed — the anchoring
@@ -98,8 +128,8 @@ adb reverse tcp:8907 tcp:8907
 # translation mode mlkit / overlay display / DOM extraction off, and
 # open http://localhost:8907/page.html; drive the two scenarios; pull
 # <documentsDir>/stab-capture/*.jsonl
-dart tool/replay/replay.dart ab-report dwell.jsonl
-dart tool/replay/dump_frames.dart dwell.jsonl dump.json 2
+dart tool/replay/replay.dart ab-report dwell.jsonl   # 2.1.0: applies meta.vp; --viewport=360x587 for a stream without it
+dart tool/replay/dump_frames.dart dwell.jsonl dump.json 2   # same viewport rule
 python doc/media/render_demo_gif.py dump.json demo.gif "0,250,360,860" 1.25 14   # the 14 frames = captures 0-18
 ```
 

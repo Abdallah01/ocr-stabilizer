@@ -54,14 +54,19 @@ void main() {
 
     final legacy = establishedDisp(PositionMergeModel.legacy);
     final agreement = establishedDisp(PositionMergeModel.agreementWeighted);
+    // replay() applies the stream's meta.vp (2.1.0), so these are the
+    // production-geometry figures: 8.1 px/merge legacy, 2.9 agreement at
+    // the 2.1.0 render (the 2.0.0 render, on the 200 px default buckets,
+    // measured ~15 and ~4.2 — the difference is four cross-neighbourhood
+    // matches production bucket sizes never offer).
     expect(legacy, greaterThanOrEqualTo(8),
         reason: 'raw ML Kit jitter on established chains must be real '
-            '(measured ~15 px/merge at render time) — if this drops, the '
+            '(measured 8.1 px/merge at render time) — if this drops, the '
             'corpus changed and the GIF no longer shows what the caption '
             'says');
     expect(agreement, lessThanOrEqualTo(6),
         reason: 'the stabilized panel must actually hold steady '
-            '(measured ~4.2 px/merge at render time)');
+            '(measured 2.9 px/merge at render time)');
     expect(agreement * 2, lessThan(legacy),
         reason: 'the visible raw-vs-stabilized contrast is the point of '
             'the demo');
@@ -88,6 +93,14 @@ void main() {
     expect(engine.positionMergeModel, PositionMergeModel.agreementWeighted,
         reason: 'the README caption says "defaults"; if the default model '
             'changes, re-render the GIF and reword the caption');
+    // 2.1.0: replay on the corpus viewport, as replay()/dump_frames do —
+    // the 200 px default buckets are not production geometry.
+    expect(stream.viewport, isNotNull,
+        reason: 'the committed corpus header must carry meta.vp');
+    engine.updateViewport(
+      viewportWidth: stream.viewport!.width,
+      viewportHeight: stream.viewport!.height,
+    );
 
     // The page region render_demo_gif.py crops to (REGION top/bottom).
     bool inRegion(double top) => top > 830 && top < 1630;
