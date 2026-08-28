@@ -1,3 +1,43 @@
+## 2.1.0 - 2026-08-29
+
+### Added
+- **Cross-frame supersession under `missedFrameRetention`.** A cached
+  block that is not matched this capture, but whose region a fresh block
+  of this capture covers, is evicted instead of retained. Coverage is
+  measured against the CACHED block's own area at the resolver's
+  size-adaptive overlap threshold, so a single line reported inside a
+  retained paragraph does not evict the paragraph. Before this, the old
+  box stayed in the tracked state for the whole retention window and a
+  consumer drawing from `spatialIndex.allBlocks` painted it on top of the
+  new one (the box-on-box overlaps in the 2.0.0 hero GIF). Retention 0 —
+  the default — is untouched: the rule runs only inside the retention
+  branch, so no default-configuration number moves because of it.
+- **The replay rig honours the producer viewport.** Capture schema v1
+  gains an additive `meta.vp` = `[cssWidth, cssHeight]`; `replay()`,
+  `freeze-report`, `ab-report` and `dump_frames.dart` call
+  `updateViewport` with it — the same call every real consumer makes —
+  instead of replaying on the engine's 200 px default buckets.
+  `--viewport=WxH` overrides; with neither, the rig warns on stderr. The
+  reports record the viewport under `input.viewport`. All eight committed
+  streams carry `vp` and their `.ab.json` were regenerated: the
+  dwell-only synthetic streams are unchanged; the ML Kit streams lose the
+  cross-neighbourhood matches production geometry never offers (dwell
+  34→30 merges; n6-10 legacy 20.74→0.79 px); the Tesseract and PaddleOCR
+  scroll streams move by 0.1–1.6 px per bucket. The three validation
+  entries carry a dated note.
+
+### Changed
+- Hero demo GIF re-rendered from the viewport-honouring dump (captures
+  0–18, `missedFrameRetention: 2`): overlapping tracked-box pairs across
+  the 14 frames drop from 32 to 14; the pairs that remain are a paragraph
+  box and the line boxes the producer reports inside it in other frames,
+  which the supersession rule keeps on purpose.
+- `test/long_session_replay_test.dart`: the text-churn modulus is now 23
+  (divides the 69-capture pass), so the fixture is truly periodic (period
+  two passes, by parity) and the flatness detector compares same-phase
+  passes by equality. Supersession made the population phase-sensitive,
+  which exposed that the old modulus (11) drifted ~3 captures per pass.
+
 ## 2.0.0 - 2026-08-24
 
 ### Breaking

@@ -25,7 +25,7 @@ the entry's correction note), 3-frame ghost trails, the same drawing rule
 on both panels. Left: the boxes exactly as the production pipeline reports
 them each frame, including the producer's scroll-stamp lag. Right: the
 engine's tracked state (`StabilizationEngine` defaults plus
-`missedFrameRetention: 2`).
+`missedFrameRetention: 2`), replayed on the device viewport.
 Rendered from engine output by
 [`tool/replay/dump_frames.dart`](tool/replay/dump_frames.dart) +
 [`doc/media/render_demo_gif.py`](doc/media/render_demo_gif.py) — not an
@@ -74,8 +74,21 @@ counts are evidence depth, never a readiness ladder:
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^2.0.0
+  ocr_stabilizer: ^2.1.0
 ```
+
+> **What's new in 2.1.0** — cross-frame supersession under
+> `missedFrameRetention`: a retained box whose region a fresh box now
+> covers (without matching it) is evicted at once instead of sitting out
+> its retention window on top of the new one — the box-on-box overlaps
+> the 2.0.0 hero GIF showed. Coverage is measured against the retained
+> box's own area, so a line reported inside a retained paragraph keeps
+> the paragraph. The default configuration (retention 0) is untouched.
+> The replay rig now configures the engine with the producer's viewport
+> (`meta.vp`, an additive capture-schema field), the same `updateViewport`
+> call every real consumer makes; the committed validation numbers were
+> regenerated on production geometry. No API changes; safe upgrade from
+> 2.0.x.
 
 > **What's new in 2.0.0** — merge-decision diagnostics and a read-only
 > spatial index. `ParagraphGrouper.onMergeDecision` streams a
