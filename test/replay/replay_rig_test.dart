@@ -77,7 +77,42 @@ void main() {
     });
   });
 
+  group('--viewport=WxH parsing (2.1.0, PR #111 review)', () {
+    test('accepts finite positive WxH, decimals allowed', () {
+      expect(viewportFromWxH('360x587'), (width: 360.0, height: 587.0));
+      expect(viewportFromWxH('360.5x587.25'), (width: 360.5, height: 587.25));
+    });
+
+    test('rejects malformed and non-positive values', () {
+      // The CLI override must carry the same constraint as meta.vp: a zero
+      // or negative viewport reached updateViewport before this fix.
+      for (final bad in ['0x587', '360x0', '360x-1', '-1x587', 'abc',
+          '360x', 'x587', '360', '360x587x1', '', ' 360x587']) {
+        expect(viewportFromWxH(bad), isNull, reason: 'input: "$bad"');
+      }
+    });
+  });
+
   group('replay() applies the stream viewport (2.1.0)', () {
+    // PR #111 review (Copilot): a report must record the viewport that was
+    // ACTUALLY applied. With no explicit viewport replay() falls back to
+    // meta.vp, so recording the parameter alone would print null for a
+    // replay that ran on production buckets.
+    test('ab-report and freeze-report record the effective viewport', () {
+      final stream = CaptureStream.parse(
+          File('doc/replay/validation/2026-08-mlkit-on-device/dwell.jsonl')
+              .readAsLinesSync());
+      const header = {'width': 360.0, 'height': 587.0};
+      expect((abReport(stream)['input'] as Map)['viewport'], header,
+          reason: 'no parameter: the header viewport was applied, say so');
+      expect((freezeReport(stream)['input'] as Map)['viewport'], header);
+      expect(
+          (abReport(stream, viewport: (width: 200, height: 200))['input']
+              as Map)['viewport'],
+          {'width': 200.0, 'height': 200.0},
+          reason: 'an explicit viewport wins over the header and is recorded');
+    });
+
     // The committed on-device dwell stream carries vp:[360,587] (read from
     // the recording WebView via CDP). Under production buckets two
     // long-distance text matches no longer find each other, so the merge

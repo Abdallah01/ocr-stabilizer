@@ -12,20 +12,25 @@ import 'stats.dart';
 /// freeze frequency, evidence lost, promotion latency — as computed by the
 /// package's own funnel.
 ///
-/// [viewport] (2.1.0) is applied via `updateViewport` and recorded in the
-/// report's `input` block; null means the engine's default buckets.
+/// Viewport (2.1.0): [viewport] overrides, else the stream's `meta.vp`;
+/// the EFFECTIVE value is applied and recorded in the report's `input`
+/// block (null = the engine's default buckets). The position-merge model
+/// is replay()'s `legacy` default and is recorded too; this report's
+/// outputs are counts and text fields, which the model does not change.
 Map<String, Object?> freezeReport(
   CaptureStream stream, {
   int? candidateObservationFloor,
   Viewport? viewport,
 }) {
+  final effective = viewport ?? stream.viewport;
   final result = replay(
     stream,
     band: BandFallbackConfig(
       mode: BandFallbackMode.admit,
       candidateObservationFloor: candidateObservationFloor,
     ),
-    viewport: viewport,
+    viewport: effective,
+    useStreamViewport: false,
   );
 
   final freezes = result.freezes.toList();
@@ -42,9 +47,8 @@ Map<String, Object?> freezeReport(
       'observations': result.observations,
       'skippedLines': stream.skippedLines,
       'invalidRecords': stream.invalidRecords,
-      'viewport': viewport == null
-          ? null
-          : {'width': viewport.width, 'height': viewport.height},
+      'viewport': viewportJson(effective),
+      'positionMergeModel': 'legacy',
     },
     'funnel': {
       'primaryMatchesAdmitted': s.primaryMatchesAdmitted,

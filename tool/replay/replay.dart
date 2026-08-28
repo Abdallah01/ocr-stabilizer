@@ -40,17 +40,19 @@ Future<void> main(List<String> args) async {
   for (final a in args.skip(2)) {
     final m = RegExp(r'^--floor=(\d+)$').firstMatch(a);
     if (m != null) floor = int.parse(m.group(1)!);
-    final v = RegExp(r'^--viewport=(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$')
-        .firstMatch(a);
-    if (v != null) {
-      viewportOverride = (
-        width: double.parse(v.group(1)!),
-        height: double.parse(v.group(2)!),
-      );
-    } else if (a.startsWith('--viewport')) {
-      stderr.writeln('--viewport must be WxH in CSS px, e.g. --viewport=360x587');
-      exitCode = 64;
-      return;
+    if (a.startsWith('--viewport')) {
+      // Same constraint as meta.vp: finite, positive CSS px (PR #111
+      // review — a zero viewport reached updateViewport before).
+      final v = a.startsWith('--viewport=')
+          ? viewportFromWxH(a.substring('--viewport='.length))
+          : null;
+      if (v == null) {
+        stderr.writeln('--viewport must be WxH in finite positive CSS px, '
+            'e.g. --viewport=360x587 (got: $a)');
+        exitCode = 64;
+        return;
+      }
+      viewportOverride = v;
     }
   }
 

@@ -93,6 +93,14 @@ void main() {
     expect(engine.positionMergeModel, PositionMergeModel.agreementWeighted,
         reason: 'the README caption says "defaults"; if the default model '
             'changes, re-render the GIF and reword the caption');
+    // 2.1.0: replay on the corpus viewport, as replay()/dump_frames do —
+    // the 200 px default buckets are not production geometry.
+    expect(stream.viewport, isNotNull,
+        reason: 'the committed corpus header must carry meta.vp');
+    engine.updateViewport(
+      viewportWidth: stream.viewport!.width,
+      viewportHeight: stream.viewport!.height,
+    );
 
     // The page region render_demo_gif.py crops to (REGION top/bottom).
     bool inRegion(double top) => top > 830 && top < 1630;

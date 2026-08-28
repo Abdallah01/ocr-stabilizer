@@ -22,12 +22,16 @@ Two families of records coexist in one file:
 
 ```jsonc
 // `vp` (rig 2.1.0, additive): the producer's viewport in CSS px, [width,
-// height] — the same two numbers the consumer passes to
-// `StabilizationEngine.updateViewport`. The rig applies it before replay
-// so the spatial index's bucket sizes match production geometry; a stream
-// without it replays on the engine's 200 px default buckets and the rig
-// says so on stderr (`--viewport=WxH` overrides either way). Both values
-// must be finite and > 0; a malformed `vp` counts as an invalid record.
+// height] — the viewport the consumer sizes its spatial-index buckets
+// from, whether through `StabilizationEngine.updateViewport` or through
+// `SpatialBlockIndex.updateBucketSizes` on an index it injects. The rig
+// calls `updateViewport` with it before replay so the bucket geometry is
+// the viewport-derived one; a stream without it replays on the engine's
+// 200 px default buckets and the rig says so on stderr (`--viewport=WxH`
+// overrides either way). Both values must be finite and > 0; a malformed
+// `vp` counts as an invalid record. A recorder that predates the field
+// may have its streams stamped after the fact from an out-of-band
+// reading of the same viewport — the stream's entry must say so.
 {"t":"meta", "v":1, "ts":<epochMs>, "note":"<free text>", "vp":[<cssW>, <cssH>]}
 
 {"t":"obs", "ts":..., "cap":<captureId>, "raw":<count before empty-text filter>,

@@ -27,6 +27,19 @@ class ObsBatch {
 /// replayed geometry matches what a real consumer configures.
 typedef Viewport = ({double width, double height});
 
+/// Parse a `--viewport=WxH` style value (`"360x587"`, decimals allowed)
+/// into a [Viewport]; null when malformed or when either side is not a
+/// finite positive number — the same constraint `meta.vp` carries.
+Viewport? viewportFromWxH(String value) {
+  final m = RegExp(r'^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$').firstMatch(value);
+  if (m == null) return null;
+  final w = double.tryParse(m.group(1)!);
+  final h = double.tryParse(m.group(2)!);
+  if (w == null || h == null) return null;
+  if (!w.isFinite || !h.isFinite || w <= 0 || h <= 0) return null;
+  return (width: w, height: h);
+}
+
 class CaptureStream {
   CaptureStream({
     required this.batches,

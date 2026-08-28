@@ -245,14 +245,19 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// [StabilizationResult.stableBlocks] — the result remains "what this
   /// capture produced"; retention only affects future matching.
   ///
-  /// Since 2.1.0 a retained block is also evicted early when a fresh
-  /// block of THIS capture covers its region (measured against the
-  /// retained block's own area, at the resolver's size-adaptive overlap
-  /// threshold) without matching it: the region has visibly changed, and
-  /// keeping the old box would have a consumer of the tracked state draw
-  /// it on top of the new one for the rest of the window. With retention
-  /// 0 nothing is retained, so default-configuration behavior is
-  /// unchanged.
+  /// Since 2.1.0 a retained block is also evicted early when one fresh
+  /// block of THIS capture covers at least half of the retained block's
+  /// own area without matching it (the resolver's per-script NMS
+  /// threshold applies only where it is stricter, e.g. short Latin
+  /// snippets): the region has visibly changed, and keeping the old box
+  /// would have a consumer of the tracked state draw it on top of the new
+  /// one for the rest of the window. This is a deliberate trade of
+  /// identity for a clean frame — a wrongly placed fresh block (a lagged
+  /// scroll stamp on the producer's side) evicts a correct retained one,
+  /// which then re-enters as new. Blocks from different carousels, and
+  /// viewport-relative vs page-absolute blocks, never supersede each
+  /// other. With retention 0 nothing is retained, so default-configuration
+  /// behavior is unchanged.
   final int missedFrameRetention;
 
   /// Consecutive-miss counter per retained block (identity-keyed; block
@@ -540,7 +545,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// treated as new — opt into retention to preserve identity across
   /// missed frames (#46). Blocks the app inserts into [spatialIndex]
   /// between calls are treated like any other cached block: dropped at
-  /// the next [stabilize] unless retention keeps them.
+  /// the next [stabilize] unless retention keeps them — and, since 2.1.0,
+  /// dropped even inside the retention window when a fresh block of that
+  /// call covers them (supersession, see [missedFrameRetention]).
   ///
   /// Throws [ArgumentError] if any observation carries an invalid (NaN or
   /// out-of-range) [PositionConfidence] or [TextConfidence] value (#27).
@@ -611,12 +618,16 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       // paragraph), is not retained. The region has visibly changed — or
       // the old box sat in a lagged coordinate frame — and retaining it
       // makes a consumer of the tracked state draw the old box on top of
-      // the new one for the whole retention window. Batch-scoped NMS in
-      // `_dedup` never sees cached blocks; this is the only cross-frame
-      // rule. Retention 0 is untouched: nothing is retained to evict.
+      // the new one for the whole retention window. This deliberately
+      // trades identity for a clean frame: when the FRESH block is the
+      // wrongly placed one (a lagged scroll stamp), a correct retained
+      // block loses its history; the alternative is two boxes on screen.
+      // Batch-scoped NMS in `_dedup` never sees cached blocks; this is the
+      // only cross-frame rule. Retention 0 is untouched: nothing is
+      // retained to evict.
       final superseded = Set<T>.identity();
       for (final fresh in stableBlocks) {
-        for (final cached in _spatialIndex.candidates(fresh)) {
+        for (final cached in _supersessionCandidates(fresh)) {
           if (matchedExisting.contains(cached)) continue;
           if (_coversRetained(fresh, cached)) superseded.add(cached);
         }
@@ -847,16 +858,52 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     return null;
   }
 
+  /// Least share of a retained block's own area one fresh block must cover
+  /// to supersede it. Script-independent on purpose: the resolver's
+  /// per-script NMS threshold gives CJK-dominant text its LOOSEST value
+  /// (0.35), which is right for matching jittery boxes of the same text
+  /// and wrong here, where the texts differ — a sliver covering 40% of a
+  /// CJK block must not evict it while an equal Latin block survives.
+  static const double _kSupersessionCoverageFloor = 0.5;
+
+  /// Cached blocks a fresh block could supersede: every block whose cell
+  /// intersects the fresh block's RECT (plus the index's one-cell margin),
+  /// not just the 3×3 cells around the fresh block's centre — a tall
+  /// paragraph covers blocks whose cells sit far from its centre cell.
+  /// [SpatialIndexView.candidates] is added for the viewport-relative
+  /// namespace, which [SpatialIndexView.blocksInRegion] excludes.
+  Iterable<T> _supersessionCandidates(T fresh) sync* {
+    final seen = Set<T>.identity();
+    for (final b in _spatialIndex.blocksInRegion(fresh.absoluteRect.raw)) {
+      if (seen.add(b)) yield b;
+    }
+    for (final b in _spatialIndex.candidates(fresh)) {
+      if (seen.add(b)) yield b;
+    }
+  }
+
   /// Cross-frame supersession test (2.1.0): does [fresh] cover enough of
   /// [cached]'s OWN area to say the cached region has been replaced?
   ///
   /// Deliberately not the smaller-area ratio `checkOverlap` uses for
   /// batch NMS: there a small fresh box inside a large cached one would
   /// score 1.0 and evict a paragraph because one of its lines was
-  /// reported. The threshold is the resolver's size-adaptive one for the
-  /// cached block; no drift margin is applied (a margin only makes
-  /// eviction easier, and the fail-safe direction here is to retain).
+  /// reported. The bar is [_kSupersessionCoverageFloor] (half of the
+  /// cached block's own area), raised to the resolver's per-script NMS
+  /// threshold only where that is stricter (short Latin snippets, 0.65).
+  /// No drift margin is applied (a margin only makes eviction easier, and
+  /// the fail-safe direction here is to retain). The two coordinate
+  /// contracts `checkOverlap` refuses to compare are refused here too:
+  /// viewport-relative vs page-absolute blocks, and blocks from different
+  /// carousels.
   bool _coversRetained(T fresh, T cached) {
+    if (fresh.isViewportRelative != cached.isViewportRelative) return false;
+    if (fresh.isHorizontalScrollChild &&
+        cached.isHorizontalScrollChild &&
+        fresh.scrollContext.hzScrollerIndex !=
+            cached.scrollContext.hzScrollerIndex) {
+      return false;
+    }
     final f = fresh.absoluteRect.raw;
     final c = cached.absoluteRect.raw;
     final cachedArea = c.width * c.height;
@@ -864,7 +911,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final inter = f.intersect(c);
     if (inter.isEmpty) return false;
     final covered = inter.width * inter.height;
-    return covered / cachedArea >= _resolver.overlapThresholdFor(cached);
+    final scriptThreshold = _resolver.overlapThresholdFor(cached);
+    final threshold = scriptThreshold > _kSupersessionCoverageFloor
+        ? scriptThreshold
+        : _kSupersessionCoverageFloor;
+    return covered / cachedArea >= threshold;
   }
 
   /// Find a matching existing block for [fresh] in the spatial index.

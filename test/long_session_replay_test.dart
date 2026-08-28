@@ -60,7 +60,17 @@ void main() {
     const scrollWrap = 13800.0;
     const captures = 900;
     const capsPerPass = 69; // scrollWrap / scrollStep
+    const churnModulus = 23;
     const populationCeiling = 160;
+    // The flatness detector below rests on the fixture being periodic;
+    // assert the property instead of narrating it (a masked violation
+    // surfaces as a phantom regression the first time the engine stops
+    // masking it — which is exactly how this fixture was caught).
+    expect(capsPerPass % churnModulus, 0,
+        reason: 'the churn suffix must repeat exactly once per pass');
+    expect(capsPerPass.isOdd, isTrue,
+        reason: 'the parity term flips each pass, so the period is TWO '
+            'passes — the same-phase comparison below depends on it');
     // Mirrors _kMaxTextVotes (private) in stabilization_engine.dart; the
     // source-parse assert directly below turns the mirror into an
     // enforced link — if the engine constant changes, this test goes red
@@ -102,7 +112,7 @@ void main() {
         // (A modulus of 11 let the churn phase drift ~3 captures per
         // pass; the flatness assert below could not see that until
         // 2.1.0's supersession made the population phase-sensitive.)
-        final suffix = (cap + i).isEven ? '~${cap % 23}' : '';
+        final suffix = (cap + i).isEven ? '~${cap % churnModulus}' : '';
         batch.add(DefaultTrackedBlock<void>(
           absoluteRect: AbsoluteRect(Rect.fromLTWH(60, y, 800, lineHeight)),
           payload: null,

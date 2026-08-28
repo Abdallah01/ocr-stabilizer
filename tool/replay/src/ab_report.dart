@@ -12,14 +12,22 @@ import 'stats.dart';
 /// confidence informativeness. Same input for both arms — a cleaner A/B
 /// than two separate live sessions could provide.
 ///
-/// [viewport] (2.1.0) is applied to both arms via `updateViewport` and
-/// recorded in the report's `input` block, so a committed `.ab.json` says
-/// which geometry produced its numbers; null means default buckets.
+/// Viewport (2.1.0): [viewport] overrides, else the stream's `meta.vp`;
+/// the EFFECTIVE value is applied to both arms and recorded in the
+/// report's `input` block, so a committed `.ab.json` says which geometry
+/// produced its numbers (null = the engine's default buckets). Recording
+/// the parameter alone printed null for a replay that ran on the header
+/// viewport (PR #111 review).
 Map<String, Object?> abReport(CaptureStream stream, {Viewport? viewport}) {
-  final legacy =
-      replay(stream, model: PositionMergeModel.legacy, viewport: viewport);
+  final effective = viewport ?? stream.viewport;
+  final legacy = replay(stream,
+      model: PositionMergeModel.legacy,
+      viewport: effective,
+      useStreamViewport: false);
   final agreement = replay(stream,
-      model: PositionMergeModel.agreementWeighted, viewport: viewport);
+      model: PositionMergeModel.agreementWeighted,
+      viewport: effective,
+      useStreamViewport: false);
 
   return {
     'mode': 'ab-report',
@@ -28,9 +36,7 @@ Map<String, Object?> abReport(CaptureStream stream, {Viewport? viewport}) {
       'observations': stream.observationCount,
       'skippedLines': stream.skippedLines,
       'invalidRecords': stream.invalidRecords,
-      'viewport': viewport == null
-          ? null
-          : {'width': viewport.width, 'height': viewport.height},
+      'viewport': viewportJson(effective),
     },
     'legacy': _arm(legacy),
     'agreementWeighted': _arm(agreement),

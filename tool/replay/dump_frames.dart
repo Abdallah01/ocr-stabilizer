@@ -29,16 +29,17 @@ void main(List<String> args) {
   final positional = <String>[];
   Viewport? viewportOverride;
   for (final a in args) {
-    final v = RegExp(r'^--viewport=(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$')
-        .firstMatch(a);
-    if (v != null) {
-      viewportOverride = (
-        width: double.parse(v.group(1)!),
-        height: double.parse(v.group(2)!),
-      );
-    } else if (a.startsWith('--viewport')) {
-      stderr.writeln('--viewport must be WxH in CSS px, e.g. --viewport=360x587');
-      exit(64);
+    if (a.startsWith('--viewport')) {
+      // Same constraint as meta.vp: finite, positive CSS px.
+      final v = a.startsWith('--viewport=')
+          ? viewportFromWxH(a.substring('--viewport='.length))
+          : null;
+      if (v == null) {
+        stderr.writeln('--viewport must be WxH in finite positive CSS px, '
+            'e.g. --viewport=360x587 (got: $a)');
+        exit(64);
+      }
+      viewportOverride = v;
     } else {
       positional.add(a);
     }
