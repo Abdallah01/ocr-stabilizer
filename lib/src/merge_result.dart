@@ -9,7 +9,10 @@ import 'types/confidence_types.dart';
 ///
 /// The consumer receives this via [BlockMerger] and uses it to construct
 /// an updated block instance (e.g. via `copyWith`). No fields are
-/// pass-through — the engine owns the computation of every value.
+/// pass-through — the engine owns the computation of every value. On a
+/// nested confirmation (2.2.0, [isNestedFragment]) that computation is
+/// "keep the host's value" for every field except [observationCount] and
+/// [sourceQuality]: the fragment casts no vote and pulls no position.
 class MergeResult {
   // ── Position (engine computes weighted average) ──
 

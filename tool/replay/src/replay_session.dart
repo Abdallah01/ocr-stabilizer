@@ -54,6 +54,46 @@ Buckets? medianHeightBuckets(Iterable<TrackedBlock> tracked) {
   return (width: size, height: size);
 }
 
+/// Applies a [BucketPolicy] to an engine capture by capture (2.2.0, #113).
+///
+/// Shared by [replay] and `tool/replay/dump_frames.dart` so the frame
+/// dump runs on exactly the geometry the reports run on (PR #114 review:
+/// the dump used to carry its own copy of this loop, untested). [applied]
+/// lists every distinct size in the order it was applied; [policyUsed]
+/// names the source of the last applied size (`viewportFormula` until a
+/// size is applied, then `stream` or `medianHeight`).
+class BucketPolicyApplier {
+  BucketPolicyApplier(this.engine, this.policy);
+
+  final StabilizationEngine<ReplayBlock, Object> engine;
+  final BucketPolicy policy;
+  final List<Buckets> applied = [];
+  String policyUsed = 'viewportFormula';
+  Buckets? _current;
+
+  /// Apply the policy's size for [batch] — call before `stabilize`.
+  void beforeBatch(ObsBatch batch) {
+    switch (policy) {
+      case BucketPolicy.auto:
+        final bk = batch.buckets;
+        if (bk != null) _apply(bk, 'stream');
+      case BucketPolicy.medianHeight:
+        final m = medianHeightBuckets(engine.spatialIndex.allBlocks);
+        if (m != null) _apply(m, 'medianHeight');
+      case BucketPolicy.viewportFormula:
+        break;
+    }
+  }
+
+  void _apply(Buckets b, String source) {
+    if (b == _current) return;
+    engine.updateBucketSizes(bucketWidth: b.width, bucketHeight: b.height);
+    _current = b;
+    applied.add(b);
+    policyUsed = source;
+  }
+}
+
 /// One merge observed during replay (recorded inside the merger callback,
 /// i.e. exactly what the engine computed).
 class MergeSample {
@@ -275,30 +315,13 @@ ReplayResult replay(
   // Bucket policy (2.2.0, #113): the viewport formula above is the floor;
   // `auto` applies the stream's own `bk` exactly where the producer
   // applied it, `medianHeight` re-derives the reference consumer's rule
-  // from the tracked state before each capture.
-  var policyUsed = 'viewportFormula';
-  final applied = <Buckets>[];
-  Buckets? current;
-  void apply(Buckets b, String source) {
-    if (b == current) return;
-    engine.updateBucketSizes(bucketWidth: b.width, bucketHeight: b.height);
-    current = b;
-    applied.add(b);
-    policyUsed = source;
-  }
+  // from the tracked state before each capture. One applier class serves
+  // this loop and dump_frames.dart, so the dump's geometry is the replay's.
+  final buckets = BucketPolicyApplier(engine, bucketPolicy);
 
   for (final batch in stream.batches) {
     currentCapture = batch.captureId;
-    switch (bucketPolicy) {
-      case BucketPolicy.auto:
-        final bk = batch.buckets;
-        if (bk != null) apply(bk, 'stream');
-      case BucketPolicy.medianHeight:
-        final m = medianHeightBuckets(engine.spatialIndex.allBlocks);
-        if (m != null) apply(m, 'medianHeight');
-      case BucketPolicy.viewportFormula:
-        break;
-    }
+    buckets.beforeBatch(batch);
     engine.stabilize(batch.blocks);
   }
 
@@ -308,7 +331,7 @@ ReplayResult replay(
     merges: merges,
     chains: chains,
     stats: engine.bandStats,
-    bucketPolicy: policyUsed,
-    bucketsApplied: applied,
+    bucketPolicy: buckets.policyUsed,
+    bucketsApplied: buckets.applied,
   );
 }

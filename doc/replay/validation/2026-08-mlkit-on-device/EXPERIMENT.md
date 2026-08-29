@@ -120,8 +120,9 @@ block whose text it is a fragment of (windowed Levenshtein ≥ 0.70 on ≥ 4
 significant characters) confirms that block instead of spawning, and a
 fragment reported in the same frame as its paragraph is dropped as
 redundant. On the 14 demo frames that takes the count from 23 to **15**
-(per frame `0 0 0 0 0 0 0 0 0 1 0 2 4 8`); the six nested pairs in
-frames 5–8 and 11–12 are gone, and all 15 that remain are the lag —
+(per frame `0 0 0 0 0 0 0 0 0 1 0 2 4 8`, from 2.1.0's
+`0 0 0 0 0 1 1 2 2 1 0 3 5 8`); the eight nested pairs — six in frames
+5–8, two in frames 11–12 — are gone, and all 15 that remain are the lag —
 different text over an established box, or the same paragraph split
 into two side-by-side boxes 23–31 px below where it was — which no
 engine rule can tell from real new text (the consumer's issue for the

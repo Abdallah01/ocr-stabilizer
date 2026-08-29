@@ -9,6 +9,14 @@ import 'observable_block.dart';
 /// access app-specific pass-through fields (scroll context, classification
 /// flags, translated text) that the engine does not compute.
 ///
+/// **Nested confirmations (2.2.0, `merge.isNestedFragment`):** the fresh
+/// observation was one LINE of [existing] reported on its own, and it
+/// carries nothing the host should adopt. The engine therefore passes
+/// [existing] as [fresh] too, so a merger that copies pass-through fields
+/// from [fresh] keeps the host's own — no consumer change is needed to
+/// stay correct. Every [MergeResult] field except `observationCount` and
+/// `sourceQuality` repeats the host's current value on that path.
+///
 /// **Required field mappings from [MergeResult]:**
 /// - `mergedRect` → `absoluteRect`
 /// - `positionConfidence` → `positionConfidence`

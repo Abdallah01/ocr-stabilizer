@@ -36,6 +36,10 @@ Map<String, Object?> freezeReport(
   );
 
   final freezes = result.freezes.toList();
+  // Nested-fragment confirmations (#112) can never be freezes (the host is
+  // never provisional), so they leave the denominator — as ab-report keeps
+  // them out of its displacement buckets — and are counted beside it.
+  final positional = result.merges.where((m) => !m.nestedFragment).toList();
   final differing = freezes.where((f) => f.textDiffers).toList();
   final highConfDiffering =
       differing.where((f) => f.freshTconf >= 0.8).length;
@@ -65,9 +69,10 @@ Map<String, Object?> freezeReport(
       'matchesAdmitted': s.matchesAdmitted,
     },
     'freeze': {
-      'totalMerges': result.merges.length,
+      'totalMerges': positional.length,
+      'nestedFragmentMerges': result.merges.length - positional.length,
       'frozenMerges': freezes.length,
-      'frozenShare': share(freezes.length, result.merges.length),
+      'frozenShare': share(freezes.length, positional.length),
       'freshTconf': NumStats([for (final f in freezes) f.freshTconf]).toJson(),
       'textDiffers': differing.length,
       'textDiffersShare': share(differing.length, freezes.length),

@@ -7,7 +7,7 @@
 // output is REAL engine behavior, not a mock-up.
 //
 // Usage: dart tool/replay/dump_frames.dart <capture.jsonl> <out.json>
-//            [retention] [--viewport=WxH]
+//            [retention] [--viewport=WxH] [--buckets=auto|formula|median]
 //
 // [retention] (default 0) sets missedFrameRetention — pass a small window
 // (e.g. 2) for streams where the engine's tracked state, not the
@@ -17,6 +17,12 @@
 // (or the --viewport override) exactly as a real consumer configures it
 // via `updateViewport`; without either, the dump runs on the 200 px
 // default buckets and says so on stderr.
+//
+// Buckets (2.2.0, #113): `--buckets` selects the bucket policy exactly as
+// for `replay`/`ab-report` — `auto` (default) applies the stream's own
+// `meta.bk` where the producer applied it, `formula` keeps the viewport
+// formula, `median` emulates the reference consumer's 2× median block
+// height rule. The same `BucketPolicyApplier` drives both tools.
 import 'dart:convert';
 import 'dart:io';
 
@@ -54,7 +60,7 @@ void main(List<String> args) {
   }
   if (positional.length < 2 || positional.length > 3) {
     stderr.writeln('usage: dump_frames.dart <capture.jsonl> <out.json> '
-        '[retention] [--viewport=WxH]');
+        '[retention] [--viewport=WxH] [--buckets=auto|formula|median]');
     exit(64);
   }
   final retention = positional.length == 3 ? int.tryParse(positional[2]) : 0;
@@ -81,27 +87,12 @@ void main(List<String> args) {
     );
   }
   final frames = <Map<String, Object>>[];
-  // Same bucket policy as replay() (2.2.0, #113): the stream's `bk` where
-  // present (auto), or the reference consumer's median-height emulation.
-  Buckets? current;
-  final applied = <Buckets>[];
-  void apply(Buckets b) {
-    if (b == current) return;
-    engine.updateBucketSizes(bucketWidth: b.width, bucketHeight: b.height);
-    current = b;
-    applied.add(b);
-  }
+  // Same bucket policy as replay() (2.2.0, #113) — the SAME applier class,
+  // so the dump cannot drift from the reports.
+  final buckets = BucketPolicyApplier(engine, bucketPolicy);
 
   for (final batch in stream.batches) {
-    switch (bucketPolicy) {
-      case BucketPolicy.auto:
-        if (batch.buckets != null) apply(batch.buckets!);
-      case BucketPolicy.medianHeight:
-        final m = medianHeightBuckets(engine.spatialIndex.allBlocks);
-        if (m != null) apply(m);
-      case BucketPolicy.viewportFormula:
-        break;
-    }
+    buckets.beforeBatch(batch);
     final result = engine.stabilize(batch.blocks);
     Map<String, Object> enc(ReplayBlock b) => {
           'rect': [
@@ -133,7 +124,7 @@ void main(List<String> args) {
     'retention': retention,
     'bucketPolicy': bucketPolicy.name,
     'bucketsApplied': [
-      for (final b in applied) {'width': b.width, 'height': b.height},
+      for (final b in buckets.applied) {'width': b.width, 'height': b.height},
     ],
     'frames': frames,
   }));

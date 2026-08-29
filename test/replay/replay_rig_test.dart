@@ -287,6 +287,61 @@ void main() {
       }
     });
 
+    test('freeze-report keeps nested-fragment confirmations out of the '
+        'merge denominator (#112): counted beside it', () {
+      String para(int cap, int top) =>
+          '{"t": "obs", "cap": $cap, "raw": 1, "blocks": ['
+          '{"rect": [33, $top, 333, ${top + 52}], '
+          '"otext": "The quick brown fox jumps over the lazy dog near the '
+          'river bank", "pconf": 0.5, "tconf": 0.5, "obsN": 1, '
+          '"prov": false, "provN": 0}]}';
+      const line = '{"t": "obs", "cap": 3, "raw": 1, "blocks": ['
+          '{"rect": [33, 768, 313, 786], "otext": "The quick brown fox jumps", '
+          '"pconf": 0.5, "tconf": 0.5, "obsN": 1, "prov": false, "provN": 0}]}';
+      final s = CaptureStream.parse([meta, para(1, 754), para(2, 764), line]);
+      final freeze =
+          freezeReport(s)['freeze'] as Map<String, Object?>;
+      expect(freeze['totalMerges'], 1, reason: 'one position merge');
+      expect(freeze['nestedFragmentMerges'], 1,
+          reason: 'the confirmation is counted beside the denominator');
+      expect(freeze['frozenMerges'], 0);
+      expect(freeze['frozenShare'], 0.0);
+    });
+
+    test('BucketPolicyApplier (shared with dump_frames.dart) applies a '
+        'stream size once per change and names its source', () {
+      final s = CaptureStream.parse([
+        meta,
+        obs(1),
+        '{"t": "meta", "v": 1, "bk": [80, 88]}',
+        obs(2),
+        obs(3),
+      ]);
+      StabilizationEngine<ReplayBlock, Object> engine() =>
+          StabilizationEngine<ReplayBlock, Object>(
+            merger: (existing, fresh, m) => existing.applyMerge(m),
+          );
+      final auto = engine();
+      final applier = BucketPolicyApplier(auto, BucketPolicy.auto);
+      for (final b in s.batches) {
+        applier.beforeBatch(b);
+      }
+      expect(applier.applied, [(width: 80.0, height: 88.0)],
+          reason: 'applied once at the first batch carrying it, not '
+              're-applied for the unchanged later batch');
+      expect(applier.policyUsed, 'stream');
+      expect(auto.spatialIndex.bucketWidth, 80.0);
+      expect(auto.spatialIndex.bucketHeight, 88.0);
+
+      final formula = engine();
+      final none = BucketPolicyApplier(formula, BucketPolicy.viewportFormula);
+      for (final b in s.batches) {
+        none.beforeBatch(b);
+      }
+      expect(none.applied, isEmpty, reason: 'formula ignores bk');
+      expect(none.policyUsed, 'viewportFormula');
+    });
+
     test('--buckets parsing', () {
       expect(bucketPolicyFromArg('--buckets=auto'), BucketPolicy.auto);
       expect(bucketPolicyFromArg('--buckets=formula'),

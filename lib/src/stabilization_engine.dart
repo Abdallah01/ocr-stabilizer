@@ -447,25 +447,40 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// every cached block filed under stale cells — unfindable by the
   /// next [stabilize] at any scroll depth where old and new cell
   /// coordinates diverge by more than the ±1-neighbor scan
-  /// (PR #61 review).
+  /// (PR #61 review). Since 2.2.0 the index performs that re-key itself
+  /// whenever its sizes change.
+  ///
+  /// 2.2.0: once [updateBucketSizes] has set the sizes directly, this
+  /// method no longer re-derives them from the viewport — a consumer
+  /// whose bucket policy is not the viewport formula would otherwise
+  /// have its policy silently reverted by the next rotation or keyboard
+  /// event (PR #114 review). Pass [resetBucketPolicy] to return to the
+  /// formula; [scale] is applied either way.
   void updateViewport({
     required double viewportWidth,
     required double viewportHeight,
     double? scale,
+    bool resetBucketPolicy = false,
   }) {
     _validatePositiveFinite('viewportWidth', viewportWidth);
     _validatePositiveFinite('viewportHeight', viewportHeight);
     if (scale != null) _validatePositiveFinite('scale', scale);
-    final cached = _spatialIndex.allBlocks.toList();
+    if (scale != null) _scale = scale;
+    if (resetBucketPolicy) _bucketsPinned = false;
+    if (_bucketsPinned) return;
     _spatialIndex.updateBucketSizes(
       viewportWidth: viewportWidth,
       viewportHeight: viewportHeight,
     );
-    _spatialIndex.rebuild(cached);
     _bucketWidth = _spatialIndex.bucketWidth;
     _bucketHeight = _spatialIndex.bucketHeight;
-    if (scale != null) _scale = scale;
   }
+
+  /// Whether [updateBucketSizes] has pinned the bucket sizes, so that
+  /// [updateViewport] leaves them alone until called with
+  /// `resetBucketPolicy: true`.
+  bool get bucketsPinned => _bucketsPinned;
+  bool _bucketsPinned = false;
 
   /// Set the spatial-index bucket sizes directly (2.2.0, #113), for a
   /// consumer whose bucket policy is not [updateViewport]'s viewport
@@ -474,23 +489,25 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// for the replay rig applying the buckets a stream recorded.
   ///
   /// Same contract as [updateViewport]: the stored blocks are re-keyed
-  /// under the new geometry before this returns, and the dedup-key
-  /// quantization follows the index. Throws [ArgumentError] on
-  /// non-finite or non-positive values; no state changes on failure.
+  /// under the new geometry before this returns (the index re-keys
+  /// itself), and the dedup-key quantization follows the index. Pins
+  /// the sizes: a later [updateViewport] keeps them until it is called
+  /// with `resetBucketPolicy: true` (see [bucketsPinned]). Throws
+  /// [ArgumentError] on non-finite or non-positive values; no state
+  /// changes on failure.
   void updateBucketSizes({
     required double bucketWidth,
     required double bucketHeight,
   }) {
     _validatePositiveFinite('bucketWidth', bucketWidth);
     _validatePositiveFinite('bucketHeight', bucketHeight);
-    final cached = _spatialIndex.allBlocks.toList();
     _spatialIndex.setBucketSizes(
       bucketWidth: bucketWidth,
       bucketHeight: bucketHeight,
     );
-    _spatialIndex.rebuild(cached);
     _bucketWidth = _spatialIndex.bucketWidth;
     _bucketHeight = _spatialIndex.bucketHeight;
+    _bucketsPinned = true;
   }
 
   /// Throw [ArgumentError] unless [value] is a finite double > 0.
@@ -596,6 +613,19 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       ..._detectGroupingContradictions(deduped, dedupResult.batchIndex),
       ...detectSplittingContradictions(deduped),
     ];
+    // #112 × #49: a cached block the grouping detector just flagged as
+    // SPLIT into two or more of this capture's blocks is withheld from
+    // nested absorption. The contradiction is the stronger evidence (the
+    // subdividers cover the host and reassemble its text) and is handed
+    // to the consumer for eviction; silently confirming the same host
+    // with one of those subdividers in the same call would contradict
+    // it. The fragments enter as new blocks instead — the pre-2.2.0
+    // outcome the consumer's eviction logic expects (PR #114 review).
+    final contradictedHosts = Set<T>.identity()
+      ..addAll([
+        for (final c in contradictions)
+          if (c.type == ContradictionType.grouping) c.target,
+      ]);
 
     // 3. Merge or insert
     final invalidatedTexts = <String>[];
@@ -635,6 +665,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       stableBlocks.add(merged);
     }
     for (final (fresh, host) in pendingNested) {
+      if (contradictedHosts.contains(host)) {
+        stableBlocks.add(fresh);
+        continue;
+      }
       if (matchedExisting.contains(host)) continue;
       matchedExisting.add(host);
       stableBlocks.add(_merge(
@@ -1005,7 +1039,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// ML Kit dwell stream the grouping flips on consecutive frames, so a
   /// paragraph is re-observed as its own line before it can reach two
   /// observations — a bar of two never fired on the eight pairs the rule
-  /// was written for. The geometry (≥ 90 % inside) and text (≥ 0.70
+  /// was written for. The geometry (≥ 80 % inside) and text (≥ 0.70
   /// windowed, ≥ 4 significant characters) conditions carry the guard;
   /// provisional hosts are excluded because they are frozen.
   static const int _kNestedEstablishedObservations = 1;
@@ -1328,7 +1362,13 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         isNestedFragment: true,
       );
       return MergeOutput<T>(
-        merged: _merger(existing, fresh, result),
+        // The HOST is handed to the merger as `fresh` too: a fragment
+        // carries nothing the host should adopt, and a merger written to
+        // the 2.1 contract copies pass-through fields (scroll context,
+        // translated text, payload) from `fresh` on every call — with the
+        // line as `fresh` it would overwrite the paragraph's. Contract
+        // documented on [BlockMerger] (PR #114 review).
+        merged: _merger(existing, existing, result),
         // Same threshold as the full path: a paragraph confirmed only by
         // its own lines still becomes well-observed.
         isWellObserved:

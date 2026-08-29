@@ -31,6 +31,24 @@
   `updateViewport`, for consumers whose bucket policy is not the
   viewport formula (the reference consumer switches to 2× the median
   block height once it has enough blocks) and for the replay rig.
+  `updateBucketSizes` PINS the sizes: a later `updateViewport` keeps them
+  (a non-formula policy is not silently reverted by the next rotation)
+  until it is called with `resetBucketPolicy: true`;
+  `StabilizationEngine.bucketsPinned` reports the state. The index now
+  re-keys its own blocks whenever its sizes change (`setBucketSizes`,
+  `updateBucketSizes`) — the re-key is no longer a caller obligation.
+- **Nested re-observation × grouping contradictions.** A cached block the
+  grouping detector (#49) flags as split into two or more of the
+  capture's blocks is withheld from nested absorption in that call: the
+  contradiction is handed to the consumer and the fragments enter as new
+  blocks, as before 2.2.0. On a nested confirmation the engine passes the
+  HOST to the merger as `fresh` too, so a merger written to the 2.1
+  contract (copy pass-through fields from `fresh`) cannot overwrite the
+  paragraph's with the line's. `freeze-report` counts
+  `nestedFragmentMerges` beside `totalMerges` and leaves them out of
+  `frozenShare`'s denominator (they can never be freezes); one
+  `BucketPolicyApplier` now drives both `replay()` and
+  `dump_frames.dart`.
 - **The replay rig models the consumer's bucket policy (#113).** Capture
   schema v1 gains an additive `meta.bk` = `[bucketW, bucketH]` — the
   buckets the consumer was actually using, written whenever they change

@@ -93,18 +93,39 @@ class SpatialBlockIndex<T extends TrackedBlock> implements SpatialIndexView<T> {
   double get bucketHeight => _bucketHeight;
 
   /// Update bucket sizes based on current viewport dimensions.
+  ///
+  /// A populated index re-keys its blocks under the new geometry before
+  /// this returns (2.2.0; see [_applyBucketSizes]).
   void updateBucketSizes({
     required double viewportWidth,
     required double viewportHeight,
   }) {
-    _bucketWidth = (viewportWidth * _kBucketWidthRatio).clamp(
-      _kBucketMin,
-      _kBucketMax,
+    _applyBucketSizes(
+      (viewportWidth * _kBucketWidthRatio)
+          .clamp(_kBucketMin, _kBucketMax)
+          .toDouble(),
+      (viewportHeight * _kBucketHeightRatio)
+          .clamp(_kBucketMin, _kBucketMax)
+          .toDouble(),
     );
-    _bucketHeight = (viewportHeight * _kBucketHeightRatio).clamp(
-      _kBucketMin,
-      _kBucketMax,
-    );
+  }
+
+  /// Adopt new bucket dimensions AND re-key every stored block under
+  /// them. Cell keys are a function of bucket size, so a size change
+  /// without a rebuild leaves every block filed under stale cells —
+  /// unfindable by [candidates] at any depth where old and new cell
+  /// coordinates diverge by more than the ±1-neighbour scan. The re-key
+  /// happens HERE, by construction, instead of being a documented
+  /// obligation on callers (PR #114 review). Unchanged sizes and empty
+  /// indexes skip the rebuild.
+  void _applyBucketSizes(double bucketWidth, double bucketHeight) {
+    if (bucketWidth == _bucketWidth && bucketHeight == _bucketHeight) {
+      return;
+    }
+    final cached = isEmpty ? <T>[] : allBlocks.toList();
+    _bucketWidth = bucketWidth;
+    _bucketHeight = bucketHeight;
+    if (cached.isNotEmpty) rebuild(cached);
   }
 
   /// Set the bucket dimensions directly (2.2.0, #113).
@@ -115,8 +136,8 @@ class SpatialBlockIndex<T extends TrackedBlock> implements SpatialIndexView<T> {
   /// capture stream recorded (`meta.bk`). Values are used as given (no
   /// clamp): the caller's policy owns the range. Throws [ArgumentError]
   /// on non-finite or non-positive values; nothing changes on failure.
-  /// Callers holding populated indexes must re-key them afterwards
-  /// (`rebuild`) — `StabilizationEngine.updateBucketSizes` does.
+  /// A populated index re-keys its blocks under the new geometry before
+  /// this returns — no separate `rebuild` call is needed or expected.
   void setBucketSizes({
     required double bucketWidth,
     required double bucketHeight,
@@ -129,8 +150,7 @@ class SpatialBlockIndex<T extends TrackedBlock> implements SpatialIndexView<T> {
         throw ArgumentError('$name must be a finite double > 0 (got $v)');
       }
     }
-    _bucketWidth = bucketWidth;
-    _bucketHeight = bucketHeight;
+    _applyBucketSizes(bucketWidth, bucketHeight);
   }
 
   /// Copy [other]'s current bucket dimensions.
