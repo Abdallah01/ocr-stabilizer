@@ -150,5 +150,43 @@ void main() {
         returnsNormally,
       );
     });
+
+    // #116 finding D: a band-fallback (provisional) admission never runs
+    // step-response logic either — StabilizationEngine._mergeImpl computes
+    // `stepResponseEligible = !wasBandFallback && ...` (see #116), and the
+    // provisional-freeze path at the top of `_mergeImpl` returns before
+    // that computation runs on any LATER capture of an already-provisional
+    // block. A `MergeResult` combining both is, like the nested-fragment
+    // combination above, a state the engine can never produce — the
+    // constructor must catch a direct-construction bypass here too.
+    test('throws when isProvisional and stepResponseApplied are both set',
+        () {
+      expect(
+        () => _validResult(
+          isProvisional: true,
+          provisionalCapturesRemaining: 2,
+          stepResponseApplied: StepResponse.snap,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        () => _validResult(
+          isProvisional: true,
+          provisionalCapturesRemaining: 2,
+          stepResponseApplied: StepResponse.coherentShift,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('isProvisional alone (no step response) succeeds', () {
+      expect(
+        () => _validResult(
+          isProvisional: true,
+          provisionalCapturesRemaining: 2,
+        ),
+        returnsNormally,
+      );
+    });
   });
 }

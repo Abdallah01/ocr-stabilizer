@@ -112,6 +112,13 @@ class MergeResult {
   ///   engine can never produce that combination (see [stepResponseApplied]'s
   ///   doc), so a `MergeResult` combining them can only be a construction
   ///   bug bypassing the engine.
+  /// - [isProvisional] and [stepResponseApplied] are not both set (#116
+  ///   finding D) — for the same reason: a band-fallback admission is
+  ///   never step-response eligible (`stepResponseEligible` excludes
+  ///   `wasBandFallback`), and a later capture of an already-provisional
+  ///   block returns from the freeze path before step-response logic runs
+  ///   at all. Like the nested-fragment case above, this combination is
+  ///   unreachable from the engine and can only be a construction bug.
   MergeResult({
     required this.mergedRect,
     required this.positionConfidence,
@@ -154,6 +161,14 @@ class MergeResult {
         'isNestedFragment and stepResponseApplied cannot both be set — a '
         'nested-fragment confirmation keeps the existing geometry and never '
         'runs step-response logic',
+      );
+    }
+    if (isProvisional && stepResponseApplied != null) {
+      throw ArgumentError(
+        'isProvisional and stepResponseApplied cannot both be set — a '
+        'band-fallback admission is never step-response eligible, and a '
+        'later capture of an already-provisional block returns from the '
+        'freeze path before step-response logic runs at all',
       );
     }
   }
