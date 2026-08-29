@@ -145,9 +145,49 @@ The scroll ladder is young-blocks-only (no chain survives to depth 3 in
 14 one-directional steps) and shows parity, as designed — the anchoring
 loop has nothing to anchor.
 
+## Addendum 2026-08-29 — a stream that carries `bk` (`dwell-bk.jsonl`)
+
+Captured four days later on the same device, page and settings, after
+the consumer's recorder gained the `meta.bk` field (#113) and its
+capture-time scroll fix shipped (its issue 2552): 14 captures, 57
+observations, the dwell scenario only (ten ±45 px micro-scrolls 1.5 s
+apart, then a fling). The scroll scenario could not be captured — after
+any relaunch the consumer's restored tab no longer scrolls by touch
+(its issue 2554); the walk pitfall, not this package's.
+
+What it shows, per `dwell-bk.ab.json` (`--buckets=auto`, the default):
+
+| policy | sizes applied (w×h, CSS px) | merges | disp n1-2 | disp n3-5 | disp n6-10 |
+|---|---|---|---|---|---|
+| auto (the stream's `bk`) | 80×88.05 → 105.3² → 80×100.45 → 102.7² | 17 | 0.22 / 9 | 0.27 / 7 | 0.17 / 1 |
+| formula | 80×88 (viewport) | 17 | 0.22 / 9 | 0.27 / 7 | 0.17 / 1 |
+| median (rig emulation) | 80² → 105.3² → 220² → 102.7² | 17 | 0.22 / 9 | 0.27 / 7 | 0.17 / 1 |
+
+(agreement arm, px per merge / count; legacy arm 0.25 / 0.70 / 0.65 on
+the same counts; `nestedFragmentMerges` 0 — the grouping never flipped
+on this run.) Two readings. (1) **The consumer's real bucket sequence
+and the rig's median emulation differ in two of four steps** (the
+consumer went to 80×100.45 where the emulation goes to 220², because
+the consumer re-derives from ITS block set, which includes blocks the
+rig's tracked state has already dropped) — so `auto` on a `bk`-carrying
+stream is the only faithful policy, and that is why the field exists.
+(2) On this stream **no policy moves a single merge**: every match
+partner sits inside the 3×3 cell neighbourhood at all of these sizes,
+the page being static for most captures and the displacements tiny
+(the consumer's scroll fix removed the lag family that produced the
+2.1.0 entry's far matches). The 2.1.0 question above — do the
+viewport-formula numbers understate the displacement production
+geometry sees? — is therefore answered "not on a still page"; the
+fling-tail comparison the earlier streams raised needs a scroll stream
+with `bk`, blocked by the consumer issue. The recorder in this stream
+still wrote one viewport record per animation frame while the browser
+bar collapsed (31 metas for 14 captures; the consumer coalesces them
+since the same day) — the rig applies only the last before each batch,
+so the numbers are unaffected.
+
 ## Boundary of what this proves
 
-Small n (19+15 batches, ~5 paragraph-level blocks per viewport at this
+Small n (19+15+14 batches, ~5 paragraph-level blocks per viewport at this
 zoom); one device, one page style; the dwell motion is scripted, not
 human, and its scroll stamps lag the screenshot (correction above), so
 the "raw movement" it measures is an upper bound on OCR jitter, not OCR
@@ -169,6 +209,7 @@ adb reverse tcp:8907 tcp:8907
 # <documentsDir>/stab-capture/*.jsonl
 dart tool/replay/replay.dart ab-report dwell.jsonl   # 2.1.0: applies meta.vp; --viewport=360x587 for a stream without it
 dart tool/replay/replay.dart ab-report dwell.jsonl --buckets=median   # 2.2.0: the consumer's 2x-median bucket emulation (the note above)
+dart tool/replay/replay.dart ab-report dwell-bk.jsonl               # 2.2.0 addendum: applies the stream's own bk (auto); --buckets=formula|median for the comparison rows
 dart tool/replay/dump_frames.dart dwell.jsonl dump.json 2   # same viewport rule; --buckets=... as above
 python doc/media/render_demo_gif.py dump.json demo.gif "0,250,360,860" 1.25 14   # the 14 frames = captures 0-18
 ```
