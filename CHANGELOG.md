@@ -90,7 +90,9 @@
   of the sizes applied (the consumer re-derives from a block set the rig
   has already trimmed), and on that still page neither moves a single merge.
 - **Dynamic-reflow replay corpus (#93).** Two synthesized Tesseract
-  scenarios in `doc/replay/validation/2026-08-dynamic-reflow/` — an image
+  scenarios in `doc/replay/validation/2026-08-dynamic-reflow/` (plus a
+  unit-of-identity addendum: the same streams replayed as lines and as
+  pre-grouped paragraphs, with `tool/replay/pregroup.dart`) — an image
   slab that pushes every line below it down 300 px, and a font swap that
   re-wraps every line — with the regime each lands in stated and pinned by
   `test/replay/dynamic_reflow_corpus_test.dart`: push-down keeps identity

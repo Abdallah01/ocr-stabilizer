@@ -587,7 +587,12 @@ Deliberate trade-offs, each with a tracking issue for discussion:
   `doc/replay/validation/2026-08-dynamic-reflow/`: a push-down keeps block
   identity but the position model damps the move as jitter, so tracked
   positions lag it for several captures
-  ([#116](https://github.com/Abdallah01/ocr-stabilizer/issues/116)).
+  ([#116](https://github.com/Abdallah01/ocr-stabilizer/issues/116)). The
+  same streams replayed as pre-grouped paragraphs (`tool/replay/pregroup.dart`)
+  show that grouping BEFORE tracking imports the grouper's own instability
+  into identity — one mis-read line re-chunks the rest of its paragraph — which
+  is why grouping is the consumer's downstream concern
+  ([#101](https://github.com/Abdallah01/ocr-stabilizer/issues/101)).
 
 ## Docs
 
