@@ -31,12 +31,19 @@ Map<String, Object?> abReport(
       bucketPolicy: bucketPolicy);
   final agreement = replay(stream,
       model: PositionMergeModel.agreementWeighted,
+      // Explicit, not relied-on-default (2.3.0): `StabilizationEngine`'s
+      // own default flipped to `StepResponse.coherentShift` in 2.3.0 (the
+      // #116 A/B); `replay()`'s own default stays pinned to `damp` (same
+      // precedent as `model`'s default staying `legacy` above regardless
+      // of the engine's `agreementWeighted` default), but this arm names
+      // its baseline outright so report semantics can never drift silently
+      // if either default changes again.
+      stepResponse: StepResponse.damp,
       viewport: effective,
       useStreamViewport: false,
       bucketPolicy: bucketPolicy);
   // #116 candidate arms: the same agreement-weighted model, with each of
-  // the two opt-in StepResponse alternatives to damp (the default the
-  // `agreementWeighted` arm above already runs).
+  // the two opt-in StepResponse alternatives to damp (the arm above).
   final agreementSnap = replay(stream,
       model: PositionMergeModel.agreementWeighted,
       stepResponse: StepResponse.snap,

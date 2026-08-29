@@ -219,7 +219,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     this.bandFallback = const BandFallbackConfig(),
     this.missedFrameRetention = 0,
     this.positionMergeModel = PositionMergeModel.agreementWeighted,
-    this.stepResponse = StepResponse.damp,
+    this.stepResponse = StepResponse.coherentShift,
     this.snapThresholdMultiplier = 1.5,
     this.coherentShiftMinBlocks = 3,
     this.coherentShiftMinShare = 0.5,
@@ -283,9 +283,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   final PositionMergeModel positionMergeModel;
 
   /// How the engine reacts to a residual far outside a block's normal
-  /// jitter allowance (#116). Default [StepResponse.damp] — today's
-  /// behaviour, unchanged. See [StepResponse] for [snap] and
-  /// [coherentShift].
+  /// jitter allowance (#116). Default [StepResponse.coherentShift] since
+  /// 2.3.0 (the 17-stream A/B: 14/17 vs [StepResponse.snap]'s 11/17, zero
+  /// false-triggered step events on any control stream — see
+  /// `doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`'s "Step
+  /// response A/B" section). Pass [StepResponse.damp] to restore the
+  /// pre-2.3.0 numerics exactly. See [StepResponse] for [snap] and
+  /// [coherentShift]'s own semantics, including the two documented blind
+  /// spots tracked as #119.
   final StepResponse stepResponse;
 
   /// [StepResponse.snap] fires when a merge's residual exceeds this

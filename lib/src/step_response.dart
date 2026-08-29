@@ -11,9 +11,17 @@
 /// step: an ad or image finishing load pushes every line below it down by
 /// a fixed offset in one frame, and the damped model then draws tracked
 /// boxes 130-275px above the real text for several seconds (#116).
-/// [StepResponse] adds two opt-in alternatives, selected via
-/// `StabilizationEngine(stepResponse: ...)`. The default, [damp],
-/// preserves the existing behaviour exactly.
+/// [StepResponse] adds two alternatives to [damp], selected via
+/// `StabilizationEngine(stepResponse: ...)`. Since 2.3.0 the engine's
+/// default is [coherentShift] — a 17-stream A/B against the corrected
+/// `agreementWeighted` (damp) baseline (2026-08-29,
+/// `doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`'s "Step
+/// response A/B" section) scored it 14/17 vs [snap]'s 11/17, with zero
+/// false-triggered step events on any control stream (no real move) —
+/// [snap] false-triggered on 4 of 10. Pass [damp] to restore the pre-2.3.0
+/// numerics exactly. [coherentShift]'s two documented blind spots (a
+/// single-frame slab too large for a quorum to survive the primary match,
+/// and one inside or near the jitter allowance) are tracked as #119.
 ///
 /// Both non-default values are scoped to
 /// `PositionMergeModel.agreementWeighted` — [legacy]'s merge math has no
@@ -26,8 +34,9 @@
 /// band admission is explicitly excluded — see `MergeResult
 /// .stepResponseApplied`).
 enum StepResponse {
-  /// Today's behaviour: every residual is damped by the ordinary weighted
-  /// merge, however large. The default.
+  /// Every residual is damped by the ordinary weighted merge, however
+  /// large — the engine's sole behaviour before 2.3.0, still available by
+  /// passing this value explicitly.
   damp,
 
   /// Per-block re-anchor: when a merge's residual (the distance between
@@ -40,6 +49,8 @@ enum StepResponse {
   /// with the new position).
   snap,
 
+  /// The default since 2.3.0 (#116's A/B winner — see the class doc).
+  ///
   /// Per-batch translation vote: `StabilizationEngine.stabilize` looks for
   /// a group of matched pairs, within the same capture, whose
   /// drift-corrected displacement agrees (within

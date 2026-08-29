@@ -78,11 +78,18 @@ _Block _at(
 
 void main() {
   group('StepResponse constructor default', () {
-    test('defaults to damp', () {
+    // #116 A/B (2026-08-29, all 17 streams, corrected agreementWeighted
+    // baseline): coherentShift 14/17 vs snap 11/17, zero false-triggered
+    // step events on any control stream (snap false-triggered on 4 of 10).
+    // The engine now defaults to coherentShift; StepResponse.damp restores
+    // the pre-2.3.0 numerics exactly (still a documented, exact-numerics
+    // no-op path — see the (a)/(i)/legacy groups below, which explicitly
+    // pass damp/legacy and are unaffected by this default change).
+    test('defaults to coherentShift', () {
       final engine = StabilizationEngine<_Block, void>(
         merger: (existing, fresh, merge) => existing.applyMerge(merge),
       );
-      expect(engine.stepResponse, StepResponse.damp);
+      expect(engine.stepResponse, StepResponse.coherentShift);
     });
   });
 

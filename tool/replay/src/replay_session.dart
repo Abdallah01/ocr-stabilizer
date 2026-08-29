@@ -263,9 +263,16 @@ BucketPolicy? bucketPolicyFromArg(String arg) {
 ///   can be named explicitly; `freeze-report` inherits that default and
 ///   records it (its outputs are model-neutral: counts and text fields,
 ///   no positions).
-/// - [stepResponse] (#116) defaults to `StepResponse.damp` — today's
-///   numerics, unchanged. `ab_report.dart`'s `agreementSnap` and
-///   `agreementCoherent` arms are the ones that pass `snap` / `coherentShift`.
+/// - [stepResponse] (#116) defaults to `StepResponse.damp` here — same
+///   precedent as [model] above: the replay rig's own default stays
+///   pinned so every A/B arm can be named explicitly and this tool's
+///   baseline numerics do not silently move when `StabilizationEngine`'s
+///   OWN default changes (it flipped to `StepResponse.coherentShift` in
+///   2.3.0 — the #116 A/B winner; this parameter did not follow it).
+///   `ab_report.dart`'s `agreementWeighted` arm now passes `damp`
+///   explicitly for the same reason; its `agreementSnap` and
+///   `agreementCoherent` arms are the ones that pass `snap` /
+///   `coherentShift`.
 ReplayResult replay(
   CaptureStream stream, {
   BandFallbackConfig band = const BandFallbackConfig(),
