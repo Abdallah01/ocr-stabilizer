@@ -739,6 +739,39 @@ void main() {
     });
   });
 
+  // #116 finding E: `_detectCoherentShift`'s two remaining force-unwraps
+  // (the final tx/ty computation) are safe by construction — `bestGroup`
+  // is checked non-null immediately above them and is never empty (every
+  // window searched has size >= coherentShiftMinBlocks, and the
+  // constructor rejects coherentShiftMinBlocks < 1). This group pins the
+  // TRULY empty candidate set — a first-ever capture, before anything has
+  // been established to match against at all — as an explicit regression
+  // test rather than relying on it being an implicit side effect of every
+  // other group's own first `stabilize()` call.
+  group('(k2) coherentShift on a first-ever capture never crashes on an '
+      'empty candidate set', () {
+    test('no established blocks to match against yet: ordinary admission, '
+        'no coherent-shift vote possible', () {
+      final rig = _engine(stepResponse: StepResponse.coherentShift);
+      final result = rig.engine.stabilize([
+        _at(50, text: 'alpha block'),
+        _at(600, text: 'bravo block'),
+        _at(1100, text: 'charlie block'),
+      ]);
+
+      expect(result.stableBlocks, hasLength(3),
+          reason: 'a first-ever capture matches nothing — every fresh '
+              'block is admitted as new, not merged');
+      for (final b in result.stableBlocks) {
+        expect(b.observationCount, 1);
+      }
+      expect(rig.log, isEmpty,
+          reason: 'no merges happened at all — the merger callback is '
+              'never invoked for a brand-new admission, so there is '
+              'nothing for a coherent-shift vote to even consider');
+    });
+  });
+
   group('(j) neither option touches a nested-fragment or band-fallback '
       'merge', () {
     const kPara = Rect.fromLTWH(33, 754, 300, 52);

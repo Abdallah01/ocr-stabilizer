@@ -1125,6 +1125,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       return null;
     }
 
+    // #116 finding E: these two force-unwraps are safe by construction,
+    // not merely by argument — `bestGroup` is non-null (checked above)
+    // and non-empty: every window searched has `size >= coherentShiftMinBlocks`,
+    // and the constructor rejects `coherentShiftMinBlocks < 1` (see
+    // `StepResponse`'s validation), so `bestGroup.length >= 1` always.
+    // `RobustStats.median` returns null ONLY on an empty list — never on
+    // a non-empty one — so these two calls can never actually return
+    // null here.
     final tx = RobustStats.median([for (final j in bestGroup) movedDx[j]])!;
     final ty = RobustStats.median([for (final j in bestGroup) movedDy[j]])!;
     // #116 finding C: one map carries both membership AND each member's
