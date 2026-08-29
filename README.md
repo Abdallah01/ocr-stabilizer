@@ -582,8 +582,12 @@ Deliberate trade-offs, each with a tracking issue for discussion:
   `ParagraphGrouper.onMergeDecision` streams a `MergeDecisionDiagnostic`
   per boundary decision. **Batch-size benchmarks and a long-session
   bounded-state replay** live in `benchmark/` and `doc/benchmarks/`
-  ([#97](https://github.com/Abdallah01/ocr-stabilizer/issues/97)). **No dynamic-reflow replay scenarios yet**
-  ([#93](https://github.com/Abdallah01/ocr-stabilizer/issues/93)).
+  ([#97](https://github.com/Abdallah01/ocr-stabilizer/issues/97)). **Dynamic-reflow replay scenarios**
+  (push-down, re-wrap; [#93](https://github.com/Abdallah01/ocr-stabilizer/issues/93)) live in
+  `doc/replay/validation/2026-08-dynamic-reflow/`: a push-down keeps block
+  identity but the position model damps the move as jitter, so tracked
+  positions lag it for several captures
+  ([#116](https://github.com/Abdallah01/ocr-stabilizer/issues/116)).
 
 ## Docs
 

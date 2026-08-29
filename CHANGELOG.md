@@ -89,6 +89,15 @@
   consumer's sequence and the rig's median emulation agree on only two
   of the sizes applied (the consumer re-derives from a block set the rig
   has already trimmed), and on that still page neither moves a single merge.
+- **Dynamic-reflow replay corpus (#93).** Two synthesized Tesseract
+  scenarios in `doc/replay/validation/2026-08-dynamic-reflow/` — an image
+  slab that pushes every line below it down 300 px, and a font swap that
+  re-wraps every line — with the regime each lands in stated and pinned by
+  `test/replay/dynamic_reflow_corpus_test.dart`: push-down keeps identity
+  for most shifted lines but the position model damps the 300 px step as
+  jitter, so tracked positions lag the move by 130–275 px for six-plus
+  captures (tracked as #116); re-wrap resets 23 of 30 line identities and
+  the new chains track from the next capture, as it should.
 - Hero demo GIF re-rendered (captures 0–18, `missedFrameRetention: 2`):
   overlapping tracked-box pairs across the 14 frames drop from 23 to
   15, all 15 the producer's scroll-stamp lag placing different text (or
