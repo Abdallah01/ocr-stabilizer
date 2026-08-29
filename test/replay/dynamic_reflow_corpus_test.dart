@@ -122,18 +122,24 @@ void main() {
     // counts, nested-fragment confirmations included: the fragment found
     // its block, which is the identity question (the other tests drop them
     // only because their displacement is zero by construction).
-    List<double> retention(CaptureStream s) {
+    List<double> retention(CaptureStream s, {required bool afterReflow}) {
       final r = replay(s, model: PositionMergeModel.agreementWeighted);
+      final caps = afterReflow
+          ? [for (var c = _reflowCapture + 1; c <= 12; c++) c]
+          : [for (var c = 2; c < _reflowCapture; c++) c];
       return [
-        for (var cap = 2; cap < _reflowCapture; cap++)
+        for (final cap in caps)
           r.merges.where((m) => m.captureId == cap).length /
               s.batches[cap - 1].blocks.length,
       ];
     }
 
+    CaptureStream grouped(String name) => CaptureStream.parse(
+        pregroupJsonl(File('$_dir/$name.jsonl').readAsLinesSync()));
+
     test('lines: every static capture re-finds at least nine in ten units',
         () {
-      final kept = retention(_load('pushdown'));
+      final kept = retention(_load('pushdown'), afterReflow: false);
       expect(kept.reduce(min), greaterThanOrEqualTo(0.9),
           reason: 'measured 28-29 of 30 on each of captures 2-6: one line '
               'read differently is one identity lost, nothing else');
@@ -142,19 +148,30 @@ void main() {
     test(
         'pre-grouped paragraphs: a static capture loses a quarter or more — '
         'one differently-read line re-chunks the rest of its paragraph', () {
-      final grouped = CaptureStream.parse(
-          pregroupJsonl(File('$_dir/pushdown.jsonl').readAsLinesSync()));
-      expect(grouped.batches, hasLength(12));
-      expect(grouped.skippedLines, 0);
-      expect(grouped.batches.first.blocks.length,
+      final s = grouped('pushdown');
+      expect(s.batches, hasLength(12));
+      expect(s.skippedLines, 0);
+      expect(s.batches.first.blocks.length,
           lessThan(_load('pushdown').batches.first.blocks.length),
           reason: 'grouping folded lines into fewer, larger units');
-      final kept = retention(grouped);
+      final kept = retention(s, afterReflow: false);
       expect(kept.reduce(min), lessThanOrEqualTo(0.75),
           reason: 'measured 7 of 11 on capture 5 and 10 of 14 on capture 6: '
               'the grouper re-chunked a paragraph around one misread line, '
               'so the neighbours changed text and rect too — grouping '
               'imported its own instability');
+    });
+
+    test('rewrap, static captures after the swap: lines keep at least 85 in '
+        '100; paragraphs drop to 65 in 100 or less (the same re-chunking, '
+        'on the new text)', () {
+      final lines = retention(_load('rewrap'), afterReflow: true);
+      expect(lines.reduce(min), greaterThanOrEqualTo(0.85),
+          reason: 'measured 29, 28, 28, 27, 26 of 30 (31 on capture 10)');
+      final paragraphs = retention(grouped('rewrap'), afterReflow: true);
+      expect(paragraphs.reduce(min), lessThanOrEqualTo(0.65),
+          reason: 'measured 11, 11, 11, 6, 7 of 11: three clean captures, '
+              'then one misread line re-chunks and 5 of 11 units vanish');
     });
   });
 }

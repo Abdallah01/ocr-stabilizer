@@ -116,8 +116,16 @@ line boxes, ~30 per capture); **paragraphs** = the same captures pre-grouped
 per capture with `ParagraphGrouper` at one consumer's translation-sized knobs
 (gap 10 px / ×0.75, `maxParagraphBlocks` 3, `maxParagraphRunes` 200, member
 texts joined with a space), ~14 units per capture. Tool:
-`tool/replay/pregroup.dart`; reports: `pushdown.grouped.ab.json`,
+`tool/replay/pregroup.dart` (it prints the knobs it applied; a bad flag is
+an error, not a fallback); reports: `pushdown.grouped.ab.json`,
 `rewrap.grouped.ab.json` (agreement-weighted arm quoted; retention 0).
+
+A grouped unit is a fresh observation carrying only rect, text, the two
+confidences and the scroll context. Engine-side per-block fields a recorder
+may emit (`cid`, `sf`, `srcQ`, `obsN`, `prov`, `cvotes`, ...) are dropped
+and reset to defaults in the grouped arm; the tool reports on stderr when a
+stream carries any. Both corpora here carry none, so the two arms differ in
+the unit and nothing else.
 
 **Identity on UNCHANGED captures** (units matched to an existing block /
 units observed; nested-fragment confirmations count as matches — the
@@ -129,9 +137,10 @@ and 1 of the 7 on rewrap capture 12):
 | lines | 28/30, 29/30, 28/30, 28/30, 28/30 | 29/30, 28/30, 28/31, 27/30, 26/30 |
 | paragraphs | 13/14, 13/14, 13/14, **7/11**, **10/14** | 11/11, 11/11, 11/11, **6/11**, **7/11** |
 
-The pushdown row is pinned by `test/replay/dynamic_reflow_corpus_test.dart`
-(lines keep at least 9 in 10 on every static capture; paragraphs drop to
-three quarters or less on at least one).
+Both rows are pinned by `test/replay/dynamic_reflow_corpus_test.dart`
+(pushdown: lines keep at least 9 in 10 on every static capture, paragraphs
+drop to three quarters or less on at least one; rewrap: lines keep at least
+85 in 100, paragraphs drop to 65 in 100 or less).
 
 The paragraph losses are cascades. On pushdown capture 5 the OCR mis-reads
 ten lines slightly and returns a few two-line boxes (72–76 px tall). A line
@@ -142,9 +151,10 @@ captures 10 → 11 show the same shape on a static page (7 of 11 units
 re-chunked).
 
 **At the reflow (capture 7):** pushdown — lines keep 20 of 26 (9 of 14 below
-the slab), paragraphs keep 7 of 10 (4 of 5 below); rewrap — lines reset 23 of
-30 and recover fully on the next capture (29 / 1), paragraphs reset 6 of 11
-and then lose 4 more on each of two static captures.
+the slab), paragraphs keep 8 of 10 (4 of 5 below, 4 of 5 above); rewrap —
+lines reset 23 of 30 and recover fully on the next capture (29 / 1),
+paragraphs reset 6 of 11, recover fully for three captures, then lose 5 and
+4 more on the static captures 11 and 12.
 
 **Merges per frame:** lines 22.6 (pushdown) / 24.0 (rewrap); paragraphs 8.4 /
 9.2 — about 2.7× the absolute work with lines, at 0.80 vs 0.72–0.76 merges
