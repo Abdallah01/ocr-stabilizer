@@ -1142,9 +1142,20 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // could fall out of sync under a later edit; a missing key here
     // would silently fall back to a live tracker read in `_mergeImpl`
     // with nothing red.
-    final memberDrift = <T, Offset>{
-      for (final j in bestGroup) movedExisting[j]: movedRegionDrift[j],
-    };
+    //
+    // Identity-keyed like every other `T` collection in this engine
+    // (`matchedExisting`, the classification/carousel vote maps, the
+    // contradicted-hosts set, ...) -- `T` is the CONSUMER's type and may
+    // define VALUE equality (an Equatable-style block keyed on
+    // `originalText` only). Two coherent-shift members that are
+    // `==`-equal but sit in DIFFERENT drift regions must each keep their
+    // OWN frozen snapshot; a value-keyed map collapses them onto one
+    // entry and silently overwrites one member's snapshot with the
+    // other's.
+    final memberDrift = Map<T, Offset>.identity();
+    for (final j in bestGroup) {
+      memberDrift[movedExisting[j]] = movedRegionDrift[j];
+    }
     return (translation: Offset(tx, ty), memberDrift: memberDrift);
   }
 
