@@ -92,21 +92,28 @@ void main() {
     // wording cannot silently drift into a mislabel.
     final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
       merger: (existing, fresh, m) => existing.applyMerge(m),
-      // #116 finding G, 2026-08-29: pinned explicitly, unlike
-      // positionMergeModel below. This GIF was rendered before the #116
-      // A/B flipped StabilizationEngine's own default from
-      // StepResponse.damp to StepResponse.coherentShift (2.3.0) — the
-      // committed corpus's provenance is "the engine's defaults AT
-      // RENDER TIME", which was damp. positionMergeModel can still
-      // assert-equals-current-default (agreementWeighted never moved);
-      // stepResponse can no longer make that claim, so it is pinned
-      // outright instead — without this, the test would silently start
-      // measuring coherentShift's damping instead of the render's own.
-      stepResponse: StepResponse.damp,
+      // stepResponse (#122, 2026-08-29): left unset, unlike the #116
+      // finding G review cycle that pinned this outright to
+      // StepResponse.damp. That pin existed because this GIF was
+      // rendered before the #116 A/B flipped StabilizationEngine's own
+      // default from StepResponse.damp to StepResponse.coherentShift
+      // (2.3.0), and the committed corpus's provenance was "the engine's
+      // defaults AT RENDER TIME", which was damp. #122 re-dumped this
+      // corpus (doc/replay/validation/2026-08-tesseract-matrix/
+      // ocr-jitter-dwell.jsonl) under both values via
+      // tool/replay/dump_frames.dart's construction and found
+      // byte-identical output — coherentShift never fires on this
+      // control stream — so the pin now follows the current default
+      // again, same as positionMergeModel below.
     );
     expect(engine.positionMergeModel, PositionMergeModel.agreementWeighted,
         reason: 'the README caption says "defaults"; if the default model '
             'changes, re-render the GIF and reword the caption');
+    expect(engine.stepResponse, StepResponse.coherentShift,
+        reason: 'the README caption says "defaults"; if the default step '
+            'response changes, re-verify this GIF\'s frames are still '
+            'byte-identical under it (#122) before trusting the caption '
+            'again, and re-render if not');
     // 2.1.0: replay on the corpus viewport, as replay()/dump_frames do —
     // the 200 px default buckets are not production geometry.
     expect(stream.viewport, isNotNull,
