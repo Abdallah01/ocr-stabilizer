@@ -42,9 +42,12 @@ void main() {
         reason: 'everything after the cut is the fling');
 
     double establishedDisp(PositionMergeModel model) {
+      // Nested-fragment confirmations (#112) move nothing by construction
+      // and are excluded here exactly as ab_report's displacement buckets
+      // exclude them — this test mirrors that construction.
       final merges = replay(stream, model: model)
           .merges
-          .where((m) => m.obsNBefore >= 3)
+          .where((m) => m.obsNBefore >= 3 && !m.nestedFragment)
           .toList();
       expect(merges, isNotEmpty,
           reason: 'the dwell fixture must produce established chains');

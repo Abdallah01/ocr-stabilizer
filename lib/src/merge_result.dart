@@ -9,7 +9,10 @@ import 'types/confidence_types.dart';
 ///
 /// The consumer receives this via [BlockMerger] and uses it to construct
 /// an updated block instance (e.g. via `copyWith`). No fields are
-/// pass-through — the engine owns the computation of every value.
+/// pass-through — the engine owns the computation of every value. On a
+/// nested confirmation (2.2.0, [isNestedFragment]) that computation is
+/// "keep the host's value" for every field except [observationCount] and
+/// [sourceQuality]: the fragment casts no vote and pulls no position.
 class MergeResult {
   // ── Position (engine computes weighted average) ──
 
@@ -70,6 +73,20 @@ class MergeResult {
   /// Best source-quality tier observed (engine picks max of fresh/existing).
   final int sourceQuality;
 
+  // ── Merge kind (2.2.0, #112) ──
+
+  /// True when this merge is a NESTED-FRAGMENT confirmation: the fresh
+  /// block was one line of the existing block reported on its own (an
+  /// engine's grouping flipped between frames). The engine then keeps the
+  /// existing geometry, text and votes and only increments
+  /// [observationCount] — [mergedRect] equals the existing rect,
+  /// [textWasPromoted] is false, [driftCorrection] is zero. Consumers
+  /// and measurement tools can tell such a confirmation from a position
+  /// merge (a jittered observation of the same box) without comparing
+  /// rects: the replay rig keeps them out of its displacement statistics.
+  /// Additive; defaults to false.
+  final bool isNestedFragment;
+
   /// All fields are engine-computed. The constructor throws [ArgumentError]
   /// on any violation of:
   /// - If [isProvisional], [provisionalCapturesRemaining] must be > 0
@@ -92,6 +109,7 @@ class MergeResult {
     required this.isProvisional,
     required this.provisionalCapturesRemaining,
     required this.sourceQuality,
+    this.isNestedFragment = false,
   }) {
     // Engine-output state. Per project policy (feedback_assert_vs_throw_in_storage):
     // asserts strip in release; production-critical invariants on stored state

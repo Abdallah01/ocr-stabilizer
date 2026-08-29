@@ -447,24 +447,67 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// every cached block filed under stale cells — unfindable by the
   /// next [stabilize] at any scroll depth where old and new cell
   /// coordinates diverge by more than the ±1-neighbor scan
-  /// (PR #61 review).
+  /// (PR #61 review). Since 2.2.0 the index performs that re-key itself
+  /// whenever its sizes change.
+  ///
+  /// 2.2.0: once [updateBucketSizes] has set the sizes directly, this
+  /// method no longer re-derives them from the viewport — a consumer
+  /// whose bucket policy is not the viewport formula would otherwise
+  /// have its policy silently reverted by the next rotation or keyboard
+  /// event (PR #114 review). Pass [resetBucketPolicy] to return to the
+  /// formula; [scale] is applied either way.
   void updateViewport({
     required double viewportWidth,
     required double viewportHeight,
     double? scale,
+    bool resetBucketPolicy = false,
   }) {
     _validatePositiveFinite('viewportWidth', viewportWidth);
     _validatePositiveFinite('viewportHeight', viewportHeight);
     if (scale != null) _validatePositiveFinite('scale', scale);
-    final cached = _spatialIndex.allBlocks.toList();
+    if (scale != null) _scale = scale;
+    if (resetBucketPolicy) _bucketsPinned = false;
+    if (_bucketsPinned) return;
     _spatialIndex.updateBucketSizes(
       viewportWidth: viewportWidth,
       viewportHeight: viewportHeight,
     );
-    _spatialIndex.rebuild(cached);
     _bucketWidth = _spatialIndex.bucketWidth;
     _bucketHeight = _spatialIndex.bucketHeight;
-    if (scale != null) _scale = scale;
+  }
+
+  /// Whether [updateBucketSizes] has pinned the bucket sizes, so that
+  /// [updateViewport] leaves them alone until called with
+  /// `resetBucketPolicy: true`.
+  bool get bucketsPinned => _bucketsPinned;
+  bool _bucketsPinned = false;
+
+  /// Set the spatial-index bucket sizes directly (2.2.0, #113), for a
+  /// consumer whose bucket policy is not [updateViewport]'s viewport
+  /// formula — e.g. 2× the median block height, the spatial-hashing
+  /// convention under which any box overlaps at most four cells — and
+  /// for the replay rig applying the buckets a stream recorded.
+  ///
+  /// Same contract as [updateViewport]: the stored blocks are re-keyed
+  /// under the new geometry before this returns (the index re-keys
+  /// itself), and the dedup-key quantization follows the index. Pins
+  /// the sizes: a later [updateViewport] keeps them until it is called
+  /// with `resetBucketPolicy: true` (see [bucketsPinned]). Throws
+  /// [ArgumentError] on non-finite or non-positive values; no state
+  /// changes on failure.
+  void updateBucketSizes({
+    required double bucketWidth,
+    required double bucketHeight,
+  }) {
+    _validatePositiveFinite('bucketWidth', bucketWidth);
+    _validatePositiveFinite('bucketHeight', bucketHeight);
+    _spatialIndex.setBucketSizes(
+      bucketWidth: bucketWidth,
+      bucketHeight: bucketHeight,
+    );
+    _bucketWidth = _spatialIndex.bucketWidth;
+    _bucketHeight = _spatialIndex.bucketHeight;
+    _bucketsPinned = true;
   }
 
   /// Throw [ArgumentError] unless [value] is a finite double > 0.
@@ -570,6 +613,19 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       ..._detectGroupingContradictions(deduped, dedupResult.batchIndex),
       ...detectSplittingContradictions(deduped),
     ];
+    // #112 × #49: a cached block the grouping detector just flagged as
+    // SPLIT into two or more of this capture's blocks is withheld from
+    // nested absorption. The contradiction is the stronger evidence (the
+    // subdividers cover the host and reassemble its text) and is handed
+    // to the consumer for eviction; silently confirming the same host
+    // with one of those subdividers in the same call would contradict
+    // it. The fragments enter as new blocks instead — the pre-2.2.0
+    // outcome the consumer's eviction logic expects (PR #114 review).
+    final contradictedHosts = Set<T>.identity()
+      ..addAll([
+        for (final c in contradictions)
+          if (c.type == ContradictionType.grouping) c.target,
+      ]);
 
     // 3. Merge or insert
     final invalidatedTexts = <String>[];
@@ -577,22 +633,51 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final stableBlocks = <T>[];
 
     final matchedExisting = Set<T>.identity();
+    // Nested-fragment matches (#112) are resolved AFTER every full match
+    // of this capture: an engine can report a paragraph AND one of its
+    // lines in the same frame, and both would otherwise merge into the
+    // same cached block — two merged copies of one paragraph (measured on
+    // the committed ML Kit stream: three identical tracked boxes). A
+    // fragment whose host was already confirmed this frame is redundant
+    // evidence and is dropped; the first fragment of an otherwise-missed
+    // host confirms it once, later fragments of the same host are dropped
+    // too.
+    final pendingNested = <(T fresh, T host)>[];
     for (final fresh in deduped) {
       final matchResult = _findMatch(fresh);
       final existing = matchResult.match;
-      if (existing != null) {
-        matchedExisting.add(existing);
-        final merged = _merge(
-          fresh,
-          existing,
-          invalidatedTexts,
-          wellObservedTexts,
-          wasBandFallback: matchResult.wasBandFallback,
-        );
-        stableBlocks.add(merged);
-      } else {
+      if (existing == null) {
         stableBlocks.add(fresh);
+        continue;
       }
+      if (matchResult.wasNestedFragment) {
+        pendingNested.add((fresh, existing));
+        continue;
+      }
+      matchedExisting.add(existing);
+      final merged = _merge(
+        fresh,
+        existing,
+        invalidatedTexts,
+        wellObservedTexts,
+        wasBandFallback: matchResult.wasBandFallback,
+      );
+      stableBlocks.add(merged);
+    }
+    for (final (fresh, host) in pendingNested) {
+      if (contradictedHosts.contains(host)) {
+        stableBlocks.add(fresh);
+        continue;
+      }
+      if (matchedExisting.contains(host)) continue;
+      matchedExisting.add(host);
+      stableBlocks.add(_merge(
+        fresh,
+        host,
+        invalidatedTexts,
+        wellObservedTexts,
+        wasNestedFragment: true,
+      ));
     }
 
     // Missed-frame retention (#46): cached blocks that were not matched
@@ -918,6 +1003,104 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     return covered / cachedArea >= threshold;
   }
 
+  // ┌─── Nested re-observation (#112, 2.2.0) ───────────────────────────
+  // An OCR engine's grouping can flip between frames: the same paragraph
+  // comes back as one paragraph box in one capture and as one of its own
+  // lines in the next. The line's text is a fragment of the paragraph's,
+  // so the whole-string primary match fails and the line used to be
+  // admitted as a NEW block — the same text tracked twice, drawn as a box
+  // inside a box. When a fresh block sits inside an ESTABLISHED block and
+  // its text is a fragment of that block's text, it is a re-observation of
+  // the block: count up, geometry and text untouched.
+  // One-directional on purpose: a fresh paragraph over an established
+  // line is the whole-string path's case (from the other side) and is not
+  // touched here — see the issue for the symmetric variant's open
+  // questions.
+  // └────────────────────────────────────────────────────────────────────
+
+  /// Share of the FRESH block's own area that must lie inside the host.
+  /// 0.8, measured: an engine's line box is not perfectly nested in its
+  /// paragraph box — on the committed on-device ML Kit stream a second
+  /// line hangs 3 px below the paragraph's bottom edge (14 of 17 px
+  /// inside, 0.82) and a bar of 0.9 left it a separate block. The text
+  /// condition is the guard; geometry only has to say "inside, not beside".
+  static const double _kNestedContainment = 0.8;
+
+  /// Fragments with fewer significant characters than this never nest —
+  /// three characters match inside almost anything.
+  static const int _kNestedMinSignificantChars = 4;
+
+  /// Windowed-Levenshtein floor for the fragment against the host's text;
+  /// the primary whole-string Levenshtein floor, reused deliberately.
+  static const double _kNestedWindowSimilarity = 0.70;
+
+  /// A host must be a cached, non-provisional block seen at least this
+  /// many times. ONE on purpose, measured: on the committed on-device
+  /// ML Kit dwell stream the grouping flips on consecutive frames, so a
+  /// paragraph is re-observed as its own line before it can reach two
+  /// observations — a bar of two never fired on the eight pairs the rule
+  /// was written for. The geometry (≥ 80 % inside) and text (≥ 0.70
+  /// windowed, ≥ 4 significant characters) conditions carry the guard;
+  /// provisional hosts are excluded because they are frozen.
+  static const int _kNestedEstablishedObservations = 1;
+
+  /// Is [fresh] a nested fragment re-observation of [cached]?
+  ///
+  /// Geometry first (cheap): [cached] strictly larger, at least
+  /// [_kNestedContainment] of the fresh block's area inside it, same
+  /// coordinate contract (viewport-relative flag, carousel). Then text:
+  /// [TextDedupUtils.bestWindowSimilarity] of the fresh text against the
+  /// cached text at or above [_kNestedWindowSimilarity].
+  bool _isNestedFragmentOf(T fresh, T cached) {
+    if (cached.isProvisional) return false;
+    if (cached.observationCount < _kNestedEstablishedObservations) {
+      return false;
+    }
+    if (fresh.isViewportRelative != cached.isViewportRelative) return false;
+    if (fresh.isHorizontalScrollChild &&
+        cached.isHorizontalScrollChild &&
+        fresh.scrollContext.hzScrollerIndex !=
+            cached.scrollContext.hzScrollerIndex) {
+      return false;
+    }
+    final f = fresh.absoluteRect.raw;
+    final c = cached.absoluteRect.raw;
+    final freshArea = f.width * f.height;
+    final cachedArea = c.width * c.height;
+    if (!(freshArea > 0) || !(cachedArea > freshArea)) return false;
+    final inter = f.intersect(c);
+    if (inter.isEmpty) return false;
+    if ((inter.width * inter.height) / freshArea < _kNestedContainment) {
+      return false;
+    }
+    return TextDedupUtils.bestWindowSimilarity(
+          fresh.originalText,
+          cached.originalText,
+          minFragmentChars: _kNestedMinSignificantChars,
+        ) >=
+        _kNestedWindowSimilarity;
+  }
+
+  /// The established block [fresh] is a nested fragment of, or null. When
+  /// several qualify (a page-wide block whose text repeats the paragraph,
+  /// and the paragraph itself), the TIGHTEST host — smallest area — wins.
+  /// Candidates span the fresh block's whole rect plus the
+  /// viewport-relative namespace, as for supersession.
+  T? _findNestedHost(T fresh) {
+    T? best;
+    var bestArea = double.infinity;
+    for (final cached in _supersessionCandidates(fresh)) {
+      if (!_isNestedFragmentOf(fresh, cached)) continue;
+      final r = cached.absoluteRect.raw;
+      final area = r.width * r.height;
+      if (area < bestArea) {
+        bestArea = area;
+        best = cached;
+      }
+    }
+    return best;
+  }
+
   /// Find a matching existing block for [fresh] in the spatial index.
   ///
   /// Single-pass over candidates: scores are computed ONCE per candidate and
@@ -932,7 +1115,13 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// first candidate that clears the observation-count floor, spatial confirm,
   /// AND band text floors is admitted ([BandFallbackMode.admit]) or tallied
   /// ([BandFallbackMode.observeOnly]).
-  ({T? match, bool wasBandFallback}) _findMatch(T fresh) {
+  ///
+  /// Nested re-observation (#112): only when BOTH the primary and the band
+  /// path miss, a fresh block that is a nested fragment of an established
+  /// block ([_findNestedHost]) matches that block with `wasNestedFragment`
+  /// set, so the merge is a confirming observation only.
+  ({T? match, bool wasBandFallback, bool wasNestedFragment}) _findMatch(
+      T fresh) {
     final candidates = _spatialIndex.candidates(fresh);
     final shouldRunBand = bandFallback.mode != BandFallbackMode.off;
 
@@ -1037,7 +1226,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // ── Tally primary outcome ──
     if (primaryMatch != null) {
       _internalStats.recordPrimaryMatchAdmitted();
-      return (match: primaryMatch, wasBandFallback: false);
+      return (
+        match: primaryMatch,
+        wasBandFallback: false,
+        wasNestedFragment: false,
+      );
     }
     // Tick on every primary miss, including empty-candidate-set cases.
     // Holds the spec invariant:
@@ -1049,14 +1242,24 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     _internalStats.recordPrimaryMatchRejected();
 
     // ── Return band outcome ──
-    if (!shouldRunBand) {
-      return (match: null, wasBandFallback: false);
-    }
-    if (bandAdmitted != null) {
+    if (shouldRunBand && bandAdmitted != null) {
       _internalStats.recordMatchAdmitted();
-      return (match: bandAdmitted, wasBandFallback: true);
+      return (
+        match: bandAdmitted,
+        wasBandFallback: true,
+        wasNestedFragment: false,
+      );
     }
-    return (match: null, wasBandFallback: false);
+
+    // ── Nested re-observation (#112): primary AND band missed ──
+    // Counted as a primary rejection above on purpose: the band ratio
+    // consumers compute (`bandMatchesIdentified / primaryMatchesRejected`)
+    // keeps its denominator; this is a separate, later rule.
+    final host = _findNestedHost(fresh);
+    if (host != null) {
+      return (match: host, wasBandFallback: false, wasNestedFragment: true);
+    }
+    return (match: null, wasBandFallback: false, wasNestedFragment: false);
   }
 
   /// Perform SAR (Scan-Accumulate-Replace) merge of [fresh] into [existing].
@@ -1098,9 +1301,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     List<String> invalidatedTexts,
     List<String> wellObservedTexts, {
     bool wasBandFallback = false,
+    bool wasNestedFragment = false,
   }) {
-    final output =
-        _mergeImpl(fresh, existing, wasBandFallback: wasBandFallback);
+    final output = _mergeImpl(
+      fresh,
+      existing,
+      wasBandFallback: wasBandFallback,
+      nestedFragment: wasNestedFragment,
+    );
     if (output.textWasPromoted && output.promotedFromText != null) {
       invalidatedTexts.add(output.promotedFromText!);
     }
@@ -1125,7 +1333,49 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     T existing, {
     bool trackDrift = true,
     bool wasBandFallback = false,
+    bool nestedFragment = false,
   }) {
+    // ┌─── Nested fragment: confirming observation only (#112) ────────
+    // The fresh block is one line of `existing` reported on its own. It
+    // casts NO text vote (a fragment repeated over several flip frames
+    // would otherwise outscore the paragraph text), pulls NO position (its
+    // rect is a sub-box, not a jittered observation of the same box), and
+    // feeds NO drift or classification vote for the same reason. The host
+    // is never provisional (`_isNestedFragmentOf` requires an established
+    // block), so this sits above the freeze path without interacting.
+    if (nestedFragment) {
+      final result = MergeResult(
+        mergedRect: existing.absoluteRect,
+        positionConfidence: existing.positionConfidence,
+        driftCorrection: Offset.zero,
+        winningOriginalText: existing.originalText,
+        textConfidence: existing.textConfidence,
+        updatedTextVotes: existing.textVotes,
+        textWasPromoted: false,
+        updatedClassificationVotes: existing.classificationVotes,
+        needsReclassification: existing.needsReclassification,
+        updatedCarouselIdVotes: existing.carouselIdVotes,
+        observationCount: existing.observationCount + 1,
+        isProvisional: false,
+        provisionalCapturesRemaining: 0,
+        sourceQuality: max(existing.sourceQuality, fresh.sourceQuality),
+        isNestedFragment: true,
+      );
+      return MergeOutput<T>(
+        // The HOST is handed to the merger as `fresh` too: a fragment
+        // carries nothing the host should adopt, and a merger written to
+        // the 2.1 contract copies pass-through fields (scroll context,
+        // translated text, payload) from `fresh` on every call — with the
+        // line as `fresh` it would overwrite the paragraph's. Contract
+        // documented on [BlockMerger] (PR #114 review).
+        merged: _merger(existing, existing, result),
+        // Same threshold as the full path: a paragraph confirmed only by
+        // its own lines still becomes well-observed.
+        isWellObserved:
+            existing.observationCount + 1 >= _kWellObservedThreshold,
+      );
+    }
+    // └──────────────────────────────────────────────────────────────
     // ┌─── Provisional freeze ─────────────────────────────────────────
     // DECIDED (#57, 2026-07-22; trigger fired and re-armed 2026-07-23):
     // frozen captures intentionally accrue NO evidence — no observation

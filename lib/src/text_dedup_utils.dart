@@ -75,6 +75,44 @@ class TextDedupUtils {
         (c >= 0x61 && c <= 0x7a); // a-z
   }
 
+  /// Best normalized Levenshtein similarity of [fragment] against every
+  /// same-length window of [whole], on significant characters (#112).
+  ///
+  /// Used by the nested re-observation rule: an OCR line reported inside
+  /// its own paragraph scores under the whole-string floor (17 vs 33
+  /// characters), but 1.0 against the paragraph's matching window. Returns
+  /// 0.0 — never a match — when the fragment carries fewer than
+  /// [minFragmentChars] significant characters (short fragments match
+  /// inside almost anything) or is LONGER than the whole (then it is not a
+  /// fragment; the whole-string path owns that case — the length guard is
+  /// an early exit, the window loop below would also yield 0.0). Equal
+  /// lengths reduce to the whole-string score. Exact substrings return
+  /// 1.0 early.
+  ///
+  /// Cost: O((n − m + 1) · m²) on significant-character counts; callers
+  /// gate it behind a cheap geometric test.
+  static double bestWindowSimilarity(
+    String fragment,
+    String whole, {
+    int minFragmentChars = 4,
+  }) {
+    final frag = significantCharList(fragment);
+    final hay = significantCharList(whole);
+    if (frag.isEmpty ||
+        frag.length < minFragmentChars ||
+        frag.length > hay.length) {
+      return 0.0;
+    }
+    var best = 0.0;
+    for (var start = 0; start + frag.length <= hay.length; start++) {
+      final window = hay.sublist(start, start + frag.length);
+      final sim = _levenshteinOnLists(frag, window);
+      if (sim > best) best = sim;
+      if (best >= 1.0) break;
+    }
+    return best;
+  }
+
   /// Normalized Levenshtein similarity on significant characters.
   ///
   /// Returns 1.0 for identical texts, 0.0 for completely different.

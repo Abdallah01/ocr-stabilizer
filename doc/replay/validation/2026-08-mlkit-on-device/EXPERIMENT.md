@@ -67,6 +67,29 @@ production bucket size. They were the large-displacement ones — the
 n6-10 legacy mean falls from 20.74 to 0.79 px over the four merges that
 remain, and n1-2 from 13.75 to 8.85.)
 
+> **2.2.0 note (2026-08-29).** Two things changed in the committed
+> `.ab.json` without moving a displacement number. (1) The nested
+> re-observation rule (#112) turns a line reported inside its own
+> paragraph into a confirmation of the paragraph instead of a new block;
+> the reports now count those separately (`nestedFragmentMerges`: dwell
+> 3, scroll 6 — `mergeCount` 30→33 and 18→24) and keep them OUT of the
+> displacement buckets, since a confirmation moves nothing by
+> construction. Every bucket mean and count above is unchanged. (2) The
+> rig now models the consumer's bucket policy (#113). These two streams
+> predate the recorder's `bk` field, so the committed reports still run
+> on the viewport formula (`input.bucketPolicy: auto` →
+> `viewportFormula`); `--buckets=median` emulates the consumer's 2×
+> median block height rule from the tracked state and gives, on the
+> agreement arm: dwell buckets ≈ 103 px (80 at the start, 220 on the
+> fling tail), 36 merges, n1-2 8.71→10.18 over 18, n3-5 4.07 unchanged,
+> n6-10 0.19→**4.30 over six merges** (legacy 0.79→20.74 — the far
+> matches production geometry was said to lose come back at the
+> consumer's real bucket size), wellObs pconf 0.918→0.911; scroll
+> buckets 103→171 px, 25 merges, n1-2 5.46→6.24 (legacy 6.57). So the
+> viewport-formula numbers UNDERSTATE the displacement the consumer's
+> steady-state geometry sees on this stream; a fresh capture with `bk`
+> will settle which.
+
 ## Reading
 
 This is the **high-amplitude regime the 3× allowance was tuned for**,
@@ -84,18 +107,34 @@ supersession evicts a retained box once one fresh box covers at least
 half of its own area; on the 14 demo frames that cuts overlapping pairs
 of tracked boxes from 32 to 23 (`doc/media/count_overlap_pairs.py` over
 the `dump_frames.dart` output — any two tracked boxes with a positive
-intersection, per frame, summed). Of the 23 that remain, 8 are a
-paragraph box with one of its own lines inside it (ML Kit reports the
-same text as a paragraph in one frame and as one line in the next; the
-line's text is a prefix of the paragraph's and scores under the
-whole-string match gate, so it is admitted as new — and the rule keeps
-the paragraph on purpose), 14 are the lag — captures 16–18 arrive 21 to
-150 px off the earlier frames, so different text lands on an established
-box; capture 18 shifts every block by ~150 px at once — and 1 is a
-segmentation split. The app's own dedup cascade runs after the engine
-and absorbs most of these (its recorded `dedup` events for captures 16,
-17 and 18 add 3, 0 and 2 of 8, 5 and 7 incoming blocks), so the demo
-overstates what the app's overlay shows. The
+intersection, per frame, summed). Of those 23, 8 were a paragraph box
+with one of its own lines inside it (ML Kit reports the same text as a
+paragraph in one frame and as one line in the next; the line's text is
+a prefix of the paragraph's and scores under the whole-string match
+gate, so it was admitted as new), 14 the lag — captures 16–18 arrive 21
+to 150 px off the earlier frames, so different text lands on an
+established box; capture 18 shifts every block by ~150 px at once — and
+1 a segmentation split. 2.2.0's nested re-observation rule (#112)
+absorbs the first family: a fresh box at least 80 % inside a cached
+block whose text it is a fragment of (windowed Levenshtein ≥ 0.70 on ≥ 4
+significant characters) confirms that block instead of spawning, and a
+fragment reported in the same frame as its paragraph is dropped as
+redundant. On the 14 demo frames that takes the count from 23 to **15**
+(per frame `0 0 0 0 0 0 0 0 0 1 0 2 4 8`, from 2.1.0's
+`0 0 0 0 0 1 1 2 2 1 0 3 5 8`); the eight nested pairs — six in frames
+5–8, two in frames 11–12 — are gone, and all 15 that remain are the lag —
+different text over an established box, or the same paragraph split
+into two side-by-side boxes 23–31 px below where it was — which no
+engine rule can tell from real new text (the consumer's issue for the
+lag is cited above). Two measured bars, both from this stream: the host
+must only be a cached non-provisional block seen ONCE (the grouping
+flips every frame here, so a paragraph never reaches two observations
+before its line arrives), and containment is 0.8 because a second line
+hangs 3 px below its paragraph box (14 of 17 px inside). The app's own
+dedup cascade runs after the engine and absorbs most of the lag pairs
+(its recorded `dedup` events for captures 16, 17 and 18 add 3, 0 and 2
+of 8, 5 and 7 incoming blocks), so the demo overstates what the app's
+overlay shows. The
 agreement model damps established chains 2.8× at n3-5 (11.31→4.07; the
 four n6-10 merges go 0.79→0.19) while young blocks stay at parity (8.85
 vs 8.71) — the same shape as the 2026-07 production sweeps (3.8 vs 11.8
@@ -129,7 +168,8 @@ adb reverse tcp:8907 tcp:8907
 # open http://localhost:8907/page.html; drive the two scenarios; pull
 # <documentsDir>/stab-capture/*.jsonl
 dart tool/replay/replay.dart ab-report dwell.jsonl   # 2.1.0: applies meta.vp; --viewport=360x587 for a stream without it
-dart tool/replay/dump_frames.dart dwell.jsonl dump.json 2   # same viewport rule
+dart tool/replay/replay.dart ab-report dwell.jsonl --buckets=median   # 2.2.0: the consumer's 2x-median bucket emulation (the note above)
+dart tool/replay/dump_frames.dart dwell.jsonl dump.json 2   # same viewport rule; --buckets=... as above
 python doc/media/render_demo_gif.py dump.json demo.gif "0,250,360,860" 1.25 14   # the 14 frames = captures 0-18
 ```
 

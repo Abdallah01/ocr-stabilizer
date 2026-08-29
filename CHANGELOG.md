@@ -1,3 +1,97 @@
+## 2.2.0 - 2026-08-29
+
+### Added
+- **Nested re-observation (#112).** An OCR engine's grouping can flip
+  between frames: the same paragraph comes back as one paragraph box in
+  one capture and as one of its own lines in the next. The line's text
+  is a fragment of the paragraph's, so the whole-string match fails
+  (17 vs 33 characters scores under 0.70) and the line was admitted as a
+  NEW block — the same text tracked twice, drawn as a box inside a box
+  until retention expired the paragraph (8 of the 23 residual overlap
+  pairs in the 2.1.0 demo). Now, when both the primary and the band path
+  miss, a fresh block at least 80 % of whose own area lies inside a
+  cached, non-provisional block, and whose text scores ≥ 0.70 windowed
+  Levenshtein against that block's text (on ≥ 4 significant characters),
+  is a confirmation of that block: observation count up, geometry, text
+  and votes untouched — a fragment casts no text vote and pulls no
+  position. Fragments are resolved after every full match of the
+  capture, so a paragraph reported together with one of its lines merges
+  once, never twice. One-directional on purpose: a fresh paragraph over
+  an established line stays on the whole-string path. The two bars were
+  measured on the committed on-device stream, not chosen: the host only
+  has to have been seen once (the grouping flips every frame there), and
+  containment is 0.8 because a line box hangs a few px below its
+  paragraph box. `MergeResult.isNestedFragment` (additive, default
+  false) tells consumers and tools such a confirmation from a position
+  merge. This runs on the match path, so retention 0 — the default — is
+  affected; every committed `.ab.json` was regenerated (below).
+- **`StabilizationEngine.updateBucketSizes` /
+  `SpatialBlockIndex.setBucketSizes` (#113).** Set the spatial-index
+  bucket sizes directly, with the same re-keying contract as
+  `updateViewport`, for consumers whose bucket policy is not the
+  viewport formula (the reference consumer switches to 2× the median
+  block height once it has enough blocks) and for the replay rig.
+  `updateBucketSizes` PINS the sizes: a later `updateViewport` keeps them
+  (a non-formula policy is not silently reverted by the next rotation)
+  until it is called with `resetBucketPolicy: true`;
+  `StabilizationEngine.bucketsPinned` reports the state. The index now
+  re-keys its own blocks whenever its sizes change (`setBucketSizes`,
+  `updateBucketSizes`) — the re-key is no longer a caller obligation.
+- **Nested re-observation × grouping contradictions.** A cached block the
+  grouping detector (#49) flags as split into two or more of the
+  capture's blocks is withheld from nested absorption in that call: the
+  contradiction is handed to the consumer and the fragments enter as new
+  blocks, as before 2.2.0. On a nested confirmation the engine passes the
+  HOST to the merger as `fresh` too, so a merger written to the 2.1
+  contract (copy pass-through fields from `fresh`) cannot overwrite the
+  paragraph's with the line's. `freeze-report` counts
+  `nestedFragmentMerges` beside `totalMerges` and leaves them out of
+  `frozenShare`'s denominator (they can never be freezes); one
+  `BucketPolicyApplier` now drives both `replay()` and
+  `dump_frames.dart`.
+- **The replay rig models the consumer's bucket policy (#113).** Capture
+  schema v1 gains an additive `meta.bk` = `[bucketW, bucketH]` — the
+  buckets the consumer was actually using, written whenever they change
+  and carried onto every later `obs`. `replay()`, `ab-report`,
+  `freeze-report` and `dump_frames.dart` take `--buckets=auto|formula|
+  median`: `auto` (default) applies the stream's `bk` exactly where the
+  producer applied it and falls back to the viewport formula for a
+  stream without it; `formula` is the 2.1.0 behaviour; `median` emulates
+  the reference consumer's rule (from the 4th tracked block on, both
+  sides = clamp(2 × median tracked-block height, 80, 220)) from the
+  stream alone. Reports record `input.bucketPolicy` and the sizes each
+  arm applied (`bucketsApplied`).
+
+### Changed
+- **Reports separate nested confirmations from position merges.**
+  `ab-report` arms gain `nestedFragmentMerges`; `mergeCount` counts every
+  merge, the displacement buckets and the well-observed pconf stats run
+  over `mergeCount − nestedFragmentMerges` only — a confirmation moves
+  nothing by construction and would have pulled every mean toward 0
+  without a box having moved. All eight committed `.ab.json` were
+  regenerated: every displacement mean and count is unchanged; the two
+  on-device ML Kit streams count 3 (dwell, 30→33 merges) and 6 (scroll,
+  18→24) nested confirmations; the six synthetic streams count none.
+- **Bucket-policy delta, measured (#113).** The committed streams predate
+  `bk`, so their reports still run on the viewport formula
+  (`bucketPolicy: viewportFormula` under `auto`). `--buckets=median` on
+  the agreement arm: ML Kit dwell buckets ≈ 103 px instead of 80×88 —
+  36 merges, n1-2 8.71→10.18, n6-10 0.19→4.30 over six merges (legacy
+  0.79→20.74: the far matches the 2.1.0 note said production geometry
+  loses come back at the consumer's real bucket size); ML Kit scroll
+  103→171 px, n1-2 5.46→6.24; PaddleOCR scroll 80 px, n1-2 2.12→0.54,
+  n3-5 1.08→0.14; Tesseract scroll 102–150 px, n1-2 2.87→1.30, n3-5
+  1.08→0.64; the four synthetic dwell streams unchanged. The direction
+  depends on the stream, which is why the field exists — a recorder
+  that writes `bk` settles it per capture. Each entry carries a dated
+  note.
+- Hero demo GIF re-rendered (captures 0–18, `missedFrameRetention: 2`):
+  overlapping tracked-box pairs across the 14 frames drop from 23 to
+  15, all 15 the producer's scroll-stamp lag placing different text (or
+  a re-split of the same paragraph 23–31 px lower) over an established
+  box. The README caption no longer lists the nested line as a visible
+  overlap.
+
 ## 2.1.0 - 2026-08-29
 
 ### Added

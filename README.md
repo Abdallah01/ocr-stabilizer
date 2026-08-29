@@ -15,7 +15,7 @@ the user scrolls. The engine has no internal clock and no warm-up: a block
 is returned usable from its **first** observation; later captures only
 refine positions (see [Timing model](#timing-model)).
 
-![Demo: raw per-frame ML Kit boxes jittering on the left; the same stream stabilized on the right](https://raw.githubusercontent.com/Abdallah01/ocr-stabilizer/017567e/doc/media/stabilizer-demo-mlkit.gif)
+![Demo: raw per-frame ML Kit boxes jittering on the left; the same stream stabilized on the right](https://raw.githubusercontent.com/Abdallah01/ocr-stabilizer/9e8df3f/doc/media/stabilizer-demo-mlkit.gif)
 
 *Real **ML Kit** output, captured on a Galaxy S25 over a synthetic page
 (the committed [on-device corpus](doc/replay/validation/2026-08-mlkit-on-device/)):
@@ -26,9 +26,10 @@ on both panels. Left: the boxes exactly as the production pipeline reports
 them each frame, including the producer's scroll-stamp lag. Right: the
 engine's tracked state (`StabilizationEngine` defaults plus
 `missedFrameRetention: 2`), replayed on the device viewport. Boxes still
-nest on the right in the last frames: a paragraph with one of its own
-lines inside it, and the producer's lagged frames — the entry counts and
-explains both.
+overlap on the right in the last frames: the producer's lagged frames
+put different text over boxes the engine rightly holds — the entry
+counts and explains them (15 pairs over the 14 frames, from 32 in
+2.0.0).
 Rendered from engine output by
 [`tool/replay/dump_frames.dart`](tool/replay/dump_frames.dart) +
 [`doc/media/render_demo_gif.py`](doc/media/render_demo_gif.py) — not an
@@ -77,8 +78,22 @@ counts are evidence depth, never a readiness ladder:
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^2.1.0
+  ocr_stabilizer: ^2.2.0
 ```
+
+> **What's new in 2.2.0** — nested re-observation: when an engine's
+> grouping flips and a paragraph comes back as one of its own lines, the
+> line now confirms the paragraph (count up, box and text untouched)
+> instead of being tracked as a second block inside it — the last
+> box-in-box family the hero GIF showed. `MergeResult.isNestedFragment`
+> marks such a confirmation. `updateBucketSizes` sets the spatial-index
+> buckets directly for consumers whose policy is not the viewport
+> formula, and the replay rig can now apply the buckets a stream recorded
+> (`meta.bk`) or emulate the reference consumer's 2×-median rule
+> (`--buckets=median`) — the committed entries report what that changes.
+> Additive API only; the match path changes for the default
+> configuration (a fragment inside a cached block merges instead of
+> spawning), so re-read your overlap counts if you relied on that.
 
 > **What's new in 2.1.0** — cross-frame supersession under
 > `missedFrameRetention`: a retained box that one fresh box now covers by

@@ -46,6 +46,22 @@ of the 200 px default buckets; merge counts are unchanged and the two
 dwell scenarios (no motion between captures) produce identical numbers
 either way.
 
+> **2.2.0 note (2026-08-29).** Reports regenerated on rig 2.2.0: every
+> number above is unchanged. The new `nestedFragmentMerges` field is 0
+> on all three streams (the corpus never re-groups a paragraph into its
+> lines, so the #112 rule has nothing to do here), and the reports run
+> on the viewport formula (`bucketPolicy: viewportFormula` — the corpus
+> predates `meta.bk`). The consumer's bucket policy, emulated with
+> `--buckets=median` (#113): the corpus' ~60–75 px lines give 102–150 px
+> buckets instead of the formula's 194×220; the two dwell streams are
+> unchanged to two decimals (108 and 118–138 px), the scroll ladder
+> loses one of 312 merges and its agreement displacement drops to 1.30
+> at n1-2 and **0.64** at n3-5 (legacy 1.46 / 1.43), pconf 0.868→0.891
+> — the smaller buckets no longer offer the far-neighbourhood matches
+> that carried the largest displacements. Direction differs per stream
+> (the on-device ML Kit entry moves the other way), which is what the
+> `bk` field is for.
+
 ## Reading
 
 The ML-Kit sweep's qualitative claims **transfer to Tesseract-shaped noise

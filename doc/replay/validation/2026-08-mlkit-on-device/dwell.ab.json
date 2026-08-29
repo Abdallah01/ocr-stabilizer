@@ -8,10 +8,22 @@
     "viewport": {
       "width": 360.0,
       "height": 587.0
+    },
+    "bucketPolicy": "auto",
+    "bucketsApplied": {
+      "legacy": {
+        "policy": "viewportFormula",
+        "sizes": []
+      },
+      "agreementWeighted": {
+        "policy": "viewportFormula",
+        "sizes": []
+      }
     }
   },
   "legacy": {
-    "mergeCount": 30,
+    "mergeCount": 33,
+    "nestedFragmentMerges": 3,
     "displacementByObsN": {
       "n1-2": {
         "count": 17,
@@ -45,7 +57,8 @@
     "wellObservedPconfSaturated": 1.0
   },
   "agreementWeighted": {
-    "mergeCount": 30,
+    "mergeCount": 33,
+    "nestedFragmentMerges": 3,
     "displacementByObsN": {
       "n1-2": {
         "count": 17,
