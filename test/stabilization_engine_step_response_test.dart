@@ -590,6 +590,124 @@ void main() {
           .stepResponseApplied;
       expect(vrFlag, isNull);
     });
+
+    // #116 finding D: only the VR exclusion above was tested for
+    // coherentShift; carousel children get the identical treatment in
+    // `_detectCoherentShift`'s eligible-pairs loop
+    // (`fresh.isHorizontalScrollChild || existing.isHorizontalScrollChild`)
+    // but had no test proving it.
+    test('a carousel-child block that moves like the group is still '
+        'damped, not snapped to the group shift', () {
+      final coherent = _engine(stepResponse: StepResponse.coherentShift);
+      final damp = _engine(stepResponse: StepResponse.damp);
+
+      const carousel = ScrollContext(hzScrollerIndex: 0);
+      _Block carouselMover(double top, String text) => _Block(
+            absoluteRect: AbsoluteRect(Rect.fromLTWH(0, top, 200, 30)),
+            payload: null,
+            originalText: text,
+            isHorizontalScrollChild: true,
+            scrollContext: carousel,
+          );
+      List<_Block> batch1() => [
+            _at(50, text: 'one block text'),
+            _at(600, text: 'two block text'),
+            _at(1100, text: 'three block text'),
+            carouselMover(0, 'carousel card text'),
+          ];
+      List<_Block> batch2() => [
+            _at(200, text: 'one block text'), // +150
+            _at(750, text: 'two block text'), // +150
+            _at(1250, text: 'three block text'), // +150
+            carouselMover(150, 'carousel card text'), // +150 too, but carousel
+          ];
+
+      coherent.engine.stabilize(batch1());
+      damp.engine.stabilize(batch1());
+      final coherentResult = coherent.engine.stabilize(batch2()).stableBlocks;
+      final dampResult = damp.engine.stabilize(batch2()).stableBlocks;
+
+      final carouselCoherent = coherentResult
+          .firstWhere((b) => b.originalText == 'carousel card text');
+      final carouselDamp =
+          dampResult.firstWhere((b) => b.originalText == 'carousel card text');
+      expect(carouselCoherent.observationCount, 2,
+          reason: 'sanity: the carousel block must have actually merged');
+      expect(carouselCoherent.absoluteRect.raw.top,
+          closeTo(carouselDamp.absoluteRect.raw.top, 0.01),
+          reason: 'the carousel-child block must be damped exactly as under '
+              'StepResponse.damp — it never joins the vote despite a '
+              'matching displacement');
+      expect(carouselCoherent.absoluteRect.raw.top, isNot(closeTo(150.0, 5.0)),
+          reason: 'sanity: prove it was NOT snapped to the group shift');
+
+      final carouselFlag = coherent.log
+          .firstWhere((m) => m.winningOriginalText == 'carousel card text')
+          .stepResponseApplied;
+      expect(carouselFlag, isNull);
+    });
+  });
+
+  group('(k) snap never re-anchors a VR or carousel-child block, even via '
+      'merge() called directly (#116 finding D)', () {
+    // _detectCoherentShift already excludes viewport-relative and
+    // horizontal-scroll-child blocks from its eligible-pairs computation
+    // (group (h) above). `_mergeImpl`'s SNAP branch had no equivalent
+    // exclusion — `stepResponseEligible` only checked `wasBandFallback`
+    // and `positionMergeModel`. These tests call the PUBLIC `merge()`
+    // entry point directly (not `stabilize()`) to prove the fix lives in
+    // `_mergeImpl` itself, reachable by any consumer that does its own
+    // block matching — not merely a `stabilize()`-loop side effect.
+    test('a VR block: residual well past threshold, snap must still not '
+        'fire', () {
+      final rig = _engine(stepResponse: StepResponse.snap);
+      final existing = _at(100, isViewportRelative: true);
+      final fresh = _at(400, isViewportRelative: true);
+      final output = rig.engine.merge(fresh, existing);
+
+      expect(rig.log.last.stepResponseApplied, isNull,
+          reason: 'a viewport-relative block must never be snapped — a '
+              'different coordinate contract than the page-absolute '
+              'shift snap re-anchors within');
+      expect(output.merged.absoluteRect.raw.top, closeTo(250.0, 0.01),
+          reason: 'without snap firing, the merge must fall back to '
+              "damp's ordinary weighted-average lerp (w=0.5 for two "
+              '0.9-confidence, single-observation blocks -> exact '
+              'midpoint of 100 and 400) instead of a full re-anchor to '
+              '400');
+    });
+
+    test('a carousel-child block: residual well past threshold, snap must '
+        'still not fire', () {
+      final rig = _engine(stepResponse: StepResponse.snap);
+      const carousel = ScrollContext(hzScrollerIndex: 0);
+      final existing = _Block(
+        absoluteRect: const AbsoluteRect(Rect.fromLTWH(0, 100, 200, 30)),
+        payload: null,
+        originalText: 'stable paragraph text',
+        isHorizontalScrollChild: true,
+        scrollContext: carousel,
+      );
+      final fresh = _Block(
+        absoluteRect: const AbsoluteRect(Rect.fromLTWH(0, 400, 200, 30)),
+        payload: null,
+        originalText: 'stable paragraph text',
+        isHorizontalScrollChild: true,
+        scrollContext: carousel,
+      );
+      final output = rig.engine.merge(fresh, existing);
+
+      expect(rig.log.last.stepResponseApplied, isNull,
+          reason: 'a horizontal-scroll-child (carousel) block must never '
+              'be snapped — carousel motion is not page-scroll motion, '
+              "matching _detectCoherentShift's own exclusion");
+      expect(output.merged.absoluteRect.raw.top, closeTo(250.0, 0.01),
+          reason: 'without snap firing, the merge must fall back to '
+              "damp's ordinary weighted-average lerp (w=0.5 for two "
+              '0.9-confidence, single-observation blocks -> exact '
+              'midpoint of 100 and 400) instead of a full re-anchor to '
+              '400');
+    });
   });
 
   group('(i) coherentShift on a static batch is bit-identical to damp', () {

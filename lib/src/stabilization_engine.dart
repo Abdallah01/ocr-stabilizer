@@ -1910,8 +1910,19 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     var w = _positionMergeWeight(fresh, existing);
     double? residualOverride;
     StepResponse? appliedStepResponse;
+    // #116 finding D: the VR/carousel-child exclusion mirrors
+    // `_detectCoherentShift`'s own eligible-pairs filter exactly (see that
+    // method's doc). Gating the SHARED flag rather than only the
+    // coherentShift branch below also closes snap's exclusion — snap had
+    // none before this fix, while coherentShift was already effectively
+    // covered (a VR/carousel `existing` never enters
+    // `_detectCoherentShift`'s `memberDrift` map in the first place, so
+    // `coherentShiftTranslation` is already null for it regardless).
     final stepResponseEligible = !wasBandFallback &&
-        positionMergeModel == PositionMergeModel.agreementWeighted;
+        positionMergeModel == PositionMergeModel.agreementWeighted &&
+        !fresh.isViewportRelative &&
+        !fresh.isHorizontalScrollChild &&
+        !existing.isHorizontalScrollChild;
 
     if (stepResponseEligible && stepResponse == StepResponse.snap) {
       final residual =
