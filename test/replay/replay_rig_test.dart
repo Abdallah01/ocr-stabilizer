@@ -441,6 +441,90 @@ void main() {
           ['legacy', 'agreementWeighted', 'agreementSnap', 'agreementCoherent']));
     });
 
+    // #116 finding F: the test above only shape-checks meanTopLagByCapture
+    // (isA<Map>) -- it never pins a VALUE, so a bug in the metric itself
+    // (wrong sign, wrong axis, wrong averaging) would sail through green.
+    // This hand-builds a tiny 2-capture stream with a known, clean step
+    // and pins the exact numbers under all three step-response arms.
+    group('meanTopLagByCapture: a VALUE test, not just a shape check '
+        '(#116 finding F)', () {
+      // 3 blocks (coherentShiftMinBlocks's default floor), 600px apart --
+      // well outside the spatial index's default 200px-bucket 3x3
+      // neighborhood, so none is ever a spatial-match candidate for
+      // another (see stabilization_engine_prepass_band_interleaving_test
+      // .dart's identical reasoning). Each steps DOWN by exactly 60px
+      // between capture 1 and capture 2: past both snap's default
+      // threshold (1.5 x scale, scale = 3 x height=10 -> 45px) and
+      // _detectCoherentShift's own "moved" floor (scale=30px), and well
+      // within its clustering tolerance (0.5 x height=10 -> 5px; all 3
+      // move by the IDENTICAL (0, 60), so their pairwise diff is 0).
+      // pconf=tconf=0.5 on every block, matching this file's other
+      // fixtures, and obsN=1 on every capture-1 block. Under
+      // PositionMergeModel.agreementWeighted with a single prior
+      // observation at equal fresh/existing confidence, the merge weight
+      // (_positionMergeWeight) is exactly freshConf / (existingConf x 1 +
+      // freshConf) = 0.5 -- the arithmetic every expected value below
+      // depends on.
+      String block(double top, String text) =>
+          '{"rect": [0, $top, 200, ${top + 10}], "otext": "$text", '
+          '"pconf": 0.5, "tconf": 0.5, "obsN": 1, "prov": false, '
+          '"provN": 0}';
+      String capture(int cap, List<double> tops) =>
+          '{"t": "obs", "ts": $cap, "cap": $cap, "raw": ${tops.length}, '
+          '"blocks": [${[
+            block(tops[0], 'alpha para text'),
+            block(tops[1], 'bravo para text'),
+            block(tops[2], 'charlie para text'),
+          ].join(', ')}]}';
+      CaptureStream fixture() => CaptureStream.parse([
+            capture(1, [100, 700, 1300]),
+            capture(2, [160, 760, 1360]), // +60px each, identical shift
+          ]);
+
+      test('damp: lag is the UN-DAMPED remainder -- w=0.5 halves the 60px '
+          'step, so the lag is the other half (30.0), exactly, every '
+          'block', () {
+        final report = abReport(fixture());
+        final damp = report['agreementWeighted'] as Map<String, Object?>;
+        final lag = damp['meanTopLagByCapture'] as Map<String, Object?>;
+        expect(lag['1'], isNull,
+            reason: 'capture 1 is the first-ever observation of every '
+                'block -- nothing to match against, so no merges to '
+                'average at all (not zero -- genuinely absent)');
+        expect(lag['2'], 30.0,
+            reason: 'merged.top lands exactly halfway between '
+                "existing.top and fresh.top (w=0.5) -- the lag is fresh's "
+                'other, un-applied half of the 60px step');
+      });
+
+      test('snap: lag is (approximately) zero -- a full re-anchor to the '
+          "block's own corrected position", () {
+        final report = abReport(fixture());
+        final snap = report['agreementSnap'] as Map<String, Object?>;
+        final lag = snap['meanTopLagByCapture'] as Map<String, Object?>;
+        expect(lag['1'], isNull);
+        expect(lag['2'], 0.0,
+            reason: 'residual 60px clears snapThresholdMultiplier(1.5) x '
+                'scale(3 x height=10 -> 30)=45 -> full re-anchor '
+                '(w=1.0) to the corrected rect, which equals fresh.top '
+                'exactly at zero drift correction (this is each block\'s '
+                'first re-observation)');
+      });
+
+      test('coherentShift: lag is (approximately) zero -- the group vote '
+          'lands exactly on the step', () {
+        final report = abReport(fixture());
+        final coherent = report['agreementCoherent'] as Map<String, Object?>;
+        final lag = coherent['meanTopLagByCapture'] as Map<String, Object?>;
+        expect(lag['1'], isNull);
+        expect(lag['2'], 0.0,
+            reason: 'all 3 blocks move identically by (0, 60) -> the '
+                'group vote translation is exactly (0, 60), landing the '
+                "shifted baseline exactly on fresh's own (zero-drift-"
+                'corrected) position regardless of merge weight');
+      });
+    });
+
     test('identityByCapture matches the merges/observed-blocks ratio the '
         'dynamic-reflow corpus test computes independently', () {
       final s = loadFixture();
