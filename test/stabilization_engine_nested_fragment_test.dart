@@ -56,6 +56,25 @@ class _MixedNamespaceIndex
       allBlocks;
 }
 
+/// An index that offers candidates largest-area first — pins that the
+/// nested rule picks the TIGHTEST host rather than the first one seen.
+class _LargestFirstIndex extends SpatialBlockIndex<DefaultTrackedBlock<void>> {
+  List<DefaultTrackedBlock<void>> _largestFirst() {
+    double area(DefaultTrackedBlock<void> b) =>
+        b.absoluteRect.raw.width * b.absoluteRect.raw.height;
+    return allBlocks.toList()..sort((a, b) => area(b).compareTo(area(a)));
+  }
+
+  @override
+  Iterable<DefaultTrackedBlock<void>> candidates(
+          DefaultTrackedBlock<void> block) =>
+      _largestFirst();
+
+  @override
+  Iterable<DefaultTrackedBlock<void>> blocksInRegion(Rect region) =>
+      _largestFirst();
+}
+
 // Geometry from the committed ML Kit dwell stream: a two-line paragraph and
 // its first line reported alone in a later frame.
 const Rect kPara = Rect.fromLTWH(33, 754, 300, 52);
@@ -271,30 +290,41 @@ void main() {
       expect(r.stableBlocks.single.observationCount, 3);
     });
 
-    test('the tightest host wins when a fragment sits inside two established '
-        'blocks, whichever was indexed first', () {
-      // A page-wide block whose text happens to contain the same words,
+    test('the tightest host wins when a fragment sits inside two cached '
+        'blocks, even when the larger one is offered first', () {
+      // A page-wide block whose text happens to contain the line's words,
       // and the paragraph itself: the smaller (paragraph) absorbs the line.
-      // Both insertion orders, so a "first candidate wins" regression
-      // cannot pass by iteration-order luck.
+      // The two hosts cannot share a batch (batch NMS keeps one of two
+      // fully overlapping blocks), so the wide block is established first
+      // and kept by retention while the paragraph is established on top
+      // of it (a fresh paragraph covers 19.5% of the wide block — under
+      // the supersession floor, so the wide block stays). The injected
+      // index offers candidates LARGEST FIRST, so a "first candidate wins"
+      // regression picks the wide block (mutation-verified). The wide text
+      // must fail BOTH primary arms against the paragraph: Levenshtein
+      // (long enough) AND the character-set Jaccard (0.80) — two Latin
+      // sentences share nearly every letter, so it carries digits and
+      // rare capitals the paragraph lacks.
       const wide = Rect.fromLTWH(0, 700, 400, 200);
-      const wideText = 'Header The quick brown fox jumps over the lazy dog '
-          'near the river bank and a footer';
-      for (final wideFirst in [true, false]) {
-        final engine = _engine();
-        final batch = wideFirst
-            ? [_at(wide, wideText), _at(kPara, kParaText)]
-            : [_at(kPara, kParaText), _at(wide, wideText)];
-        engine.stabilize(batch);
-        engine.stabilize(batch);
-        final r = engine.stabilize([_at(kLine, kLineText)]);
-        // Only the line was observed this frame, so the frame's stable set
-        // holds exactly the host it confirmed — which must be the
-        // paragraph, not the wide block.
-        expect(r.stableBlocks.single.originalText, kParaText,
-            reason: 'order wideFirst=$wideFirst: the paragraph absorbs it');
-        expect(r.stableBlocks.single.observationCount, 3);
-      }
+      const wideText = '0123456789 header with numbers 0123456789 QWXYZ. '
+          'The quick brown fox jumps. 0123456789 footer QWXYZ 9876543210.';
+      final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
+        merger: (existing, fresh, merge) => existing.applyMerge(merge),
+        missedFrameRetention: 3,
+        spatialIndex: _LargestFirstIndex(),
+      );
+      engine.stabilize([_at(wide, wideText)]);
+      engine.stabilize([_at(wide, wideText)]);
+      engine.stabilize([_at(kPara, kParaText)]);
+      engine.stabilize([_at(kPara, kParaText)]);
+      expect(engine.spatialIndex.allBlocks, hasLength(2),
+          reason: 'fixture: both hosts are cached (the wide one retained)');
+      final r = engine.stabilize([_at(kLine, kLineText)]);
+      // Only the line was observed this frame, so the frame's stable set
+      // holds exactly the host it confirmed — the paragraph, not the wide
+      // block.
+      expect(r.stableBlocks.single.originalText, kParaText);
+      expect(r.stableBlocks.single.observationCount, 3);
     });
   });
 
