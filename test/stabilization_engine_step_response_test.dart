@@ -86,6 +86,78 @@ void main() {
     });
   });
 
+  // The four #116 tunables previously had no constructor validation, unlike
+  // every other engine config knob (`missedFrameRetention`, the
+  // `BandFallbackConfig` fields via `_validateBandFallbackConfig`). Two
+  // failure classes matter here specifically because they're SILENT: a NaN
+  // multiplier/tolerance makes every comparison false, so the option looks
+  // configured but the corresponding StepResponse permanently never fires
+  // (mirrors the NaN hazard `_validateBandFallbackConfig`'s own comment
+  // documents for `bandLevenshteinFloor`/`bandJaccardFloor`); a
+  // non-positive `coherentShiftMinBlocks` makes its own gate
+  // (`bestGroup.length < coherentShiftMinBlocks`) permanently false, i.e.
+  // unreachable rather than merely lenient.
+  group('StepResponse constructor validation', () {
+    StabilizationEngine<_Block, void> build({
+      double snapThresholdMultiplier = 1.5,
+      int coherentShiftMinBlocks = 3,
+      double coherentShiftMinShare = 0.5,
+      double coherentShiftTolerance = 0.5,
+    }) {
+      return StabilizationEngine<_Block, void>(
+        merger: (existing, fresh, merge) => existing.applyMerge(merge),
+        snapThresholdMultiplier: snapThresholdMultiplier,
+        coherentShiftMinBlocks: coherentShiftMinBlocks,
+        coherentShiftMinShare: coherentShiftMinShare,
+        coherentShiftTolerance: coherentShiftTolerance,
+      );
+    }
+
+    test('snapThresholdMultiplier rejects NaN, non-finite and <= 0', () {
+      expect(() => build(snapThresholdMultiplier: double.nan),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(snapThresholdMultiplier: double.infinity),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(snapThresholdMultiplier: 0.0),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(snapThresholdMultiplier: -1.5),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(snapThresholdMultiplier: 1.5), returnsNormally);
+    });
+
+    test('coherentShiftMinBlocks rejects < 1', () {
+      expect(() => build(coherentShiftMinBlocks: 0),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftMinBlocks: -3),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftMinBlocks: 1), returnsNormally);
+    });
+
+    test('coherentShiftMinShare rejects NaN, non-finite and outside [0.0, 1.0]',
+        () {
+      expect(() => build(coherentShiftMinShare: double.nan),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftMinShare: double.infinity),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftMinShare: -0.1),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftMinShare: 1.1),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftMinShare: 0.0), returnsNormally);
+      expect(() => build(coherentShiftMinShare: 1.0), returnsNormally);
+    });
+
+    test('coherentShiftTolerance rejects NaN, non-finite and negative', () {
+      expect(() => build(coherentShiftTolerance: double.nan),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftTolerance: double.infinity),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftTolerance: -0.1),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftTolerance: 0.0), returnsNormally);
+    });
+  });
+
   group('(a) damp reproduces the pinned #58 numerics', () {
     test('scale is 3x own height; residual 60 against scale 90 -> 0.7083', () {
       // Reuses the exact expectation pinned in

@@ -237,6 +237,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         'for N further stabilize() calls.',
       );
     }
+    _validateStepResponseConfig(
+      snapThresholdMultiplier: snapThresholdMultiplier,
+      coherentShiftMinBlocks: coherentShiftMinBlocks,
+      coherentShiftMinShare: coherentShiftMinShare,
+      coherentShiftTolerance: coherentShiftTolerance,
+    );
   }
 
   /// How many consecutive [stabilize] calls a tracked block survives in
@@ -447,6 +453,56 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         cfg.provisionalCaptures,
         'provisionalCaptures',
         'must be >= 1',
+      );
+    }
+  }
+
+  /// Validate the #116 [StepResponse] tunables with release-safe
+  /// [ArgumentError], the same treatment [_validateBandFallbackConfig] gives
+  /// [BandFallbackConfig].
+  ///
+  /// Two failure classes matter here specifically because they are SILENT
+  /// rather than merely permissive: a non-finite [snapThresholdMultiplier]
+  /// or [coherentShiftTolerance] makes every downstream comparison false
+  /// (the same IEEE-754 hazard `_validateBandFallbackConfig`'s own comment
+  /// documents), so the option looks configured but its `StepResponse`
+  /// permanently never fires; a [coherentShiftMinBlocks] < 1 makes the
+  /// winning group's own size gate (`bestGroup.length < coherentShiftMinBlocks`)
+  /// permanently false, i.e. unreachable rather than merely lenient.
+  static void _validateStepResponseConfig({
+    required double snapThresholdMultiplier,
+    required int coherentShiftMinBlocks,
+    required double coherentShiftMinShare,
+    required double coherentShiftTolerance,
+  }) {
+    if (!snapThresholdMultiplier.isFinite || snapThresholdMultiplier <= 0.0) {
+      throw ArgumentError.value(
+        snapThresholdMultiplier,
+        'snapThresholdMultiplier',
+        'must be a finite double > 0',
+      );
+    }
+    if (coherentShiftMinBlocks < 1) {
+      throw ArgumentError.value(
+        coherentShiftMinBlocks,
+        'coherentShiftMinBlocks',
+        'must be >= 1',
+      );
+    }
+    if (!coherentShiftMinShare.isFinite ||
+        coherentShiftMinShare < 0.0 ||
+        coherentShiftMinShare > 1.0) {
+      throw ArgumentError.value(
+        coherentShiftMinShare,
+        'coherentShiftMinShare',
+        'must be a finite value in [0.0, 1.0]',
+      );
+    }
+    if (!coherentShiftTolerance.isFinite || coherentShiftTolerance < 0.0) {
+      throw ArgumentError.value(
+        coherentShiftTolerance,
+        'coherentShiftTolerance',
+        'must be a finite value >= 0.0',
       );
     }
   }
