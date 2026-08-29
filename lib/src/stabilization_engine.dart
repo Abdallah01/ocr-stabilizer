@@ -827,6 +827,13 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         continue;
       }
       matchedExisting.add(existing);
+      // #116 finding C: `frozenRegionDrift` threads the SAME drift
+      // snapshot `_detectCoherentShift`'s dry pre-pass used for this
+      // member's displacement into its real merge — see that method's
+      // "Frozen drift snapshot" doc for why a live re-read here would be
+      // order-dependent.
+      final isCoherentMember = coherentShiftPlan != null &&
+          coherentShiftPlan.memberDrift.containsKey(existing);
       final merged = _merge(
         fresh,
         existing,
@@ -834,9 +841,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         wellObservedTexts,
         wasBandFallback: matchResult.wasBandFallback,
         coherentShiftTranslation:
-            coherentShiftPlan != null && coherentShiftPlan.members.contains(existing)
-                ? coherentShiftPlan.translation
-                : null,
+            isCoherentMember ? coherentShiftPlan.translation : null,
+        frozenRegionDrift:
+            isCoherentMember ? coherentShiftPlan.memberDrift[existing] : null,
       );
       stableBlocks.add(merged);
     }
@@ -956,6 +963,23 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// what `_mergeImpl` computes) exceeds the existing block's own
   /// agreement scale ([_agreementScale]).
   ///
+  /// **Frozen drift snapshot** (#116 finding C): each accepted member's
+  /// `driftTracker.medianDriftForKey(spaceKey)` — the SAME value used
+  /// above to compute its "moved" displacement and, transitively, the
+  /// group's translation — is captured into the returned map alongside
+  /// membership. `stabilize` threads it back into that member's real
+  /// merge as `frozenRegionDrift`, so the translation this method votes
+  /// on and the residual/`driftCorrection` that merge reports are always
+  /// read from ONE snapshot. Without this, `_mergeImpl`'s own step 2
+  /// recomputes `driftTracker.medianDriftForKey` LIVE against a tracker
+  /// already mutated by any earlier same-capture merge in the real
+  /// interleaved loop — which member merges first (and therefore whether
+  /// the space key has crossed the tracker's 3-observation floor by the
+  /// time a given member's merge runs) depends on arrival order, so the
+  /// reported residual/confidence could silently diverge across
+  /// otherwise-identical orderings even though the vote itself (fixed by
+  /// finding B) does not.
+  ///
   /// **Clustering** (#116 finding B, 2026-08-29 rewrite — the original
   /// dy-only sort plus a single greedy incremental-median pass was
   /// caller-arrival-order dependent: two pairs with equal or near-equal
@@ -978,7 +1002,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// spec's pairwise "smaller block height" tolerance for a
   /// group-vs-candidate comparison; see the #116 PR description for the
   /// alternative (per-pair, not per-group) reading.
-  ({Offset translation, Set<T> members})? _detectCoherentShift(
+  ({Offset translation, Map<T, Offset> memberDrift})? _detectCoherentShift(
     List<({T fresh, ({T? match, bool wasBandFallback, bool wasNestedFragment}) result})>
         matchResults,
   ) {
@@ -990,6 +1014,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final movedDx = <double>[];
     final movedDy = <double>[];
     final movedHeight = <double>[];
+    final movedRegionDrift = <Offset>[];
     for (final entry in matchResults) {
       final fresh = entry.fresh;
       final r = entry.result;
@@ -1018,6 +1043,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       var height = existing.absoluteRect.raw.height;
       if (!height.isFinite || height <= 0) height = 16.0;
       movedHeight.add(height);
+      // #116 finding C: the SAME snapshot that produced this member's
+      // displacement above, frozen for its real merge later this capture.
+      movedRegionDrift.add(regionDrift);
     }
 
     if (movedExisting.length < coherentShiftMinBlocks) return null;
@@ -1099,9 +1127,17 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
 
     final tx = RobustStats.median([for (final j in bestGroup) movedDx[j]])!;
     final ty = RobustStats.median([for (final j in bestGroup) movedDy[j]])!;
-    final members = Set<T>.identity()
-      ..addAll([for (final j in bestGroup) movedExisting[j]]);
-    return (translation: Offset(tx, ty), members: members);
+    // #116 finding C: one map carries both membership AND each member's
+    // frozen drift snapshot -- a single source of truth `stabilize` reads
+    // for both membership (`containsKey`) and `frozenRegionDrift` (the
+    // value itself). Two parallel collections built from the same loop
+    // could fall out of sync under a later edit; a missing key here
+    // would silently fall back to a live tracker read in `_mergeImpl`
+    // with nothing red.
+    final memberDrift = <T, Offset>{
+      for (final j in bestGroup) movedExisting[j]: movedRegionDrift[j],
+    };
+    return (translation: Offset(tx, ty), memberDrift: memberDrift);
   }
 
   // ── Drift propagation ────────────────────────────────────────────────
@@ -1684,6 +1720,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// [StepResponse.coherentShift] AND [existing] is a member of this
   /// batch's qualifying shift group (see `stabilize`'s
   /// `_detectCoherentShift` call). Threaded straight to `_mergeImpl`.
+  ///
+  /// [frozenRegionDrift] — (#116 finding C) non-null in lockstep with
+  /// [coherentShiftTranslation]: the drift snapshot `_detectCoherentShift`
+  /// used to compute THIS member's displacement, threaded through so
+  /// `_mergeImpl` reads the same snapshot instead of re-reading (and
+  /// potentially getting a different answer from) the live tracker.
   T _merge(
     T fresh,
     T existing,
@@ -1692,6 +1734,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     bool wasBandFallback = false,
     bool wasNestedFragment = false,
     Offset? coherentShiftTranslation,
+    Offset? frozenRegionDrift,
   }) {
     final output = _mergeImpl(
       fresh,
@@ -1699,6 +1742,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       wasBandFallback: wasBandFallback,
       nestedFragment: wasNestedFragment,
       coherentShiftTranslation: coherentShiftTranslation,
+      frozenRegionDrift: frozenRegionDrift,
     );
     if (output.textWasPromoted && output.promotedFromText != null) {
       invalidatedTexts.add(output.promotedFromText!);
@@ -1729,6 +1773,16 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// batch's qualifying shift group. When set, the weighted merge and the
   /// confidence computation both run against `existing`'s rect translated
   /// by this offset instead of `existing`'s own rect.
+  ///
+  /// [frozenRegionDrift] — (#116 finding C) non-null in lockstep with
+  /// [coherentShiftTranslation]. When set, step 2 below uses this value
+  /// in place of a live `driftTracker.medianDriftForKey` read, so the
+  /// residual/`driftCorrection` this merge reports is computed from the
+  /// SAME snapshot `_detectCoherentShift` used to vote the translation —
+  /// never a tracker already mutated by an earlier same-capture merge in
+  /// this capture's interleaved loop (see `_detectCoherentShift`'s
+  /// "Frozen drift snapshot" doc for why a live re-read would be
+  /// arrival-order dependent).
   MergeOutput<T> _mergeImpl(
     T fresh,
     T existing, {
@@ -1736,6 +1790,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     bool wasBandFallback = false,
     bool nestedFragment = false,
     Offset? coherentShiftTranslation,
+    Offset? frozenRegionDrift,
   }) {
     // ┌─── Nested fragment: confirming observation only (#112) ────────
     // The fresh block is one line of `existing` reported on its own. It
@@ -1829,8 +1884,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     }
 
     // 2. Correct fresh observation for known regional drift.
+    //
+    // #116 finding C: a coherent-shift member reads its FROZEN snapshot
+    // (the one `_detectCoherentShift` used to vote the translation) here
+    // instead of re-reading the live tracker — see this method's
+    // `frozenRegionDrift` doc.
     final spaceKey = driftTracker.spaceKeyFor(fresh);
-    final regionDrift = driftTracker.medianDriftForKey(spaceKey);
+    final regionDrift =
+        frozenRegionDrift ?? driftTracker.medianDriftForKey(spaceKey);
     final correctedRect = DriftTracker.applyCorrectedPosition(
       fresh.absoluteRect.raw,
       regionDrift,
