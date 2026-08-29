@@ -319,10 +319,15 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// step. Default `0.5`.
   final double coherentShiftMinShare;
 
-  /// [StepResponse.coherentShift] clustering tolerance: two moved pairs'
-  /// displacements are considered to agree when their difference is at
-  /// most this multiple of the smaller of the two blocks' heights. Default
-  /// `0.5`. See `_detectCoherentShift` for the exact clustering algorithm.
+  /// [StepResponse.coherentShift] clustering tolerance: a moved pair
+  /// joins a candidate group when its displacement is within this
+  /// multiple of `min(the pair's own block height, the candidate
+  /// group's median block height)` of the group's median displacement
+  /// (#116 finding B, 2026-08-29: reworded from a pairwise "smaller of
+  /// the two blocks' heights" comparison — the algorithm has always
+  /// compared a candidate against a GROUP, never against one other pair,
+  /// so this now says what the code does). Default `0.5`. See
+  /// `_detectCoherentShift` for the exact clustering algorithm.
   final double coherentShiftTolerance;
 
   /// Lerp weight toward the fresh (drift-corrected) observation.
@@ -924,15 +929,16 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   // median displacement as the batch shift every member's merge applies.
   // └──────────────────────────────────────────────────────────────────
 
-  /// Detect a per-batch coherent shift among [matchResults] (the pre-pass
-  /// `stabilize` already computed — see its doc for why calling
-  /// `_findMatch` there instead of here is safe).
+  /// Detect a per-batch coherent shift among [matchResults] (a DRY,
+  /// primary-match-only pre-pass `stabilize` computes just for this call
+  /// — see its doc for why that pre-pass is safe to run ahead of this
+  /// capture's merges).
   ///
   /// Returns `null` when [positionMergeModel] is not
   /// [PositionMergeModel.agreementWeighted] (legacy has no residual/scale
   /// concept to detect "moved" against — documented no-op, see
   /// [StepResponse]), when fewer than [coherentShiftMinBlocks] pairs moved
-  /// at all, or when the largest cluster fails either
+  /// at all, or when the largest valid window fails either
   /// [coherentShiftMinBlocks] or [coherentShiftMinShare].
   ///
   /// **Eligible pairs** — ordinary text matches only: excludes band
@@ -950,19 +956,28 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// what `_mergeImpl` computes) exceeds the existing block's own
   /// agreement scale ([_agreementScale]).
   ///
-  /// **Clustering** — sort moved pairs by displacement.dy, then scan once:
-  /// grow the current group while each next candidate's displacement is
-  /// within `coherentShiftTolerance x min(candidate's height, the
-  /// group-so-far's median height)` of the group-so-far's median
-  /// displacement (both axes, Euclidean); otherwise close the current
-  /// group and start a new one at that candidate. Because the input is
-  /// dy-sorted, this produces contiguous runs — a single greedy pass, not
-  /// an optimal clustering, but sufficient to separate "everything moved
-  /// the same amount" from "several unrelated things moved." Keep the
-  /// largest run. This is one reasonable instantiation of the spec's
-  /// pairwise "smaller block height" tolerance for a group-vs-candidate
-  /// comparison; see the #116 PR description for the alternative
-  /// (per-pair, not per-group) reading.
+  /// **Clustering** (#116 finding B, 2026-08-29 rewrite — the original
+  /// dy-only sort plus a single greedy incremental-median pass was
+  /// caller-arrival-order dependent: two pairs with equal or near-equal
+  /// dy have no secondary sort key, so which one a greedy scan visited
+  /// first — and therefore which running-median state a later candidate
+  /// was compared against — depended on the order fresh blocks arrived
+  /// in, not on their values) — sort moved pairs by a deterministic total
+  /// order over their VALUES: `(dy, dx, existing.top, existing.left,
+  /// height)`, original index last as an always-harmless final tiebreak
+  /// (two value-identical pairs always land in the same window
+  /// regardless of their relative order). Then search every contiguous
+  /// window of that order, LARGEST size first, for one whose members are
+  /// all within `coherentShiftTolerance x min(member's own height, the
+  /// window's OWN median height)` of the window's OWN median displacement
+  /// (both axes, Euclidean) — validated against the window's FINAL
+  /// membership, never an incremental running state. The first (largest,
+  /// then leftmost-start) valid window wins; ties within a size resolve
+  /// to the same window every time because the search itself is a fixed,
+  /// deterministic sweep. This is one reasonable instantiation of the
+  /// spec's pairwise "smaller block height" tolerance for a
+  /// group-vs-candidate comparison; see the #116 PR description for the
+  /// alternative (per-pair, not per-group) reading.
   ({Offset translation, Set<T> members})? _detectCoherentShift(
     List<({T fresh, ({T? match, bool wasBandFallback, bool wasNestedFragment}) result})>
         matchResults,
@@ -1007,36 +1022,77 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
 
     if (movedExisting.length < coherentShiftMinBlocks) return null;
 
+    // Deterministic total order (#116, finding B fix): (dy, dx,
+    // existing.top, existing.left, height), original index last as an
+    // always-harmless final tiebreak. The OLD algorithm sorted by dy
+    // ALONE, so two pairs with equal (or near-equal) dy had no defined
+    // relative order — the greedy scan below then compared a later
+    // candidate against whichever running state that undefined order
+    // produced, making the result depend on caller arrival order. This
+    // order depends only on the pairs' own VALUES: two value-identical
+    // pairs always land in the same window regardless of their relative
+    // order between themselves, so the index tiebreak never actually
+    // changes which window search below finds.
     final order = List<int>.generate(movedExisting.length, (i) => i)
-      ..sort((a, b) => movedDy[a].compareTo(movedDy[b]));
+      ..sort((a, b) {
+        var c = movedDy[a].compareTo(movedDy[b]);
+        if (c != 0) return c;
+        c = movedDx[a].compareTo(movedDx[b]);
+        if (c != 0) return c;
+        c = movedExisting[a]
+            .absoluteRect
+            .raw
+            .top
+            .compareTo(movedExisting[b].absoluteRect.raw.top);
+        if (c != 0) return c;
+        c = movedExisting[a]
+            .absoluteRect
+            .raw
+            .left
+            .compareTo(movedExisting[b].absoluteRect.raw.left);
+        if (c != 0) return c;
+        c = movedHeight[a].compareTo(movedHeight[b]);
+        if (c != 0) return c;
+        return a.compareTo(b);
+      });
 
+    // Find the LARGEST contiguous (in the deterministic order above)
+    // window whose members all sit within `coherentShiftTolerance x
+    // min(member's own height, the window's OWN median height)` of the
+    // window's OWN median displacement — validated against the window's
+    // FINAL membership, never an incremental running state a scan order
+    // could bias (the old bug). Search sizes largest-first so the first
+    // valid window found is the largest; ties within a size break toward
+    // the leftmost (smallest start index) window in the deterministic
+    // order, so the search is fully reproducible.
     List<int>? bestGroup;
-    var current = <int>[];
-    for (final i in order) {
-      if (current.isEmpty) {
-        current = [i];
-        continue;
-      }
-      final groupDx = RobustStats.median([for (final j in current) movedDx[j]])!;
-      final groupDy = RobustStats.median([for (final j in current) movedDy[j]])!;
-      final groupHeight =
-          RobustStats.median([for (final j in current) movedHeight[j]])!;
-      final tol = coherentShiftTolerance * min(groupHeight, movedHeight[i]);
-      final diff = Offset(movedDx[i] - groupDx, movedDy[i] - groupDy).distance;
-      if (diff <= tol) {
-        current.add(i);
-      } else {
-        if (bestGroup == null || current.length > bestGroup.length) {
-          bestGroup = current;
+    for (var size = movedExisting.length;
+        bestGroup == null && size >= coherentShiftMinBlocks;
+        size--) {
+      for (var start = 0; start + size <= order.length; start++) {
+        final window = order.sublist(start, start + size);
+        final wDx = RobustStats.median([for (final j in window) movedDx[j]]);
+        final wDy = RobustStats.median([for (final j in window) movedDy[j]]);
+        final wHeight =
+            RobustStats.median([for (final j in window) movedHeight[j]]);
+        // Only reachable if `window` were empty — `size` never goes
+        // below `coherentShiftMinBlocks`, which the constructor already
+        // enforces to be >= 1 (finding E: explicit non-null handling
+        // instead of a force-unwrap that would crash on this case).
+        if (wDx == null || wDy == null || wHeight == null) continue;
+        final valid = window.every((j) {
+          final tol = coherentShiftTolerance * min(movedHeight[j], wHeight);
+          final diff = Offset(movedDx[j] - wDx, movedDy[j] - wDy).distance;
+          return diff <= tol;
+        });
+        if (valid) {
+          bestGroup = window;
+          break;
         }
-        current = [i];
       }
-    }
-    if (bestGroup == null || current.length > bestGroup.length) {
-      bestGroup = current;
     }
 
-    if (bestGroup.length < coherentShiftMinBlocks) return null;
+    if (bestGroup == null) return null;
     if (bestGroup.length / movedExisting.length < coherentShiftMinShare) {
       return null;
     }
