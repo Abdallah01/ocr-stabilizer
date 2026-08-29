@@ -5,9 +5,8 @@
 // `agreementWeighted` arm (StepResponse.damp, band off in both replay
 // tools per doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md) was
 // produced by `abReport()` BEFORE the pre-pass restructuring. Replaying
-// every one of the 17 committed streams now and comparing `mergeCount`,
-// `nestedFragmentMerges`, and (where the committed file's schema carries
-// it) `identityByCapture` against the committed numbers pins that the
+// every one of the 17 committed streams now and comparing `mergeCount`
+// and `nestedFragmentMerges` against the committed numbers pins that the
 // restructuring did not silently change damp's own numerics.
 //
 // NOTE: band-relaxed fallback is off (`BandFallbackConfig.mode` defaults
@@ -17,6 +16,14 @@
 // stabilization_engine_prepass_band_interleaving_test.dart for the test
 // that does. This is a regression guard on top of that proof, not a
 // substitute for it.
+//
+// #121 (on top of the above): a committed file's schema must carry the
+// per-capture step-response fields (`meanTopLagByCapture`,
+// `stepEventsByCapture`, `identityByCapture` on `legacy` and
+// `agreementWeighted`) and the `agreementSnap`/`agreementCoherent` arms
+// outright — a MISSING field/arm fails the stream instead of being
+// silently skipped via a `containsKey` guard, for every stream except
+// the two carved out below.
 import 'dart:convert';
 import 'dart:io';
 
@@ -49,9 +56,29 @@ const _streams = [
   'doc/replay/validation/2026-08-tesseract-matrix/stable-dwell',
 ];
 
+/// #121: `pushdown`/`rewrap` are dynamic-reflow's original two streams —
+/// committed before the `variants/*` split (#116) and before the
+/// per-capture step-response fields existed at all. They carry the same
+/// missing-field/missing-arm gap as #121's nine, but are NOT in that
+/// issue's file list, so tightening their check is out of this guard's
+/// scope; they keep the pre-#121 lenient (`containsKey`-guarded) check
+/// below instead of the unconditional one every other stream gets.
+const _preStepResponseSchema = {
+  'doc/replay/validation/2026-08-dynamic-reflow/pushdown',
+  'doc/replay/validation/2026-08-dynamic-reflow/rewrap',
+};
+
+/// #121: fields the `legacy` and `agreementWeighted` arms must carry,
+/// checked for equality against a fresh replay (not just presence).
+const _stepResponseFields = [
+  'meanTopLagByCapture',
+  'stepEventsByCapture',
+  'identityByCapture',
+];
+
 void main() {
-  group('committed *.ab.json agreementWeighted arm (#116 finding A '
-      'equivalence guard)', () {
+  group('committed *.ab.json equivalence (#116 finding A guard, #121 '
+      'step-response field coverage)', () {
     for (final base in _streams) {
       test(base, () {
         final stream =
@@ -74,11 +101,46 @@ void main() {
             reason: '$base: nestedFragmentMerges under StepResponse.damp '
                 'must be byte-identical to the committed reference');
 
-        if (committedArm.containsKey('identityByCapture')) {
-          expect(freshArm['identityByCapture'],
-              committedArm['identityByCapture'],
-              reason: '$base: identityByCapture under StepResponse.damp '
-                  'must be byte-identical to the committed reference');
+        if (_preStepResponseSchema.contains(base)) {
+          // Pre-#121-schema streams: the original lenient check — only
+          // assert a field the committed file actually claims to carry.
+          // Out of #121's scope (see the const's doc comment above).
+          if (committedArm.containsKey('identityByCapture')) {
+            expect(freshArm['identityByCapture'],
+                committedArm['identityByCapture'],
+                reason: '$base: identityByCapture under StepResponse.damp '
+                    'must be byte-identical to the committed reference');
+          }
+          return;
+        }
+
+        // #121: every other stream's committed file must carry the full
+        // step-response schema — a missing field/arm here IS the
+        // regression the issue exists to catch, not something to skip.
+        for (final field in _stepResponseFields) {
+          expect(committedArm.keys, contains(field),
+              reason: '$base/agreementWeighted: committed .ab.json is '
+                  'missing $field (#121)');
+          expect(freshArm[field], committedArm[field],
+              reason: '$base/agreementWeighted: $field must be '
+                  'byte-identical to the committed reference');
+        }
+
+        final committedLegacy = committed['legacy'] as Map<String, Object?>;
+        final freshLegacy = fresh['legacy'] as Map<String, Object?>;
+        for (final field in _stepResponseFields) {
+          expect(committedLegacy.keys, contains(field),
+              reason: '$base/legacy: committed .ab.json is missing '
+                  '$field (#121)');
+          expect(freshLegacy[field], committedLegacy[field],
+              reason: '$base/legacy: $field must be byte-identical to '
+                  'the committed reference');
+        }
+
+        for (final armName in ['agreementSnap', 'agreementCoherent']) {
+          expect(committed.keys, contains(armName),
+              reason: '$base: committed .ab.json is missing the '
+                  '$armName arm entirely (#121)');
         }
       });
     }
