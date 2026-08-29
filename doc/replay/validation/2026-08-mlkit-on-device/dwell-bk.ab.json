@@ -1,8 +1,8 @@
 {
   "mode": "ab-report",
   "input": {
-    "batches": 14,
-    "observations": 57,
+    "batches": 12,
+    "observations": 42,
     "skippedLines": 0,
     "invalidRecords": 0,
     "viewport": {
@@ -56,33 +56,26 @@
     }
   },
   "legacy": {
-    "mergeCount": 17,
+    "mergeCount": 15,
     "nestedFragmentMerges": 0,
     "displacementByObsN": {
       "n1-2": {
-        "count": 9,
-        "mean": 0.251,
+        "count": 8,
+        "mean": 0.254,
         "p50": 0.083,
-        "p90": 0.622,
-        "max": 0.882
+        "p90": 0.618,
+        "max": 0.884
       },
       "n3-5": {
         "count": 7,
-        "mean": 0.704,
-        "p50": 0.355,
-        "p90": 1.353,
+        "mean": 0.758,
+        "p50": 0.622,
+        "p90": 1.357,
         "max": 1.668
-      },
-      "n6-10": {
-        "count": 1,
-        "mean": 0.654,
-        "p50": 0.654,
-        "p90": 0.654,
-        "max": 0.654
       }
     },
     "wellObservedPconf": {
-      "count": 3,
+      "count": 2,
       "mean": 1.0,
       "p50": 1.0,
       "p90": 1.0,
@@ -91,37 +84,30 @@
     "wellObservedPconfSaturated": 1.0
   },
   "agreementWeighted": {
-    "mergeCount": 17,
+    "mergeCount": 15,
     "nestedFragmentMerges": 0,
     "displacementByObsN": {
       "n1-2": {
-        "count": 9,
-        "mean": 0.223,
+        "count": 8,
+        "mean": 0.219,
         "p50": 0.083,
-        "p90": 0.445,
-        "max": 0.882
+        "p90": 0.442,
+        "max": 0.884
       },
       "n3-5": {
         "count": 7,
-        "mean": 0.269,
-        "p50": 0.147,
-        "p90": 0.435,
+        "mean": 0.284,
+        "p50": 0.19,
+        "p90": 0.437,
         "max": 0.845
-      },
-      "n6-10": {
-        "count": 1,
-        "mean": 0.174,
-        "p50": 0.174,
-        "p90": 0.174,
-        "max": 0.174
       }
     },
     "wellObservedPconf": {
-      "count": 3,
-      "mean": 0.907,
-      "p50": 0.91,
-      "p90": 0.912,
-      "max": 0.912
+      "count": 2,
+      "mean": 0.918,
+      "p50": 0.926,
+      "p90": 0.926,
+      "max": 0.926
     },
     "wellObservedPconfSaturated": 0.0
   },

@@ -86,9 +86,9 @@
   that writes `bk` settles it per capture. Each entry carries a dated
   note. A first stream WITH `bk` (ML Kit dwell, 2026-08-29 addendum to
   the on-device entry) applied its own sizes beside the emulation: the
-  consumer's sequence and the rig's median emulation differ in two of
-  four steps (the consumer re-derives from a block set the rig has
-  already trimmed), and on that still page neither moves a single merge.
+  consumer's sequence and the rig's median emulation agree on only two
+  of the sizes applied (the consumer re-derives from a block set the rig
+  has already trimmed), and on that still page neither moves a single merge.
 - Hero demo GIF re-rendered (captures 0–18, `missedFrameRetention: 2`):
   overlapping tracked-box pairs across the 14 frames drop from 23 to
   15, all 15 the producer's scroll-stamp lag placing different text (or

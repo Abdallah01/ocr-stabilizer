@@ -149,27 +149,32 @@ loop has nothing to anchor.
 
 Captured four days later on the same device, page and settings, after
 the consumer's recorder gained the `meta.bk` field (#113) and its
-capture-time scroll fix shipped (its issue 2552): 14 captures, 57
+capture-time scroll fix shipped (its issue 2552): 13 captures, 42
 observations, the dwell scenario only (ten ±45 px micro-scrolls 1.5 s
-apart, then a fling). The scroll scenario could not be captured — after
-any relaunch the consumer's restored tab no longer scrolls by touch
-(its issue 2554); the walk pitfall, not this package's.
+apart, then a fling). The recorder's first capture — taken while the
+restored tab still showed its previous page, before the test page had
+loaded — is not committed; that is why the capture ids start at 21.
+The scroll scenario could not be captured — after any relaunch the
+consumer's restored tab no longer scrolls by touch (its issue 2554);
+the walk pitfall, not this package's.
 
 What it shows, per `dwell-bk.ab.json` (`--buckets=auto`, the default):
 
 | policy | sizes applied (w×h, CSS px) | merges | disp n1-2 | disp n3-5 | disp n6-10 |
 |---|---|---|---|---|---|
-| auto (the stream's `bk`) | 80×88.05 → 105.3² → 80×100.45 → 102.7² | 17 | 0.22 / 9 | 0.27 / 7 | 0.17 / 1 |
-| formula | 80×88 (viewport) | 17 | 0.22 / 9 | 0.27 / 7 | 0.17 / 1 |
-| median (rig emulation) | 80² → 105.3² → 220² → 102.7² | 17 | 0.22 / 9 | 0.27 / 7 | 0.17 / 1 |
+| auto (the stream's `bk`) | 80×88.05 → 105.3² → 80×100.45 → 102.7² | 15 | 0.22 / 8 | 0.28 / 7 | — / 0 |
+| formula | 80×100.45 (from the stream's 360×669.67 viewport) | 15 | 0.22 / 8 | 0.28 / 7 | — / 0 |
+| median (rig emulation) | 105.3² → 220² → 102.7² | 15 | 0.22 / 8 | 0.28 / 7 | — / 0 |
 
-(agreement arm, px per merge / count; legacy arm 0.25 / 0.70 / 0.65 on
-the same counts; `nestedFragmentMerges` 0 — the grouping never flipped
-on this run.) Two readings. (1) **The consumer's real bucket sequence
-and the rig's median emulation differ in two of four steps** (the
-consumer went to 80×100.45 where the emulation goes to 220², because
-the consumer re-derives from ITS block set, which includes blocks the
-rig's tracked state has already dropped) — so `auto` on a `bk`-carrying
+(agreement arm, px per merge / count; legacy arm 0.25 / 0.76 on the
+same counts, no merge reached the 6–10 band; `nestedFragmentMerges` 0 —
+the grouping never flipped on this run.) Two readings. (1) **The
+consumer's real bucket sequence and the rig's median emulation agree on
+only two of the sizes applied** (105.3² and 102.7²): the consumer went
+to 80×100.45 where the emulation goes to 220², and its opening 80×88.05
+has no counterpart at all, because the consumer re-derives from ITS
+block set, which includes blocks the rig's tracked state has already
+dropped — so `auto` on a `bk`-carrying
 stream is the only faithful policy, and that is why the field exists.
 (2) On this stream **no policy moves a single merge**: every match
 partner sits inside the 3×3 cell neighbourhood at all of these sizes,
@@ -181,13 +186,13 @@ geometry sees? — is therefore answered "not on a still page"; the
 fling-tail comparison the earlier streams raised needs a scroll stream
 with `bk`, blocked by the consumer issue. The recorder in this stream
 still wrote one viewport record per animation frame while the browser
-bar collapsed (31 metas for 14 captures; the consumer coalesces them
+bar collapsed (31 metas for 13 captures; the consumer coalesces them
 since the same day) — the rig applies only the last before each batch,
 so the numbers are unaffected.
 
 ## Boundary of what this proves
 
-Small n (19+15+14 batches, ~5 paragraph-level blocks per viewport at this
+Small n (19+15+12 batches, ~5 paragraph-level blocks per viewport at this
 zoom); one device, one page style; the dwell motion is scripted, not
 human, and its scroll stamps lag the screenshot (correction above), so
 the "raw movement" it measures is an upper bound on OCR jitter, not OCR
