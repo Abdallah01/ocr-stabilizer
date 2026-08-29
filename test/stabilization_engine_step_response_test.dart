@@ -355,6 +355,57 @@ void main() {
       }
       expect(coherent.log.every((m) => m.stepResponseApplied == null), isTrue);
     });
+
+    // `_detectCoherentShift` gates on min-blocks TWICE: once on the total
+    // moved count (the case above — 2 movers never even reach clustering)
+    // and again on the WINNING cluster's own size (this case — 4 movers
+    // split evenly into two clusters of 2, so the total clears
+    // coherentShiftMinBlocks and the winning cluster clears
+    // coherentShiftMinShare at exactly 0.5, but the cluster itself is
+    // still below coherentShiftMinBlocks). Isolating this second gate
+    // matters for mutation coverage: the case above alone cannot tell the
+    // two checks apart.
+    test('4 movers split evenly into two size-2 clusters: the winning '
+        'cluster clears the share gate (50%) but not its own min-blocks '
+        'gate -> still no shift', () {
+      final coherent = _engine(stepResponse: StepResponse.coherentShift);
+      final damp = _engine(stepResponse: StepResponse.damp);
+
+      _Block mover(double top, String text) => _at(top, text: text);
+      List<_Block> batch1() => [
+            mover(50, 'one block text'),
+            mover(600, 'two block text'),
+            mover(1100, 'three block text'),
+            mover(1600, 'four block text'),
+          ];
+      // Cluster A: +120 (one, two). Cluster B: +190 (three, four). Gap 70px
+      // far exceeds tolerance (0.5 x 30 = 15), so they never merge into
+      // one group of 4 — the largest group is size 2 either way.
+      List<_Block> batch2() => [
+            mover(170, 'one block text'), // +120
+            mover(720, 'two block text'), // +120
+            mover(1290, 'three block text'), // +190
+            mover(1790, 'four block text'), // +190
+          ];
+
+      coherent.engine.stabilize(batch1());
+      damp.engine.stabilize(batch1());
+      final coherentResult = coherent.engine.stabilize(batch2()).stableBlocks;
+      final dampResult = damp.engine.stabilize(batch2()).stableBlocks;
+
+      for (final c in coherentResult) {
+        expect(c.observationCount, 2,
+            reason: '${c.originalText}: sanity — must have actually '
+                'merged, or "no shift" below would be vacuous');
+      }
+      for (final c in coherentResult) {
+        final d = dampResult.firstWhere((b) => b.originalText == c.originalText);
+        expect(c.absoluteRect.raw.top, closeTo(d.absoluteRect.raw.top, 1e-9),
+            reason: '${c.originalText}: the winning 2-block cluster is '
+                'still below coherentShiftMinBlocks (3)');
+      }
+      expect(coherent.log.every((m) => m.stepResponseApplied == null), isTrue);
+    });
   });
 
   group('(g) coherentShift: 3 movers with different vectors -> no shift '
