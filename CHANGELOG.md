@@ -17,7 +17,14 @@
   slabs of 50–150 px (inside or near the 3×-height jitter allowance,
   so the cut is null or partial) — tracked as #119. Full table:
   `doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`'s "Step
-  response A/B" section.
+  response A/B" section. The #120 review fan-out then hardened
+  `_detectCoherentShift`'s clustering (deterministic ordering) and its
+  member drift snapshot (frozen at vote time, no longer re-read live
+  mid-capture); re-running the 17-stream A/B afterward reproduces the
+  identical 14/17 vs 11/17 verdict and every PASS/FAIL cell, with three
+  streams' `agreementCoherent` lag numbers re-derived by ≤0.1 px and
+  their `.ab.json` regenerated to match — see the EXPERIMENT.md
+  "Re-verified post-#120 review" note.
 
 ## 2.2.0 - 2026-08-29
 

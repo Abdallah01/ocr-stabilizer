@@ -273,7 +273,7 @@ stated.
 |---|---|---|---|---|---|---|---|
 | pushdown-300 | 300 px @ cap 7 | 123.8 / 77.3 / 70.2 | 0.769 | 2.3 / 15.2 / 2.6 (9) | PASS | 4.3 / 16.8 / 3.4 (9) | PASS |
 | pushdown-050 | 50 px @ cap 7 | 25.9 / 25.5 / 28.9 | 0.900 | identical — 0 events | **FAIL** | identical — 0 events | **FAIL** |
-| pushdown-150 | 150 px @ cap 7 | 82.5 / 66.5 / 59.1 | 0.964 | identical — 0 events | **FAIL** | 68.2 / 54.6 / 45.2 (3) | **FAIL** |
+| pushdown-150 | 150 px @ cap 7 | 82.5 / 66.5 / 59.1 | 0.964 | identical — 0 events | **FAIL** | 68.3 / 54.7 / 45.2 (3) | **FAIL** |
 | pushdown-600 | 600 px @ cap 7 | 30.7 / 26.1 / 14.5 | 0.545 | 1.4 / 12.6 / 3.0 (6) | PASS | identical — 0 events | **FAIL** |
 | pushup-300 | −300 px @ cap 7 | 155.1 / 92.7 / 67.3 | 0.667 | 9.8 / 19.9 / 4.1 (12) | PASS | 9.4 / 19.3 / 4.2 (11) | PASS |
 | pushdown-300-early | 300 px @ cap 3 | 113.1 / 54.7 / 48.0 | 0.769 | 6.0 / 5.5 / 5.2 (10) | PASS | 7.0 / 5.9 / 5.5 (10) | PASS |
@@ -338,6 +338,31 @@ the untested-but-analytically-plausible gap below are tracked as #119 —
 none of the three is a reason to prefer `snap` as the default, which
 false-triggers on 4 of 10 controls (a cost paid on every stream, not just
 the ones with a real step).
+
+**Re-verified post-#120 review (2026-08-29):** the #116 review fan-out's
+findings B/C reshaped `_detectCoherentShift`'s clustering (deterministic
+ordering) and froze each coherent-shift member's drift snapshot at vote
+time instead of re-reading it live mid-capture. Re-running `ab-report`
+over all 17 streams after those fixes reproduces the identical 14/17 vs
+11/17 tally and every PASS/FAIL cell above unchanged, including all 10
+controls still showing zero `coherentShift` step events. The frozen-drift
+fix (finding C) did move `agreementCoherent`'s `meanTopLagByCapture` by
+≤0.1 px on 3 of 17 streams (`pushdown-150`, `pushdown-300-late`,
+`pushup-300` — the streams where a coherent-shift member's residual had
+previously been read after an earlier same-capture merge already
+mutated it) — `pushdown-150`'s row above reflects the re-derived 68.3 /
+54.7 / 45.2 (the prior 68.2 / 54.6 / 45.2 rounded to the same display
+precision on the other two streams). The three affected `variants/*.ab.json`
+files were regenerated from the fixed engine; the diff is confined to
+`agreementCoherent`'s displacement/lag fields — `legacy`, `agreementWeighted`
+and `agreementSnap` are byte-identical, confirming none of the other
+arms leaked drift from the fix. This pass also surfaced a pre-existing,
+unrelated gap: the 9 corpus-control `.ab.json` files outside
+`variants/` (the on-device, PaddleOCR and Tesseract streams) were never
+regenerated since the step-response fields were added, so they carry
+none of `agreementSnap`/`agreementCoherent` and only a partial `legacy`/
+`agreementWeighted` — tracked as #121, out of scope for this pass since
+none of those 9 files changed.
 
 ### Boundary of what this proves
 
