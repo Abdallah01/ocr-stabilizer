@@ -7,6 +7,8 @@ MergeResult _validResult({
   int observationCount = 1,
   bool isProvisional = false,
   int provisionalCapturesRemaining = 0,
+  bool isNestedFragment = false,
+  StepResponse? stepResponseApplied,
 }) {
   return MergeResult(
     mergedRect: const AbsoluteRect(Rect.fromLTWH(0, 0, 100, 30)),
@@ -23,6 +25,8 @@ MergeResult _validResult({
     isProvisional: isProvisional,
     provisionalCapturesRemaining: provisionalCapturesRemaining,
     sourceQuality: 0,
+    isNestedFragment: isNestedFragment,
+    stepResponseApplied: stepResponseApplied,
   );
 }
 
@@ -112,6 +116,39 @@ void main() {
         expect(e, isA<ArgumentError>());
         expect((e as ArgumentError).name, 'positionConfidence');
       }
+    });
+
+    // #116: a nested-fragment confirmation keeps the host's existing
+    // geometry by construction (see the class doc) — the engine never runs
+    // step-response logic on that path (StabilizationEngine._mergeImpl
+    // returns before `stepResponseEligible` is even computed). A
+    // `MergeResult` combining both flags is a state the engine can never
+    // produce; constructing it directly (bypassing the engine) must be
+    // caught here rather than silently accepted as a "valid" but
+    // unreachable combination.
+    test('throws when isNestedFragment and stepResponseApplied are both set',
+        () {
+      expect(
+        () => _validResult(
+          isNestedFragment: true,
+          stepResponseApplied: StepResponse.snap,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        () => _validResult(
+          isNestedFragment: true,
+          stepResponseApplied: StepResponse.coherentShift,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('isNestedFragment alone (no step response) succeeds', () {
+      expect(
+        () => _validResult(isNestedFragment: true),
+        returnsNormally,
+      );
     });
   });
 }

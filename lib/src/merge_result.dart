@@ -108,6 +108,10 @@ class MergeResult {
   /// - [positionConfidence] / [textConfidence] are in [0.0, 1.0] and not
   ///   NaN — checked here because the primary [PositionConfidence] /
   ///   [TextConfidence] constructors are unchecked.
+  /// - [isNestedFragment] and [stepResponseApplied] are not both set — the
+  ///   engine can never produce that combination (see [stepResponseApplied]'s
+  ///   doc), so a `MergeResult` combining them can only be a construction
+  ///   bug bypassing the engine.
   MergeResult({
     required this.mergedRect,
     required this.positionConfidence,
@@ -145,5 +149,12 @@ class MergeResult {
     }
     assertConfidenceRange('positionConfidence', positionConfidence.raw);
     assertConfidenceRange('textConfidence', textConfidence.raw);
+    if (isNestedFragment && stepResponseApplied != null) {
+      throw ArgumentError(
+        'isNestedFragment and stepResponseApplied cannot both be set — a '
+        'nested-fragment confirmation keeps the existing geometry and never '
+        'runs step-response logic',
+      );
+    }
   }
 }
