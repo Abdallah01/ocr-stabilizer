@@ -6,6 +6,14 @@
 // with the same construction the ab-report agreement arm uses — the
 // output is REAL engine behavior, not a mock-up.
 //
+// stepResponse (#116 finding G, 2026-08-29): pinned to StepResponse.damp
+// explicitly below, for the same reason ab_report.dart's own
+// `agreement` arm names its baseline outright — `StabilizationEngine`'s
+// own default flipped to StepResponse.coherentShift in 2.3.0 (the #116
+// A/B), and this tool's comment already claimed parity with that arm.
+// Without the explicit pin the demo GIF's baseline geometry would have
+// silently changed at the same commit, with nothing here saying so.
+//
 // Usage: dart tool/replay/dump_frames.dart <capture.jsonl> <out.json>
 //            [retention] [--viewport=WxH] [--buckets=auto|formula|median]
 //
@@ -72,6 +80,7 @@ void main(List<String> args) {
   final stream = CaptureStream.parse(File(positional[0]).readAsLinesSync());
   final engine = StabilizationEngine<ReplayBlock, Object>(
     positionMergeModel: PositionMergeModel.agreementWeighted,
+    stepResponse: StepResponse.damp,
     missedFrameRetention: retention,
     merger: (existing, fresh, m) => existing.applyMerge(m),
   );
