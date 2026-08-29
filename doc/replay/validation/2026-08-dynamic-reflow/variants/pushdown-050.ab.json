@@ -1,0 +1,372 @@
+{
+  "mode": "ab-report",
+  "input": {
+    "batches": 12,
+    "observations": 360,
+    "skippedLines": 0,
+    "invalidRecords": 0,
+    "viewport": {
+      "width": 1080.0,
+      "height": 2200.0
+    },
+    "bucketPolicy": "auto",
+    "bucketsApplied": {
+      "legacy": {
+        "policy": "viewportFormula",
+        "sizes": []
+      },
+      "agreementWeighted": {
+        "policy": "viewportFormula",
+        "sizes": []
+      },
+      "agreementSnap": {
+        "policy": "viewportFormula",
+        "sizes": []
+      },
+      "agreementCoherent": {
+        "policy": "viewportFormula",
+        "sizes": []
+      }
+    }
+  },
+  "legacy": {
+    "mergeCount": 304,
+    "nestedFragmentMerges": 0,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 58,
+        "mean": 1.173,
+        "p50": 0.333,
+        "p90": 2.5,
+        "max": 8.402
+      },
+      "n3-5": {
+        "count": 84,
+        "mean": 2.352,
+        "p50": 2.445,
+        "p90": 3.444,
+        "max": 3.833
+      },
+      "n6-10": {
+        "count": 135,
+        "mean": 3.32,
+        "p50": 1.446,
+        "p90": 12.968,
+        "max": 16.45
+      },
+      "n11+": {
+        "count": 27,
+        "mean": 1.044,
+        "p50": 0.96,
+        "p90": 1.654,
+        "max": 2.912
+      }
+    },
+    "wellObservedPconf": {
+      "count": 190,
+      "mean": 1.0,
+      "p50": 1.0,
+      "p90": 1.0,
+      "max": 1.0
+    },
+    "wellObservedPconfSaturated": 1.0,
+    "meanTopLagByCapture": {
+      "1": null,
+      "2": 0.0,
+      "3": 9.552,
+      "4": 9.577,
+      "5": 9.202,
+      "6": 1.463,
+      "7": 19.349,
+      "8": 16.47,
+      "9": 16.364,
+      "10": 17.576,
+      "11": 20.251,
+      "12": 20.904
+    },
+    "stepEventsByCapture": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+      "6": 0,
+      "7": 0,
+      "8": 0,
+      "9": 0,
+      "10": 0,
+      "11": 0,
+      "12": 0
+    },
+    "identityByCapture": {
+      "1": 0.0,
+      "2": 0.933,
+      "3": 0.967,
+      "4": 0.933,
+      "5": 0.933,
+      "6": 0.933,
+      "7": 0.9,
+      "8": 0.9,
+      "9": 0.9,
+      "10": 0.9,
+      "11": 0.933,
+      "12": 0.9
+    }
+  },
+  "agreementWeighted": {
+    "mergeCount": 302,
+    "nestedFragmentMerges": 0,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 60,
+        "mean": 1.22,
+        "p50": 0.375,
+        "p90": 2.0,
+        "max": 14.261
+      },
+      "n3-5": {
+        "count": 84,
+        "mean": 1.122,
+        "p50": 1.154,
+        "p90": 1.395,
+        "max": 2.053
+      },
+      "n6-10": {
+        "count": 132,
+        "mean": 1.137,
+        "p50": 0.508,
+        "p90": 3.745,
+        "max": 4.608
+      },
+      "n11+": {
+        "count": 26,
+        "mean": 0.344,
+        "p50": 0.334,
+        "p90": 0.514,
+        "max": 1.273
+      }
+    },
+    "wellObservedPconf": {
+      "count": 186,
+      "mean": 0.893,
+      "p50": 0.892,
+      "p90": 0.926,
+      "max": 0.936
+    },
+    "wellObservedPconfSaturated": 0.0,
+    "meanTopLagByCapture": {
+      "1": null,
+      "2": 0.0,
+      "3": 10.547,
+      "4": 11.036,
+      "5": 10.295,
+      "6": 2.042,
+      "7": 25.861,
+      "8": 24.886,
+      "9": 24.409,
+      "10": 25.454,
+      "11": 27.905,
+      "12": 28.942
+    },
+    "stepEventsByCapture": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+      "6": 0,
+      "7": 0,
+      "8": 0,
+      "9": 0,
+      "10": 0,
+      "11": 0,
+      "12": 0
+    },
+    "identityByCapture": {
+      "1": 0.0,
+      "2": 0.933,
+      "3": 0.967,
+      "4": 0.933,
+      "5": 0.933,
+      "6": 0.933,
+      "7": 0.9,
+      "8": 0.9,
+      "9": 0.867,
+      "10": 0.867,
+      "11": 0.933,
+      "12": 0.9
+    }
+  },
+  "agreementSnap": {
+    "mergeCount": 302,
+    "nestedFragmentMerges": 0,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 60,
+        "mean": 1.22,
+        "p50": 0.375,
+        "p90": 2.0,
+        "max": 14.261
+      },
+      "n3-5": {
+        "count": 84,
+        "mean": 1.122,
+        "p50": 1.154,
+        "p90": 1.395,
+        "max": 2.053
+      },
+      "n6-10": {
+        "count": 132,
+        "mean": 1.137,
+        "p50": 0.508,
+        "p90": 3.745,
+        "max": 4.608
+      },
+      "n11+": {
+        "count": 26,
+        "mean": 0.344,
+        "p50": 0.334,
+        "p90": 0.514,
+        "max": 1.273
+      }
+    },
+    "wellObservedPconf": {
+      "count": 186,
+      "mean": 0.893,
+      "p50": 0.892,
+      "p90": 0.926,
+      "max": 0.936
+    },
+    "wellObservedPconfSaturated": 0.0,
+    "meanTopLagByCapture": {
+      "1": null,
+      "2": 0.0,
+      "3": 10.547,
+      "4": 11.036,
+      "5": 10.295,
+      "6": 2.042,
+      "7": 25.861,
+      "8": 24.886,
+      "9": 24.409,
+      "10": 25.454,
+      "11": 27.905,
+      "12": 28.942
+    },
+    "stepEventsByCapture": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+      "6": 0,
+      "7": 0,
+      "8": 0,
+      "9": 0,
+      "10": 0,
+      "11": 0,
+      "12": 0
+    },
+    "identityByCapture": {
+      "1": 0.0,
+      "2": 0.933,
+      "3": 0.967,
+      "4": 0.933,
+      "5": 0.933,
+      "6": 0.933,
+      "7": 0.9,
+      "8": 0.9,
+      "9": 0.867,
+      "10": 0.867,
+      "11": 0.933,
+      "12": 0.9
+    }
+  },
+  "agreementCoherent": {
+    "mergeCount": 302,
+    "nestedFragmentMerges": 0,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 60,
+        "mean": 1.22,
+        "p50": 0.375,
+        "p90": 2.0,
+        "max": 14.261
+      },
+      "n3-5": {
+        "count": 84,
+        "mean": 1.122,
+        "p50": 1.154,
+        "p90": 1.395,
+        "max": 2.053
+      },
+      "n6-10": {
+        "count": 132,
+        "mean": 1.137,
+        "p50": 0.508,
+        "p90": 3.745,
+        "max": 4.608
+      },
+      "n11+": {
+        "count": 26,
+        "mean": 0.344,
+        "p50": 0.334,
+        "p90": 0.514,
+        "max": 1.273
+      }
+    },
+    "wellObservedPconf": {
+      "count": 186,
+      "mean": 0.893,
+      "p50": 0.892,
+      "p90": 0.926,
+      "max": 0.936
+    },
+    "wellObservedPconfSaturated": 0.0,
+    "meanTopLagByCapture": {
+      "1": null,
+      "2": 0.0,
+      "3": 10.547,
+      "4": 11.036,
+      "5": 10.295,
+      "6": 2.042,
+      "7": 25.861,
+      "8": 24.886,
+      "9": 24.409,
+      "10": 25.454,
+      "11": 27.905,
+      "12": 28.942
+    },
+    "stepEventsByCapture": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+      "6": 0,
+      "7": 0,
+      "8": 0,
+      "9": 0,
+      "10": 0,
+      "11": 0,
+      "12": 0
+    },
+    "identityByCapture": {
+      "1": 0.0,
+      "2": 0.933,
+      "3": 0.967,
+      "4": 0.933,
+      "5": 0.933,
+      "6": 0.933,
+      "7": 0.9,
+      "8": 0.9,
+      "9": 0.867,
+      "10": 0.867,
+      "11": 0.933,
+      "12": 0.9
+    }
+  },
+  "caveats": [
+    "Arms may diverge in pairing over time: positions evolve per model, and matching is spatial+text. Compare mergeCount before reading displacement deltas.",
+    "Replay pairing uses the package funnel, not the consumer's own matching stage; consumer-side `merge` events in live-report give the production-path legacy reference."
+  ]
+}
