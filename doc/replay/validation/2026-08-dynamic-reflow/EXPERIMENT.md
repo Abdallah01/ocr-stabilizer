@@ -106,11 +106,74 @@ two regimes above) and a sticky header offsetting the visual viewport (a
 scroll-offset change, not a layout change; the on-device entry's `sc`
 field is that path).
 
+## Unit of identity: lines vs pre-grouped paragraphs (2026-08-29 addendum)
+
+The engine tracks whatever unit a consumer feeds it (issue #101: grouping is
+the consumer's, downstream concern). A consumer that groups BEFORE tracking
+makes the grouped unit the identity. This addendum replays the same two
+streams under both choices: **lines** = the streams as recorded (Tesseract
+line boxes, ~30 per capture); **paragraphs** = the same captures pre-grouped
+per capture with `ParagraphGrouper` at one consumer's translation-sized knobs
+(gap 10 px / ×0.75, `maxParagraphBlocks` 3, `maxParagraphRunes` 200, member
+texts joined with a space), ~14 units per capture. Tool:
+`tool/replay/pregroup.dart` (it prints the knobs it applied; a bad flag is
+an error, not a fallback); reports: `pushdown.grouped.ab.json`,
+`rewrap.grouped.ab.json` (agreement-weighted arm quoted; retention 0).
+
+A grouped unit is a fresh observation carrying only rect, text, the two
+confidences and the scroll context. Engine-side per-block fields a recorder
+may emit (`cid`, `sf`, `srcQ`, `obsN`, `prov`, `cvotes`, ...) are dropped
+and reset to defaults in the grouped arm; the tool reports on stderr when a
+stream carries any. Both corpora here carry none, so the two arms differ in
+the unit and nothing else.
+
+**Identity on UNCHANGED captures** (units matched to an existing block /
+units observed; nested-fragment confirmations count as matches — the
+fragment found its block — and make up 3 of the 10 on pushdown capture 6
+and 1 of the 7 on rewrap capture 12):
+
+| unit | pushdown caps 2–6 | rewrap caps 8–12 |
+|---|---|---|
+| lines | 28/30, 29/30, 28/30, 28/30, 28/30 | 29/30, 28/30, 28/31, 27/30, 26/30 |
+| paragraphs | 13/14, 13/14, 13/14, **7/11**, **10/14** | 11/11, 11/11, 11/11, **6/11**, **7/11** |
+
+Both rows are pinned by `test/replay/dynamic_reflow_corpus_test.dart`
+(pushdown: lines keep at least 9 in 10 on every static capture, paragraphs
+drop to three quarters or less on at least one; rewrap: lines keep at least
+85 in 100, paragraphs drop to 65 in 100 or less).
+
+The paragraph losses are cascades. On pushdown capture 5 the OCR mis-reads
+ten lines slightly and returns a few two-line boxes (72–76 px tall). A line
+unit loses only itself, and the text match absorbs small edits; a three-line
+chunk shifts its boundary for the rest of the paragraph, so every following
+unit changes text and box (14 → 11 units, 9 texts gone, 6 new). Rewrap
+captures 10 → 11 show the same shape on a static page (7 of 11 units
+re-chunked).
+
+**At the reflow (capture 7):** pushdown — lines keep 20 of 26 (9 of 14 below
+the slab), paragraphs keep 8 of 10 (4 of 5 below, 4 of 5 above); rewrap —
+lines reset 23 of 30 and recover fully on the next capture (29 / 1),
+paragraphs reset 6 of 11, recover fully for three captures, then lose 5 and
+4 more on the static captures 11 and 12.
+
+**Merges per frame:** lines 22.6 (pushdown) / 24.0 (rewrap); paragraphs 8.4 /
+9.2 — about 2.7× the absolute work with lines, at 0.80 vs 0.72–0.76 merges
+per observation. Displacement per merge is the same order either way (n6-10
+band 9.0 vs 10.3 px pushdown, 16.3 vs 11.8 rewrap). The pushdown position lag
+(#116) is erratic under paragraph units (1–4 survivors per capture) and is a
+property of the position model, not of the unit.
+
+**Reading:** identity is only as stable as the unit; a grouping pass that
+runs before tracking imports its own instability into identity. Tracking
+lines and grouping afterwards costs merges, not identity. Device timing was
+not measured here (offline replay, Tesseract boxes).
+
 ## Reproduce
 
 ```
 python gen_corpus.py <tesseract.exe> .    # Tesseract 5.4.0, chi_sim (tessdata_fast), Microsoft YaHei installed
 dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-dynamic-reflow/pushdown.jsonl
 dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-dynamic-reflow/rewrap.jsonl
+dart tool/replay/pregroup.dart doc/replay/validation/2026-08-dynamic-reflow/pushdown.jsonl pushdown.grouped.jsonl   # then ab-report / dump_frames on the grouped stream
 dart tool/replay/dump_frames.dart doc/replay/validation/2026-08-dynamic-reflow/pushdown.jsonl dump.json 0   # per-capture identity (obs counts) and tracked positions
 ```

@@ -1,0 +1,112 @@
+{
+  "mode": "ab-report",
+  "input": {
+    "batches": 12,
+    "observations": 147,
+    "skippedLines": 0,
+    "invalidRecords": 0,
+    "viewport": {
+      "width": 1080.0,
+      "height": 2200.0
+    },
+    "bucketPolicy": "auto",
+    "bucketsApplied": {
+      "legacy": {
+        "policy": "viewportFormula",
+        "sizes": []
+      },
+      "agreementWeighted": {
+        "policy": "viewportFormula",
+        "sizes": []
+      }
+    }
+  },
+  "legacy": {
+    "mergeCount": 111,
+    "nestedFragmentMerges": 5,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 38,
+        "mean": 10.299,
+        "p50": 5.667,
+        "p90": 28.167,
+        "max": 54.5
+      },
+      "n3-5": {
+        "count": 49,
+        "mean": 14.719,
+        "p50": 2.834,
+        "p90": 56.777,
+        "max": 126.875
+      },
+      "n6-10": {
+        "count": 17,
+        "mean": 28.054,
+        "p50": 28.283,
+        "p90": 54.649,
+        "max": 62.222
+      },
+      "n11+": {
+        "count": 2,
+        "mean": 7.276,
+        "p50": 9.943,
+        "p90": 9.943,
+        "max": 9.943
+      }
+    },
+    "wellObservedPconf": {
+      "count": 33,
+      "mean": 1.0,
+      "p50": 1.0,
+      "p90": 1.0,
+      "max": 1.0
+    },
+    "wellObservedPconfSaturated": 1.0
+  },
+  "agreementWeighted": {
+    "mergeCount": 111,
+    "nestedFragmentMerges": 5,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 38,
+        "mean": 9.707,
+        "p50": 5.069,
+        "p90": 28.14,
+        "max": 54.5
+      },
+      "n3-5": {
+        "count": 49,
+        "mean": 7.731,
+        "p50": 1.155,
+        "p90": 28.707,
+        "max": 65.558
+      },
+      "n6-10": {
+        "count": 17,
+        "mean": 11.821,
+        "p50": 11.603,
+        "p90": 21.422,
+        "max": 34.799
+      },
+      "n11+": {
+        "count": 2,
+        "mean": 2.758,
+        "p50": 2.871,
+        "p90": 2.871,
+        "max": 2.871
+      }
+    },
+    "wellObservedPconf": {
+      "count": 33,
+      "mean": 0.801,
+      "p50": 0.847,
+      "p90": 0.902,
+      "max": 0.91
+    },
+    "wellObservedPconfSaturated": 0.0
+  },
+  "caveats": [
+    "Arms may diverge in pairing over time: positions evolve per model, and matching is spatial+text. Compare mergeCount before reading displacement deltas.",
+    "Replay pairing uses the package funnel, not the consumer's own matching stage; consumer-side `merge` events in live-report give the production-path legacy reference."
+  ]
+}
