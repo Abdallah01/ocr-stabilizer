@@ -419,6 +419,73 @@ void main() {
       expect(legacy['displacementByObsN'], isA<Map<String, Object?>>());
       expect(report['agreementWeighted'], isA<Map<String, Object?>>());
     });
+
+    test('report shape carries the two #116 candidate arms too', () {
+      final report = abReport(loadFixture());
+      for (final arm in ['legacy', 'agreementWeighted', 'agreementSnap',
+          'agreementCoherent']) {
+        final a = report[arm] as Map<String, Object?>;
+        expect(a['mergeCount'], isNonZero, reason: arm);
+        expect(a['displacementByObsN'], isA<Map<String, Object?>>(),
+            reason: arm);
+        expect(a['meanTopLagByCapture'], isA<Map<String, Object?>>(),
+            reason: arm);
+        expect(a['stepEventsByCapture'], isA<Map<String, Object?>>(),
+            reason: arm);
+        expect(a['identityByCapture'], isA<Map<String, Object?>>(),
+            reason: arm);
+      }
+      final applied =
+          (report['input'] as Map)['bucketsApplied'] as Map<String, Object?>;
+      expect(applied.keys, containsAll(
+          ['legacy', 'agreementWeighted', 'agreementSnap', 'agreementCoherent']));
+    });
+
+    test('identityByCapture matches the merges/observed-blocks ratio the '
+        'dynamic-reflow corpus test computes independently', () {
+      final s = loadFixture();
+      final report = abReport(s);
+      final agreement = report['agreementWeighted'] as Map<String, Object?>;
+      final identity = agreement['identityByCapture'] as Map<String, Object?>;
+      final replayed = replay(s, model: PositionMergeModel.agreementWeighted);
+      for (final batch in s.batches) {
+        final mergesThisCapture = replayed.merges
+            .where((m) => m.captureId == batch.captureId)
+            .length;
+        final expected = batch.blocks.isEmpty
+            ? null
+            : (mergesThisCapture * 1000 / batch.blocks.length).round() / 1000;
+        expect(identity['${batch.captureId}'], expected,
+            reason: 'capture ${batch.captureId}');
+      }
+    });
+
+    test('damp arms never set a step response; the #116 candidate arms are '
+        'non-vacuous on the push-down corpus (#116)', () {
+      final s = CaptureStream.parse(File(
+              'doc/replay/validation/2026-08-dynamic-reflow/pushdown.jsonl')
+          .readAsLinesSync());
+      final report = abReport(s);
+
+      for (final arm in ['legacy', 'agreementWeighted']) {
+        final a = report[arm] as Map<String, Object?>;
+        final events = a['stepEventsByCapture'] as Map<String, Object?>;
+        expect(events.values.every((v) => v == 0), isTrue,
+            reason: '$arm always replays under StepResponse.damp — no '
+                'merge ever sets stepResponseApplied (every capture reports '
+                'an explicit 0, not a gap)');
+      }
+      for (final arm in ['agreementSnap', 'agreementCoherent']) {
+        final a = report[arm] as Map<String, Object?>;
+        final events = a['stepEventsByCapture'] as Map<String, Object?>;
+        expect(events.values.fold<int>(0, (sum, v) => sum + (v as int)),
+            greaterThan(0),
+            reason: '$arm must actually fire a step response somewhere on '
+                'the corpus this option exists for, or the plumbing from '
+                'StabilizationEngine.stepResponse through to the report is '
+                'dead');
+      }
+    });
   });
 
   group('loader hardening (review P1s)', () {
