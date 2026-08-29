@@ -1,3 +1,31 @@
+## 2.3.0 - 2026-08-29
+
+### Changed
+- **`StabilizationEngine`'s default `StepResponse` is now `coherentShift`
+  (#116).** The engine now re-anchors a batch-wide coherent shift by
+  default, instead of damping a genuine layout step as jitter;
+  `StepResponse.damp` restores the previous (2.2.0 and earlier)
+  numerics exactly, and `StepResponse.snap` remains available.
+  Evidence: a 17-stream A/B (11 committed + 6 generated push-down/
+  push-up variants), re-derived independently from raw `ab-report`
+  output over all 17 streams against the `agreementWeighted` (damp)
+  baseline — `coherentShift` 14/17 vs `snap` 11/17, with zero
+  false-triggered step events on any control stream (`snap`
+  false-triggered on 4 of 10). Two blind spots are documented, not
+  regressions: a 600 px single-frame slab (no group meets the default
+  quorum, so the merge falls through to damp's numbers unchanged) and
+  slabs of 50–150 px (inside or near the 3×-height jitter allowance,
+  so the cut is null or partial) — tracked as #119. Full table:
+  `doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`'s "Step
+  response A/B" section. The #120 review fan-out then hardened
+  `_detectCoherentShift`'s clustering (deterministic ordering) and its
+  member drift snapshot (frozen at vote time, no longer re-read live
+  mid-capture); re-running the 17-stream A/B afterward reproduces the
+  identical 14/17 vs 11/17 verdict and every PASS/FAIL cell, with three
+  streams' `agreementCoherent` lag numbers re-derived by ≤0.1 px and
+  their `.ab.json` regenerated to match — see the EXPERIMENT.md
+  "Re-verified post-#120 review" note.
+
 ## 2.2.0 - 2026-08-29
 
 ### Added
@@ -61,6 +89,30 @@
   sides = clamp(2 × median tracked-block height, 80, 220)) from the
   stream alone. Reports record `input.bucketPolicy` and the sizes each
   arm applied (`bucketsApplied`).
+
+- **`StepResponse` (#116, candidate fixes for the push-down-reflow lag).**
+  The agreement-weighted position model damps every residual as jitter,
+  including a genuine layout step — an ad/image finishing load pushes
+  every line below it down by a fixed offset in one frame, and the model
+  then draws tracked boxes 130-275px above the real text for several
+  captures. `StabilizationEngine(stepResponse: ...)` adds two opt-in
+  alternatives to the default `StepResponse.damp` (today's behaviour,
+  unchanged): `StepResponse.snap` re-anchors a single block outright once
+  its residual exceeds `snapThresholdMultiplier` (default 1.5) times the
+  block's own agreement scale; `StepResponse.coherentShift` looks for a
+  group of matched pairs in the same capture whose displacement agrees
+  (within `coherentShiftTolerance`, default 0.5x the smaller block
+  height) and, once the group clears `coherentShiftMinBlocks` (default 3)
+  and `coherentShiftMinShare` (default 0.5), applies the group's median
+  displacement as a batch shift before the normal weighted merge runs.
+  Neither is ever applied to a provisional (frozen), nested-fragment, or
+  band-fallback-admission merge, and both are a documented no-op under
+  `PositionMergeModel.legacy` (which has no residual/scale concept to
+  gate on). `MergeResult.stepResponseApplied` (additive, default null)
+  tells consumers and replay tooling which `StepResponse`, if any, a
+  merge received. **The default (`StepResponse.damp`) reproduces today's
+  numerics exactly — no behaviour changes for an engine that does not
+  pass `stepResponse`.**
 
 ### Changed
 - **Reports separate nested confirmations from position merges.**

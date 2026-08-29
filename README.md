@@ -78,8 +78,26 @@ counts are evidence depth, never a readiness ladder:
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^2.2.0
+  ocr_stabilizer: ^2.3.0
 ```
+
+> **What's new in 2.3.0** — the default `StepResponse` is now
+> `coherentShift` ([#116](https://github.com/Abdallah01/ocr-stabilizer/issues/116)): when a batch of blocks moves together (a real
+> layout reflow), the engine now re-anchors that group instead of damping
+> the move as if it were per-block jitter. A 17-stream A/B, re-derived
+> independently from raw `ab-report` output, backs the switch —
+> `coherentShift` 14/17 vs `snap` 11/17, with zero false-triggered step
+> events on any control stream. Two blind spots are documented, not
+> regressions, and tracked as [#119](https://github.com/Abdallah01/ocr-stabilizer/issues/119): a single-frame slab too large for the
+> default quorum falls through to damp's numbers unchanged, and slabs of
+> 50–150 px land inside or near the existing jitter allowance. Full table:
+> `doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`. The
+> `StepResponse` enum, `StabilizationEngine`'s `stepResponse` parameter and
+> `MergeResult.stepResponseApplied` are all new, additive surface; existing
+> callers that never named `stepResponse` inherit the new default and see
+> the numerics change for the default configuration — pass
+> `stepResponse: StepResponse.damp` explicitly to keep the previous (2.2.0
+> and earlier) behavior exactly.
 
 > **What's new in 2.2.0** — nested re-observation: when an engine's
 > grouping flips and a paragraph comes back as one of its own lines, the

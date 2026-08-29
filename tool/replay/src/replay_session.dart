@@ -108,6 +108,8 @@ class MergeSample {
     required this.textDiffers,
     required this.remainingAfter,
     this.nestedFragment = false,
+    this.topLagAfterPx = 0,
+    this.stepResponseApplied,
   });
 
   final int captureId;
@@ -139,6 +141,24 @@ class MergeSample {
   final bool textDiffers;
 
   final int remainingAfter;
+
+  /// |fresh.absoluteRect.raw.top − merged.absoluteRect.raw.top| in
+  /// absolute px (#116): how far the tracked position still is from where
+  /// OCR actually saw the block, AFTER this merge — the per-merge lag.
+  /// The issue's lag table (#116) is exactly this quantity averaged over
+  /// the retained shifted lines of one capture (see `ab_report.dart`'s
+  /// `meanTopLagByCapture`, which averages it over non-nested merges — a
+  /// nested-fragment confirmation's `fresh` is a sub-box positioned
+  /// inside the (unmoved) host, so its raw top-vs-top difference is not a
+  /// tracking lag and would just add noise to the mean).
+  final double topLagAfterPx;
+
+  /// Which `StepResponse`, if any, the engine applied to this merge —
+  /// read straight off `MergeResult.stepResponseApplied`. Null under the
+  /// default `StepResponse.damp`, under `PositionMergeModel.legacy`
+  /// (documented no-op), or when a merge was eligible but a residual/
+  /// group never actually qualified.
+  final StepResponse? stepResponseApplied;
 }
 
 /// A provisional chain followed across merges (admission → promotion, or
@@ -243,10 +263,21 @@ BucketPolicy? bucketPolicyFromArg(String arg) {
 ///   can be named explicitly; `freeze-report` inherits that default and
 ///   records it (its outputs are model-neutral: counts and text fields,
 ///   no positions).
+/// - [stepResponse] (#116) defaults to `StepResponse.damp` here — same
+///   precedent as [model] above: the replay rig's own default stays
+///   pinned so every A/B arm can be named explicitly and this tool's
+///   baseline numerics do not silently move when `StabilizationEngine`'s
+///   OWN default changes (it flipped to `StepResponse.coherentShift` in
+///   2.3.0 — the #116 A/B winner; this parameter did not follow it).
+///   `ab_report.dart`'s `agreementWeighted` arm now passes `damp`
+///   explicitly for the same reason; its `agreementSnap` and
+///   `agreementCoherent` arms are the ones that pass `snap` /
+///   `coherentShift`.
 ReplayResult replay(
   CaptureStream stream, {
   BandFallbackConfig band = const BandFallbackConfig(),
   PositionMergeModel model = PositionMergeModel.legacy,
+  StepResponse stepResponse = StepResponse.damp,
   Viewport? viewport,
   bool useStreamViewport = true,
   BucketPolicy bucketPolicy = BucketPolicy.auto,
@@ -265,6 +296,7 @@ ReplayResult replay(
   engine = StabilizationEngine<ReplayBlock, Object>(
     bandFallback: band,
     positionMergeModel: model,
+    stepResponse: stepResponse,
     merger: (existing, fresh, m) {
       final merged = existing.applyMerge(m);
       final e = existing.absoluteRect.raw.center;
@@ -284,6 +316,9 @@ ReplayResult replay(
         textDiffers: fresh.originalText != existing.originalText,
         remainingAfter: m.provisionalCapturesRemaining,
         nestedFragment: m.isNestedFragment,
+        topLagAfterPx:
+            (fresh.absoluteRect.raw.top - merged.absoluteRect.raw.top).abs(),
+        stepResponseApplied: m.stepResponseApplied,
       ));
 
       if (wasAdmission) {

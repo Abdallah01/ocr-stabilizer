@@ -1,6 +1,7 @@
 import 'types/geometry.dart' show Offset;
 
 import 'internal/confidence_validation.dart';
+import 'step_response.dart';
 import 'text_vote.dart';
 import 'types/absolute_rect.dart';
 import 'types/confidence_types.dart';
@@ -87,6 +88,21 @@ class MergeResult {
   /// Additive; defaults to false.
   final bool isNestedFragment;
 
+  // ── Step response (#116) ──
+
+  /// Which [StepResponse] the engine applied to THIS merge, or `null` when
+  /// none did — either because `StabilizationEngine.stepResponse` is
+  /// [StepResponse.damp] (#116 finding H, 2026-08-29: [StepResponse]'s own
+  /// default flipped to [StepResponse.coherentShift] in 2.3.0 — [damp] is
+  /// no longer THE default, only one of the three flag values that never
+  /// sets this field), the merge's residual/group never qualified, or this
+  /// merge is a provisional freeze, a nested-fragment confirmation, or a
+  /// band-fallback admission (step response is never applied to any of
+  /// those three — see [StepResponse]'s doc). Additive; defaults to null.
+  /// The replay tooling reads this field directly off the [MergeResult]
+  /// the merger callback receives, the same way it reads [isNestedFragment].
+  final StepResponse? stepResponseApplied;
+
   /// All fields are engine-computed. The constructor throws [ArgumentError]
   /// on any violation of:
   /// - If [isProvisional], [provisionalCapturesRemaining] must be > 0
@@ -94,6 +110,17 @@ class MergeResult {
   /// - [positionConfidence] / [textConfidence] are in [0.0, 1.0] and not
   ///   NaN — checked here because the primary [PositionConfidence] /
   ///   [TextConfidence] constructors are unchecked.
+  /// - [isNestedFragment] and [stepResponseApplied] are not both set — the
+  ///   engine can never produce that combination (see [stepResponseApplied]'s
+  ///   doc), so a `MergeResult` combining them can only be a construction
+  ///   bug bypassing the engine.
+  /// - [isProvisional] and [stepResponseApplied] are not both set (#116
+  ///   finding D) — for the same reason: a band-fallback admission is
+  ///   never step-response eligible (`stepResponseEligible` excludes
+  ///   `wasBandFallback`), and a later capture of an already-provisional
+  ///   block returns from the freeze path before step-response logic runs
+  ///   at all. Like the nested-fragment case above, this combination is
+  ///   unreachable from the engine and can only be a construction bug.
   MergeResult({
     required this.mergedRect,
     required this.positionConfidence,
@@ -110,6 +137,7 @@ class MergeResult {
     required this.provisionalCapturesRemaining,
     required this.sourceQuality,
     this.isNestedFragment = false,
+    this.stepResponseApplied,
   }) {
     // Engine-output state. Per project policy (feedback_assert_vs_throw_in_storage):
     // asserts strip in release; production-critical invariants on stored state
@@ -130,5 +158,20 @@ class MergeResult {
     }
     assertConfidenceRange('positionConfidence', positionConfidence.raw);
     assertConfidenceRange('textConfidence', textConfidence.raw);
+    if (isNestedFragment && stepResponseApplied != null) {
+      throw ArgumentError(
+        'isNestedFragment and stepResponseApplied cannot both be set — a '
+        'nested-fragment confirmation keeps the existing geometry and never '
+        'runs step-response logic',
+      );
+    }
+    if (isProvisional && stepResponseApplied != null) {
+      throw ArgumentError(
+        'isProvisional and stepResponseApplied cannot both be set — a '
+        'band-fallback admission is never step-response eligible, and a '
+        'later capture of an already-provisional block returns from the '
+        'freeze path before step-response logic runs at all',
+      );
+    }
   }
 }

@@ -19,33 +19,70 @@
 # both sides of the event is real engine noise, not a synthetic shift of
 # boxes.
 #
-# Usage:  python gen_corpus.py <tesseract.exe> <out-dir>
+# Usage:  python gen_corpus.py <tesseract.exe> <out-dir> [options]
+#         python gen_corpus.py --help
+#
+# --gap-px, --gap-after-para, --reflow-at and --seed default to the values
+# that produced the committed pushdown.jsonl / rewrap.jsonl — running with
+# no options regenerates them identically (verified by diff at commit
+# time; this script does not do that check itself). --gap-px accepts a
+# NEGATIVE value: content moves UP instead of down (an ad slot collapsing
+# once its content finishes loading, rather than a slab being inserted).
+import argparse
 import io
 import json
 import random
 import subprocess
-import sys
 import time
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
-TESS, OUT = sys.argv[1], sys.argv[2]
+
+def parse_args():
+    p = argparse.ArgumentParser(
+        description='Dynamic-reflow capture-corpus generator (issue #93).')
+    p.add_argument('tesseract_exe')
+    p.add_argument('out_dir')
+    p.add_argument('--gap-px', type=int, default=300,
+                    help='push-down offset in px. Positive = content moves '
+                         'DOWN (an ad/image finishing load, drawn as a grey '
+                         'slab). Negative = content moves UP (an ad slot '
+                         'collapsing; no slab is drawn — there is nothing '
+                         'left occupying the space). Default: 300.')
+    p.add_argument('--gap-after-para', type=int, default=9,
+                    help='0-based paragraph index the gap slot sits after. '
+                         'Default: 9 (the tenth paragraph; with the '
+                         'default seed its top is page y=1692).')
+    p.add_argument('--reflow-at', type=int, default=7,
+                    help='first capture (1-based) rendered AFTER the '
+                         'reflow event. Default: 7.')
+    p.add_argument('--seed', type=int, default=93,
+                    help='RNG seed for corpus text and perturbation. '
+                         'Default: 93.')
+    return p.parse_args()
+
+
+args = parse_args()
+TESS, OUT = args.tesseract_exe, args.out_dir
 
 W, MARGIN, FONT_PX, LINE_H, PARA_GAP = 1080, 60, 36, 56, 40
 VIEW_H = 2200
 SCROLL_Y = 800          # the dwell viewport for every frame
-REFLOW_AT = 7           # first capture rendered AFTER the reflow event
+REFLOW_AT = args.reflow_at   # first capture rendered AFTER the reflow event
 FRAMES = 12
 WRAP_BEFORE, WRAP_AFTER = 26, 22   # chars per line: base font vs swapped-in
 # (22 not 24: at 24 no paragraph crossed a line-count boundary, so boxes
 # changed width but nothing moved — a font swap that costs a wrapped line
 # per long paragraph is the case worth measuring.)
-GAP_PX = 300            # push-down offset (the "ad" that finishes loading)
-GAP_AFTER_PARA = 9      # the ad slot sits after this paragraph (0-based: the
-                        # tenth); with seed 93 its top is page y=1692 — the
-                        # exact value goes into each stream's meta note
+GAP_PX = args.gap_px         # push-down offset (the "ad" that finishes
+                              # loading) — negative moves content UP instead
+GAP_AFTER_PARA = args.gap_after_para   # the ad slot sits after this
+                                        # paragraph; with the default seed
+                                        # and offset its top is page y=1692
+                                        # — the exact value goes into each
+                                        # stream's meta note
 
-rng = random.Random(93)  # deterministic corpus
+rng = random.Random(args.seed)  # deterministic corpus
 
 # ── Synthetic prose: common-hanzi vocabulary composed into sentences ──
 NOUNS = '山水风云天地花树鸟石桥船灯窗门书剑马城河月星火'
@@ -89,9 +126,13 @@ def render(wrap_chars, gap_after_para=None, gap_px=0):
     draw = ImageDraw.Draw(page)
     for ly, ln in lines:
         draw.text((MARGIN, ly), ln, font=FONT, fill=0)
-    if gap_top is not None:
+    if gap_top is not None and gap_px > 0:
         # A flat mid-grey slab with a border: what a loaded image ad looks
-        # like to an OCR engine — no glyphs, so it yields no blocks.
+        # like to an OCR engine — no glyphs, so it yields no blocks. Only
+        # drawn when content is moving DOWN (something new occupies the
+        # slot). A negative gap_px models an ad slot COLLAPSING — content
+        # moves up into space that is now simply gone, so there is nothing
+        # to draw.
         draw.rectangle((MARGIN, gap_top + 20, W - MARGIN, gap_top + gap_px - 20),
                        fill=200, outline=120, width=3)
     return page, lines, gap_top
@@ -185,9 +226,15 @@ rewrapped = render(WRAP_AFTER)
 print(f'page: base {base[0].height}px, pushed {pushed[0].height}px '
       f'(gap top y={pushed[2]}), rewrapped {rewrapped[0].height}px; '
       f'lines {len(base[1])}/{len(pushed[1])}/{len(rewrapped[1])}')
-scenario('pushdown', base, pushed,
-         f'{GAP_PX}px slab inserted after paragraph {GAP_AFTER_PARA + 1} '
-         f'(page y={pushed[2]}): every line below moves +{GAP_PX}px, text unchanged')
+if GAP_PX >= 0:
+    _pushdown_note = (
+        f'{GAP_PX}px slab inserted after paragraph {GAP_AFTER_PARA + 1} '
+        f'(page y={pushed[2]}): every line below moves +{GAP_PX}px, text unchanged')
+else:
+    _pushdown_note = (
+        f'{-GAP_PX}px ad slot collapsing after paragraph {GAP_AFTER_PARA + 1} '
+        f'(page y={pushed[2]}): every line below moves {GAP_PX}px, text unchanged')
+scenario('pushdown', base, pushed, _pushdown_note)
 scenario('rewrap', base, rewrapped,
          f'wrap {WRAP_BEFORE}->{WRAP_AFTER} chars/line: same paragraphs, '
          f'new line boxes and line texts')

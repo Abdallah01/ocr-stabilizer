@@ -177,3 +177,256 @@ dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-dynamic-ref
 dart tool/replay/pregroup.dart doc/replay/validation/2026-08-dynamic-reflow/pushdown.jsonl pushdown.grouped.jsonl   # then ab-report / dump_frames on the grouped stream
 dart tool/replay/dump_frames.dart doc/replay/validation/2026-08-dynamic-reflow/pushdown.jsonl dump.json 0   # per-capture identity (obs counts) and tracked positions
 ```
+
+## Step response A/B (#116, 2026-08-29)
+
+The `pushdown` entry above shows the default position model treating a
+genuine 300 px content shift as jitter — the tracked position stays
+130–160 px behind for several captures. #116 tracked two opt-in
+alternatives: `StepResponse.snap` (a per-block residual threshold) and
+`StepResponse.coherentShift` (a batch vote across an agreeing group of
+moved pairs). This entry grades both against the `agreementWeighted` arm
+— `StepResponse.damp`, today's behaviour before this change, and NOT the
+`legacy` arm above (a structurally different position-match model, not a
+`StepResponse` variant) — on `pushdown-300` and `rewrap` (the committed
+streams above), six further `pushdown`/`pushup` gap/timing variants
+(seven step streams total, committed under `variants/`), and ten streams
+that carry no real step — `rewrap` plus nine Tesseract/PaddleOCR/on-device
+ML-Kit dwell and scroll controls — seventeen streams total, four
+`StepResponse` arms replayed per stream.
+
+**Verdict: `StepResponse.coherentShift`, 14 of 17 streams, vs `snap`'s 11
+of 17.** Re-derived independently from raw `ab-report` output over all 17
+streams (not a sample) against the corrected `agreementWeighted` (damp)
+baseline. `StabilizationEngine`'s constructor default is
+[`coherentShift` as of this change](../../../../CHANGELOG.md);
+`StepResponse.damp` restores the pre-change numerics exactly.
+
+### Method
+
+Each stream was run once through `dart tool/replay/replay.dart ab-report
+<file>`, which reports `legacy`, `agreementWeighted`, `agreementSnap`,
+`agreementCoherent`. The last three are the SAME agreement-weighted
+position-match model, differing only in `StepResponse`: `agreementWeighted`
+passes `StepResponse.damp` explicitly — its numerics do not move when
+`StabilizationEngine`'s own default changes — and is the baseline for
+this A/B; `agreementSnap` passes `StepResponse.snap`; `agreementCoherent`
+passes `StepResponse.coherentShift`.
+`legacy` is `PositionMergeModel.legacy` — a different merge model
+entirely, with no residual/scale concept to gate a step response on (both
+`StepResponse` options are a documented no-op under it) — it is not a
+`StepResponse` variant, is not "damp", and is not graded here. The six
+variants were generated with `gen_corpus.py`'s CLI knobs: four gap sizes
+at the default reflow-at capture (50 / 150 / 600 / −300 px, capture 7)
+plus two reflow timings at the default 300 px gap (captures 3 and 10),
+seed 93 throughout — see `variants/` and `doc/README.md`'s doc-map row for
+the knobs per file. The ten no-step streams are `rewrap` (a font swap —
+chains should reset, not step) and nine already-committed
+Tesseract/PaddleOCR/on-device dwell, OCR-jitter-dwell and synthetic-scroll
+controls.
+
+A judge scored all 17 streams against two rules:
+
+- **Control rule** (10 streams, no real move): PASS iff `stepEvents == 0`
+  AND the merge count matches damp's (`sameMergesAsDamp`) — any step
+  event where there is no real coherent move is a false trigger
+  regardless of merge count.
+- **Step rule** (7 `pushdown`/`pushup` streams, a real move): PASS iff lag
+  at the move capture and three/five captures later is AT MOST HALF of
+  damp's, AND identity at the move capture is AT LEAST damp's.
+
+### Result
+
+*Lag = |OCR top − tracked top| per merge, mean over non-nested merges, per
+capture (`topLagAfterPx`). Identity = merges / observed units
+(`identityAtMove` at the move capture). Step events = merges where the
+named option's step-response logic actually applied — zero means the
+option fell through to damp's behaviour on every merge in the stream.
+Control PASS = 0 step events AND merge count equal to damp's. Step PASS =
+lag at move/+3/+5 ≤ half of damp's AND identity at move ≥ damp's.*
+
+#### Control streams — no real step
+
+| stream | kind | snap stepEvents | snap | coherent stepEvents | coherent |
+|---|---|---|---|---|---|
+| rewrap | rewrap — "chains should reset, no step" | 1 | **FAIL** | 0 | PASS |
+| tess-stable-dwell | dwell | 0 | PASS | 0 | PASS |
+| tess-jitter-dwell | dwell | 0 | PASS | 0 | PASS |
+| tess-scroll | synthetic scroll | 1 | **FAIL** | 0 | PASS |
+| paddle-stable-dwell | dwell | 0 | PASS | 0 | PASS |
+| paddle-jitter-dwell | dwell | 0 | PASS | 0 | PASS |
+| paddle-scroll | synthetic scroll | 5 | **FAIL** | 0 | PASS |
+| mlkit-dwell | on-device (scroll-stamp lag confound) | 1 | **FAIL** | 0 | PASS |
+| mlkit-dwell-bk | on-device | 0 | PASS | 0 | PASS |
+| mlkit-scroll | on-device (scroll-stamp lag confound) | 0 | PASS | 0 | PASS |
+| **tally** | | | **6/10** | | **10/10** |
+
+Every FAIL row has `sameMergesAsDamp: true` — the merge count came out the
+same as damp's either way — but `snap` still opened a step event where no
+real move occurred (a per-block residual crossed threshold on an isolated
+misread or on continuous scroll motion), which fails the control rule as
+stated.
+
+#### Step streams — real `pushdown`/`pushup` moves
+
+| stream | gap / reflow-at | damp lag: move / +3 / +5 | identity at move | snap lag: move / +3 / +5 (stepEvents) | snap | coherent lag: move / +3 / +5 (stepEvents) | coherent |
+|---|---|---|---|---|---|---|---|
+| pushdown-300 | 300 px @ cap 7 | 123.8 / 77.3 / 70.2 | 0.769 | 2.3 / 15.2 / 2.6 (9) | PASS | 4.5 / 17.0 / 3.5 (9) | PASS |
+| pushdown-050 | 50 px @ cap 7 | 25.9 / 25.5 / 28.9 | 0.900 | identical — 0 events | **FAIL** | identical — 0 events | **FAIL** |
+| pushdown-150 | 150 px @ cap 7 | 82.5 / 66.5 / 59.1 | 0.964 | identical — 0 events | **FAIL** | 68.3 / 54.7 / 45.2 (3) | **FAIL** |
+| pushdown-600 | 600 px @ cap 7 | 30.7 / 26.1 / 14.5 | 0.545 | 1.4 / 12.6 / 3.0 (6) | PASS | identical — 0 events | **FAIL** |
+| pushup-300 | −300 px @ cap 7 | 155.1 / 92.7 / 67.3 | 0.667 | 9.8 / 19.9 / 4.1 (12) | PASS | 9.4 / 19.3 / 4.2 (11) | PASS |
+| pushdown-300-early | 300 px @ cap 3 | 113.1 / 54.7 / 48.0 | 0.769 | 6.0 / 5.5 / 5.2 (10) | PASS | 7.0 / 5.9 / 5.5 (10) | PASS |
+| pushdown-300-late | 300 px @ cap 10 | 135.6 / n/a / n/a | 0.731 | 8.7 / n/a / n/a (9) | PASS | 9.9 / n/a / n/a (9) | PASS |
+| **tally** | | | | | **5/7** | | **4/7** |
+
+Identity at move ties across damp/snap/coherent on every row — no
+`StepResponse` can fire before the move capture, so the pre-move match
+set is identical for all three — it never discriminates in this corpus;
+the pass/fail split is decided by lag alone. `pushdown-300-late`'s reflow
+lands three captures from the end of the 12-capture window, so
+`lagPlus3`/`lagPlus5` are undefined for every arm there.
+
+**Combined: `agreementSnap` 6 + 5 = 11/17. `agreementCoherent` 10 + 4 =
+14/17.**
+
+### Reading
+
+`coherentShift` wins on breadth: it never false-triggers on a control
+(10/10 — including `rewrap`, whose note explicitly says "chains should
+reset, no step," and both synthetic-scroll controls, where `snap` fires 1
+and 5 times on continuous motion it should ignore), and it clears four of
+five 300 px-class step streams with lag cut by roughly an order of
+magnitude. Its two misses are measured, not analytically inferred, and
+neither is a regression against damp — both are tracked as #119:
+
+- **`pushdown-600` (a 600 px slab): a clean fall-through, not a
+  regression.** `coherentShift` never engages its `coherentShiftMinBlocks`
+  / `coherentShiftMinShare` quorum — its merges are bit-identical to
+  damp's. `snap`'s per-block threshold, having no quorum, passes this
+  stream cleanly instead.
+- **`pushdown-150` (150 px): a real cut, short of the bar.**
+  `coherentShift` fires 3 step events and cuts lag 17–23 % — genuine, but
+  short of the ≤ half-of-damp bar this A/B set. `snap` never fires here
+  (below its residual threshold).
+- **`pushdown-050` (50 px): inside the jitter allowance for both.**
+  Neither option fires — the move is inside the block's own 3×-height
+  agreement scale, so it is damped by design, the same as any ordinary
+  jitter residual. Both arms are byte-identical to damp on this stream.
+
+### Verdict (FINAL)
+
+**`StepResponse.coherentShift`, 14/17 vs `snap`'s 11/17 — re-derived
+independently from raw `ab-report` output over all 17 streams against the
+`agreementWeighted` (damp) baseline.**
+
+An earlier pass at this table carried a PROVISIONAL verdict: its own
+written reasoning (not its tally) named `legacy` as "damp" and graded the
+step streams against `legacy`'s lag figures, producing two false claims —
+`pushdown-600`'s coherent lag called "worse than damp" (it is
+bit-identical to the REAL damp arm, a clean fall-through, not a
+regression) and `pushdown-150`'s coherent lag called "also worse than
+damp" (against the real baseline it is 17–23 % lower, not worse). Two
+spot-check passes (2–3 streams each) first caught the `legacy`-as-damp
+defect and confirmed every PASS/FAIL classification was unchanged against
+the corrected baseline; the full independent re-derivation above (all 17
+streams, not a sample) confirms the same tally and the same winner, which
+settles it.
+
+`coherentShift`'s two measured misses (`pushdown-600`, `pushdown-150`) and
+the untested-but-analytically-plausible gap below are tracked as #119 —
+none of the three is a reason to prefer `snap` as the default, which
+false-triggers on 4 of 10 controls (a cost paid on every stream, not just
+the ones with a real step).
+
+**Re-verified post-#120 review (2026-08-29):** the #116 review fan-out's
+findings B/C reshaped `_detectCoherentShift`'s clustering (deterministic
+ordering) and froze each coherent-shift member's drift snapshot at vote
+time instead of re-reading it live mid-capture. Re-running `ab-report`
+over all 17 streams after those fixes reproduces the identical 14/17 vs
+11/17 tally and every PASS/FAIL cell above unchanged, including all 10
+controls still showing zero `coherentShift` step events. The frozen-drift
+fix (finding C) did move `agreementCoherent`'s `meanTopLagByCapture` by
+≤0.1 px on 3 of 17 streams (`pushdown-150`, `pushdown-300-late`,
+`pushup-300` — the streams where a coherent-shift member's residual had
+previously been read after an earlier same-capture merge already
+mutated it) — `pushdown-150`'s row above reflects the re-derived 68.3 /
+54.7 / 45.2 (the prior 68.2 / 54.6 / 45.2 rounded to the same display
+precision on the other two streams). The three affected `variants/*.ab.json`
+files were regenerated from the fixed engine; the diff is confined to
+`agreementCoherent`'s displacement/lag fields — `legacy`, `agreementWeighted`
+and `agreementSnap` are byte-identical, confirming none of the other
+arms leaked drift from the fix. This pass also surfaced a pre-existing,
+unrelated gap: the 9 corpus-control `.ab.json` files outside
+`variants/` (the on-device, PaddleOCR and Tesseract streams) were never
+regenerated since the step-response fields were added, so they carry
+none of `agreementSnap`/`agreementCoherent` and only a partial `legacy`/
+`agreementWeighted` — tracked as #121, out of scope for this pass since
+none of those 9 files changed.
+
+### Boundary of what this proves
+
+Synthetic corpus, single seed (93), one repetition per stream
+configuration — no variance estimate on any number above. The six
+variants are not a factorial grid (one axis at a time: four gap sizes at
+the default timing, two timings at the default gap), so a step small
+enough to miss `snap`'s threshold AND land on young chains, or large
+enough to blow `coherentShift`'s quorum AND land on well-established
+chains, is untested. The on-device streams (`mlkit-dwell`,
+`mlkit-dwell-bk`, `mlkit-scroll`) carry the documented scroll-stamp lag
+confound; `snap`'s single false-triggered step event on `mlkit-dwell` is
+scored as a control failure per the stated rule, but could in principle
+be catching that confound rather than a spurious per-block residual — not
+demonstrated either way here. The identity-at-move criterion never
+discriminated in this dataset (ties in every step row by construction)
+and contributed nothing to the score; a future A/B should drop it or
+measure identity at move+1 instead (also tracked as #119).
+`_detectCoherentShift`'s exclusion of provisional / viewport-relative /
+horizontal-scroll-child blocks from the moved-pair pool before the quorum
+gates apply is, structurally, the same shape as the confirmed
+`pushdown-600` miss (a quorum that can fail to see enough movers) but was
+not itself exercised by any of the 17 streams — an untested, not a
+measured, gap. Nothing here measures device timing (offline replay,
+corpus JSONL only, consistent with the entry above).
+
+### Reproduce
+
+The numbers above come from the COMMITTED streams, not from regenerating
+them: this environment's Tesseract/PaddleOCR toolchain does not reproduce
+`pushdown.jsonl`/`rewrap.jsonl` bit-for-bit (confirmed by running
+`gen_corpus.py`'s pre- and post-CLI-refactor forms side by side here —
+both agree with each other, neither with the committed corpus — so this
+is environment/version drift, not a script bug). The `gen_corpus.py`
+invocations below are the ORIGINAL knobs each variant was produced with,
+kept for provenance; regenerating from them in a different environment is
+not guaranteed to reproduce the committed `.jsonl` bytes, only the
+`ab-report` commands over the already-committed files are.
+
+```
+# provenance only — not guaranteed to reproduce the committed bytes in every environment
+python doc/replay/validation/2026-08-dynamic-reflow/gen_corpus.py <tesseract.exe> <out_dir> --gap-px 50 --reflow-at 7 --seed 93     # -> pushdown-050.jsonl
+python doc/replay/validation/2026-08-dynamic-reflow/gen_corpus.py <tesseract.exe> <out_dir> --gap-px 150 --reflow-at 7 --seed 93    # -> pushdown-150.jsonl
+python doc/replay/validation/2026-08-dynamic-reflow/gen_corpus.py <tesseract.exe> <out_dir> --gap-px 600 --reflow-at 7 --seed 93    # -> pushdown-600.jsonl
+python doc/replay/validation/2026-08-dynamic-reflow/gen_corpus.py <tesseract.exe> <out_dir> --gap-px -300 --reflow-at 7 --seed 93   # -> pushup-300.jsonl
+python doc/replay/validation/2026-08-dynamic-reflow/gen_corpus.py <tesseract.exe> <out_dir> --gap-px 300 --reflow-at 3 --seed 93    # -> pushdown-300-early.jsonl
+python doc/replay/validation/2026-08-dynamic-reflow/gen_corpus.py <tesseract.exe> <out_dir> --gap-px 300 --reflow-at 10 --seed 93   # -> pushdown-300-late.jsonl
+
+# reproducible: runs against the committed streams, all four StepResponse arms in one JSON each
+dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-dynamic-reflow/pushdown.jsonl
+dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-dynamic-reflow/rewrap.jsonl
+dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-dynamic-reflow/variants/pushdown-050.jsonl
+dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-dynamic-reflow/variants/pushdown-150.jsonl
+dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-dynamic-reflow/variants/pushdown-600.jsonl
+dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-dynamic-reflow/variants/pushup-300.jsonl
+dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-dynamic-reflow/variants/pushdown-300-early.jsonl
+dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-dynamic-reflow/variants/pushdown-300-late.jsonl
+dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-tesseract-matrix/stable-dwell.jsonl        # + ocr-jitter-dwell.jsonl, scroll.jsonl
+dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-paddleocr-matrix/stable-dwell.jsonl        # + ocr-jitter-dwell.jsonl, scroll.jsonl
+dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-mlkit-on-device/dwell.jsonl                # + dwell-bk.jsonl, scroll.jsonl
+```
+
+Note: `pushdown.ab.json`/`rewrap.ab.json` committed above predate the
+`StepResponse` arms (`legacy`/`agreementWeighted` only) — rerun `ab-report`
+on the two `.jsonl` streams to see the four-arm output this section's
+table cites; they were deliberately left as the historical snapshot for
+the entry above rather than regenerated for this section.

@@ -92,6 +92,17 @@ void main() {
     // wording cannot silently drift into a mislabel.
     final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
       merger: (existing, fresh, m) => existing.applyMerge(m),
+      // #116 finding G, 2026-08-29: pinned explicitly, unlike
+      // positionMergeModel below. This GIF was rendered before the #116
+      // A/B flipped StabilizationEngine's own default from
+      // StepResponse.damp to StepResponse.coherentShift (2.3.0) — the
+      // committed corpus's provenance is "the engine's defaults AT
+      // RENDER TIME", which was damp. positionMergeModel can still
+      // assert-equals-current-default (agreementWeighted never moved);
+      // stepResponse can no longer make that claim, so it is pinned
+      // outright instead — without this, the test would silently start
+      // measuring coherentShift's damping instead of the render's own.
+      stepResponse: StepResponse.damp,
     );
     expect(engine.positionMergeModel, PositionMergeModel.agreementWeighted,
         reason: 'the README caption says "defaults"; if the default model '
