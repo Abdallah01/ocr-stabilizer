@@ -41,7 +41,9 @@ WRAP_BEFORE, WRAP_AFTER = 26, 22   # chars per line: base font vs swapped-in
 # changed width but nothing moved — a font swap that costs a wrapped line
 # per long paragraph is the case worth measuring.)
 GAP_PX = 300            # push-down offset (the "ad" that finishes loading)
-GAP_AFTER_PARA = 9      # the ad slot sits after this paragraph (page y≈1400)
+GAP_AFTER_PARA = 9      # the ad slot sits after this paragraph (0-based: the
+                        # tenth); with seed 93 its top is page y=1692 — the
+                        # exact value goes into each stream's meta note
 
 rng = random.Random(93)  # deterministic corpus
 

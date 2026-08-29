@@ -40,7 +40,7 @@ admitted as new.
 
 | capture | raw | matched / new | below the slab: matched / new | mean lag of retained shifted lines (raw top − tracked top) |
 |---|---|---|---|---|
-| 6 (before) | 30 | 28 / 2 | 21 / 1 | 1.6 px |
+| 6 (before) | 30 | 28 / 2 | 18 / 0 | 1.6 px |
 | 7 (the move) | 26 | 20 / 6 | 9 / 5 | **274.4 px** |
 | 8 | 26 | 24 / 2 | 14 / 0 | 138.8 px |
 | 9 | 26 | 24 / 2 | 14 / 0 | 160.2 px |
@@ -50,8 +50,10 @@ admitted as new.
 
 (26 raw lines from capture 7 on: the slab pushes the last four lines out
 of the viewport.) **Identity:** 9 of the 14 shifted lines match their
-pre-move blocks on the reflow frame (text + band path); 24 of the 26 line
-texts on capture 7 existed on capture 6 and 20 of them matched. The five
+pre-move blocks on the reflow frame through the primary text match (the
+band-relaxed fallback is off in both replay tools and admitted nothing);
+24 of the 26 line texts on capture 7 existed on capture 6 and 20 of them
+matched. The five
 resets re-enter as new chains and track from capture 8. **Position:** the
 agreement-weighted model treats the 300 px step as jitter — the tracked top
 lags by 274 px on the move and is still 130–160 px behind five captures
