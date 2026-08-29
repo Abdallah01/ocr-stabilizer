@@ -1,3 +1,24 @@
+## 2.3.0 - 2026-08-29
+
+### Changed
+- **`StabilizationEngine`'s default `StepResponse` is now `coherentShift`
+  (#116).** The engine now re-anchors a batch-wide coherent shift by
+  default, instead of damping a genuine layout step as jitter;
+  `StepResponse.damp` restores the previous (2.2.0 and earlier)
+  numerics exactly, and `StepResponse.snap` remains available.
+  Evidence: a 17-stream A/B (11 committed + 6 generated push-down/
+  push-up variants), re-derived independently from raw `ab-report`
+  output over all 17 streams against the `agreementWeighted` (damp)
+  baseline — `coherentShift` 14/17 vs `snap` 11/17, with zero
+  false-triggered step events on any control stream (`snap`
+  false-triggered on 4 of 10). Two blind spots are documented, not
+  regressions: a 600 px single-frame slab (no group meets the default
+  quorum, so the merge falls through to damp's numbers unchanged) and
+  slabs of 50–150 px (inside or near the 3×-height jitter allowance,
+  so the cut is null or partial) — tracked as #119. Full table:
+  `doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`'s "Step
+  response A/B" section.
+
 ## 2.2.0 - 2026-08-29
 
 ### Added
