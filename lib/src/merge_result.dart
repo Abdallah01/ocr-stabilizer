@@ -1,6 +1,7 @@
 import 'types/geometry.dart' show Offset;
 
 import 'internal/confidence_validation.dart';
+import 'step_response.dart';
 import 'text_vote.dart';
 import 'types/absolute_rect.dart';
 import 'types/confidence_types.dart';
@@ -87,6 +88,19 @@ class MergeResult {
   /// Additive; defaults to false.
   final bool isNestedFragment;
 
+  // ── Step response (#116) ──
+
+  /// Which [StepResponse] the engine applied to THIS merge, or `null` when
+  /// none did — either because `StabilizationEngine.stepResponse` is
+  /// [StepResponse.damp] (the default), the merge's residual/group never
+  /// qualified, or this merge is a provisional freeze, a nested-fragment
+  /// confirmation, or a band-fallback admission (step response is never
+  /// applied to any of those three — see [StepResponse]'s doc). Additive;
+  /// defaults to null. The replay tooling reads this field directly off
+  /// the [MergeResult] the merger callback receives, the same way it reads
+  /// [isNestedFragment].
+  final StepResponse? stepResponseApplied;
+
   /// All fields are engine-computed. The constructor throws [ArgumentError]
   /// on any violation of:
   /// - If [isProvisional], [provisionalCapturesRemaining] must be > 0
@@ -110,6 +124,7 @@ class MergeResult {
     required this.provisionalCapturesRemaining,
     required this.sourceQuality,
     this.isNestedFragment = false,
+    this.stepResponseApplied,
   }) {
     // Engine-output state. Per project policy (feedback_assert_vs_throw_in_storage):
     // asserts strip in release; production-critical invariants on stored state

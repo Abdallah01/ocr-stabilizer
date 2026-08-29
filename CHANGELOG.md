@@ -62,6 +62,30 @@
   stream alone. Reports record `input.bucketPolicy` and the sizes each
   arm applied (`bucketsApplied`).
 
+- **`StepResponse` (#116, candidate fixes for the push-down-reflow lag).**
+  The agreement-weighted position model damps every residual as jitter,
+  including a genuine layout step — an ad/image finishing load pushes
+  every line below it down by a fixed offset in one frame, and the model
+  then draws tracked boxes 130-275px above the real text for several
+  captures. `StabilizationEngine(stepResponse: ...)` adds two opt-in
+  alternatives to the default `StepResponse.damp` (today's behaviour,
+  unchanged): `StepResponse.snap` re-anchors a single block outright once
+  its residual exceeds `snapThresholdMultiplier` (default 1.5) times the
+  block's own agreement scale; `StepResponse.coherentShift` looks for a
+  group of matched pairs in the same capture whose displacement agrees
+  (within `coherentShiftTolerance`, default 0.5x the smaller block
+  height) and, once the group clears `coherentShiftMinBlocks` (default 3)
+  and `coherentShiftMinShare` (default 0.5), applies the group's median
+  displacement as a batch shift before the normal weighted merge runs.
+  Neither is ever applied to a provisional (frozen), nested-fragment, or
+  band-fallback-admission merge, and both are a documented no-op under
+  `PositionMergeModel.legacy` (which has no residual/scale concept to
+  gate on). `MergeResult.stepResponseApplied` (additive, default null)
+  tells consumers and replay tooling which `StepResponse`, if any, a
+  merge received. **The default (`StepResponse.damp`) reproduces today's
+  numerics exactly — no behaviour changes for an engine that does not
+  pass `stepResponse`.**
+
 ### Changed
 - **Reports separate nested confirmations from position merges.**
   `ab-report` arms gain `nestedFragmentMerges`; `mergeCount` counts every

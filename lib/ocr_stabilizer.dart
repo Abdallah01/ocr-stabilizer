@@ -58,6 +58,7 @@ export 'src/robust_stats.dart';
 export 'src/stabilization_result.dart';
 export 'src/spatial_block_index.dart';
 export 'src/stabilization_engine.dart';
+export 'src/step_response.dart';
 export 'src/submap_membership.dart';
 export 'src/text_dedup_utils.dart';
 export 'src/text_vote.dart';
