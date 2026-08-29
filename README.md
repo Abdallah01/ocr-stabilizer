@@ -91,11 +91,13 @@ dependencies:
 > regressions, and tracked as [#119](https://github.com/Abdallah01/ocr-stabilizer/issues/119): a single-frame slab too large for the
 > default quorum falls through to damp's numbers unchanged, and slabs of
 > 50–150 px land inside or near the existing jitter allowance. Full table:
-> `doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`. Additive
-> API only (`StabilizationEngine`'s `stepResponse` parameter and
-> `MergeResult.stepResponseApplied` already existed); the numerics change
-> for the default configuration — pass `stepResponse: StepResponse.damp`
-> explicitly to keep the previous (2.2.0 and earlier) behavior exactly.
+> `doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`. The
+> `StepResponse` enum, `StabilizationEngine`'s `stepResponse` parameter and
+> `MergeResult.stepResponseApplied` are all new, additive surface; existing
+> callers that never named `stepResponse` inherit the new default and see
+> the numerics change for the default configuration — pass
+> `stepResponse: StepResponse.damp` explicitly to keep the previous (2.2.0
+> and earlier) behavior exactly.
 
 > **What's new in 2.2.0** — nested re-observation: when an engine's
 > grouping flips and a paragraph comes back as one of its own lines, the
