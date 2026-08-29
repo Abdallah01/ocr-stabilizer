@@ -767,28 +767,51 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // too.
     final pendingNested = <(T fresh, T host)>[];
 
-    // Pre-pass (#116): match every fresh block against the spatial index
-    // BEFORE any merge of this capture runs. `_findMatch` reads the
-    // spatial index (unmutated until the rebuild at the end of this
-    // method) and the band-fallback counters (which it DOES mutate —
-    // `_internalStats.record*`); it does not read or depend on anything
-    // a same-capture merge changes. Calling it exactly once per fresh
-    // block, in this original order, therefore tallies those counters
-    // identically to the previous interleaved match+merge loop, while
-    // giving `_detectCoherentShift` a full-capture snapshot of every
-    // match to vote on before any merge (and its driftTracker
-    // side-effects) has happened.
-    final matchResults = [
-      for (final fresh in deduped) (fresh: fresh, result: _findMatch(fresh)),
-    ];
-
+    // Dry pre-pass (#116, finding A fix): ONLY when [stepResponse] is
+    // [StepResponse.coherentShift] — under [StepResponse.damp] or
+    // [StepResponse.snap] this block does not run at all, so the match+
+    // merge loop below is structurally identical to the pre-#116
+    // interleaved design (byte-identical to main, not merely argued to
+    // be). `_detectCoherentShift` needs every match of this capture
+    // decided BEFORE any of this capture's merges (and their
+    // `driftTracker.addObservation` side effects) — but it only ever
+    // votes on ordinary PRIMARY matches (band admissions and nested
+    // fragments are excluded from its eligible pairs). The primary check
+    // alone reads only the (this-capture-immutable) spatial index and
+    // text scores — never `driftTracker`, never `_internalStats` — so a
+    // primary-only, non-mutating pass here is safe to run ahead of the
+    // real loop. `recordStats: false` keeps every counter ticking exactly
+    // once, in the real loop below; `allowBandFallback: false` and
+    // `allowNestedFallback: false` skip the two branches that either
+    // read same-capture-mutable state (band) or would recompute work the
+    // real loop does anyway for a result this vote discards either way
+    // (nested).
     final coherentShiftPlan = stepResponse == StepResponse.coherentShift
-        ? _detectCoherentShift(matchResults)
+        ? _detectCoherentShift([
+            for (final fresh in deduped)
+              (
+                fresh: fresh,
+                result: _findMatch(
+                  fresh,
+                  recordStats: false,
+                  allowBandFallback: false,
+                  allowNestedFallback: false,
+                ),
+              ),
+          ])
         : null;
 
-    for (final entry in matchResults) {
-      final fresh = entry.fresh;
-      final matchResult = entry.result;
+    // Real match+merge loop — interleaved exactly as main had it (#116
+    // finding A): each fresh block's REAL match (full band-fallback +
+    // nested-fragment logic, `_internalStats` ticked) is resolved and,
+    // if it merges, immediately merged before the next fresh block is
+    // matched. A same-capture band spatial-confirm therefore sees
+    // `driftTracker` as mutated by every earlier same-capture merge in
+    // THIS loop — not a pre-capture snapshot — matching cross-capture
+    // behavior exactly (see `_findMatch`'s band branch and
+    // `DriftTracker.addObservation`).
+    for (final fresh in deduped) {
+      final matchResult = _findMatch(fresh);
       final existing = matchResult.match;
       if (existing == null) {
         stableBlocks.add(fresh);
@@ -1400,10 +1423,29 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// path miss, a fresh block that is a nested fragment of an established
   /// block ([_findNestedHost]) matches that block with `wasNestedFragment`
   /// set, so the merge is a confirming observation only.
+  ///
+  /// [recordStats] / [allowBandFallback] / [allowNestedFallback] (#116,
+  /// finding A fix): the DRY pre-pass `stabilize` runs to feed
+  /// `_detectCoherentShift` a full-capture snapshot calls this with all
+  /// three `false`. That pre-pass must never mutate [_internalStats] (the
+  /// REAL, interleaved call below ticks every counter exactly once per
+  /// fresh block) and must never evaluate the band branch (which reads
+  /// `driftTracker` — see `stabilize`'s own doc for why only the PRIMARY
+  /// check, which touches neither, is safe to run ahead of this capture's
+  /// merges). Skipping the nested-fragment lookup too is a pure perf
+  /// saving: `_detectCoherentShift` already discards `wasNestedFragment`
+  /// matches, so computing one in the dry pass is wasted work, never a
+  /// correctness difference. Every default reproduces today's single-mode
+  /// behavior exactly.
   ({T? match, bool wasBandFallback, bool wasNestedFragment}) _findMatch(
-      T fresh) {
+    T fresh, {
+    bool recordStats = true,
+    bool allowBandFallback = true,
+    bool allowNestedFallback = true,
+  }) {
     final candidates = _spatialIndex.candidates(fresh);
-    final shouldRunBand = bandFallback.mode != BandFallbackMode.off;
+    final shouldRunBand =
+        allowBandFallback && bandFallback.mode != BandFallbackMode.off;
 
     T? primaryMatch;
     // Seeded below any reachable score so a candidate admitted purely via
@@ -1505,7 +1547,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
 
     // ── Tally primary outcome ──
     if (primaryMatch != null) {
-      _internalStats.recordPrimaryMatchAdmitted();
+      if (recordStats) _internalStats.recordPrimaryMatchAdmitted();
       return (
         match: primaryMatch,
         wasBandFallback: false,
@@ -1518,8 +1560,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     //     == total fresh observations that reached _findMatch.
     // Consumers compute "band fires as % of primary misses" as
     // `bandMatchesIdentified / primaryMatchesRejected` — undercounting
-    // here would skew that ratio.
-    _internalStats.recordPrimaryMatchRejected();
+    // here would skew that ratio. (Gated on [recordStats] — the dry
+    // pre-pass calls this with `recordStats: false` and must not tick it;
+    // the real, interleaved call always passes the default `true`.)
+    if (recordStats) _internalStats.recordPrimaryMatchRejected();
 
     // ── Return band outcome ──
     if (shouldRunBand && bandAdmitted != null) {
@@ -1529,6 +1573,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         wasBandFallback: true,
         wasNestedFragment: false,
       );
+    }
+
+    if (!allowNestedFallback) {
+      return (match: null, wasBandFallback: false, wasNestedFragment: false);
     }
 
     // ── Nested re-observation (#112): primary AND band missed ──
