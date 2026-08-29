@@ -271,7 +271,7 @@ stated.
 
 | stream | gap / reflow-at | damp lag: move / +3 / +5 | identity at move | snap lag: move / +3 / +5 (stepEvents) | snap | coherent lag: move / +3 / +5 (stepEvents) | coherent |
 |---|---|---|---|---|---|---|---|
-| pushdown-300 | 300 px @ cap 7 | 123.8 / 77.3 / 70.2 | 0.769 | 2.3 / 15.2 / 2.6 (9) | PASS | 4.3 / 16.8 / 3.4 (9) | PASS |
+| pushdown-300 | 300 px @ cap 7 | 123.8 / 77.3 / 70.2 | 0.769 | 2.3 / 15.2 / 2.6 (9) | PASS | 4.5 / 17.0 / 3.5 (9) | PASS |
 | pushdown-050 | 50 px @ cap 7 | 25.9 / 25.5 / 28.9 | 0.900 | identical — 0 events | **FAIL** | identical — 0 events | **FAIL** |
 | pushdown-150 | 150 px @ cap 7 | 82.5 / 66.5 / 59.1 | 0.964 | identical — 0 events | **FAIL** | 68.3 / 54.7 / 45.2 (3) | **FAIL** |
 | pushdown-600 | 600 px @ cap 7 | 30.7 / 26.1 / 14.5 | 0.545 | 1.4 / 12.6 / 3.0 (6) | PASS | identical — 0 events | **FAIL** |
