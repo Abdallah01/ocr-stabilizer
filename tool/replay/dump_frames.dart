@@ -3,16 +3,27 @@
 
 // Dumps per-capture raw vs stabilized geometry for visualization (the
 // README demo GIF). Replays a capture stream through the packaged engine
-// with the same construction the ab-report agreement arm uses — the
-// output is REAL engine behavior, not a mock-up.
+// with the same positionMergeModel construction the ab-report agreement
+// arm uses — the output is REAL engine behavior, not a mock-up.
 //
-// stepResponse (#116 finding G, 2026-08-29): pinned to StepResponse.damp
-// explicitly below, for the same reason ab_report.dart's own
-// `agreement` arm names its baseline outright — `StabilizationEngine`'s
-// own default flipped to StepResponse.coherentShift in 2.3.0 (the #116
-// A/B), and this tool's comment already claimed parity with that arm.
-// Without the explicit pin the demo GIF's baseline geometry would have
-// silently changed at the same commit, with nothing here saying so.
+// stepResponse (#122, 2026-08-29): left unset below, so this tool tracks
+// `StabilizationEngine`'s own default (`StepResponse.coherentShift` since
+// 2.3.0, the #116 A/B). It was pinned to `StepResponse.damp` for one
+// review cycle (#116 finding G) so the default flip wouldn't silently
+// change the committed demo GIFs' baseline geometry out from under them;
+// #122 re-dumped both committed corpora (the ML Kit hero dwell stream and
+// the Tesseract twin's jitter-dwell stream) under both values and found
+// byte-identical output on each — `coherentShift` never fires on either
+// control stream, so the pin was removed. Neither half of that is a
+// one-time hand measurement: `test/demo_gif_provenance_test.dart` rebuilds
+// this construction for both corpora and asserts the two dumps are
+// byte-identical AND that the step response fired zero times, so a future
+// change that makes `coherentShift` fire on either stream goes red here
+// rather than silently invalidating the README captions.
+// ab_report.dart's own `agreement` arm still pins `StepResponse.damp`
+// outright (its committed `.ab.json` baselines depend on it) — this tool
+// no longer claims parity with that pin, only with its positionMergeModel
+// choice.
 //
 // Usage: dart tool/replay/dump_frames.dart <capture.jsonl> <out.json>
 //            [retention] [--viewport=WxH] [--buckets=auto|formula|median]
@@ -80,7 +91,6 @@ void main(List<String> args) {
   final stream = CaptureStream.parse(File(positional[0]).readAsLinesSync());
   final engine = StabilizationEngine<ReplayBlock, Object>(
     positionMergeModel: PositionMergeModel.agreementWeighted,
-    stepResponse: StepResponse.damp,
     missedFrameRetention: retention,
     merger: (existing, fresh, m) => existing.applyMerge(m),
   );

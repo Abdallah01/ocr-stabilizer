@@ -24,12 +24,17 @@ last five captures are a momentum fling and are cut from the demo — see
 the entry's correction note), 3-frame ghost trails, the same drawing rule
 on both panels. Left: the boxes exactly as the production pipeline reports
 them each frame, including the producer's scroll-stamp lag. Right: the
-engine's tracked state (`StabilizationEngine` defaults plus
-`missedFrameRetention: 2`), replayed on the device viewport. Boxes still
-overlap on the right in the last frames: the producer's lagged frames
-put different text over boxes the engine rightly holds — the entry
-counts and explains them (15 pairs over the 14 frames, from 32 in
-2.0.0).
+engine's tracked state (`StabilizationEngine` defaults, currently
+`StepResponse.coherentShift` since 2.3.0, plus `missedFrameRetention: 2`),
+replayed on the device viewport. Boxes still overlap on the right in the
+last frames: the producer's lagged frames put different text over boxes
+the engine rightly holds — the entry counts and explains them (15 pairs
+over the 14 frames, from 32 in 2.0.0). These frames were rendered under
+the pre-2.3.0 default (`StepResponse.damp`);
+[#122](https://github.com/Abdallah01/ocr-stabilizer/issues/122)
+re-dumped the same corpus under `coherentShift` and confirmed
+byte-identical frames and counts, so the caption's "defaults" claim
+still holds without a re-render.
 Rendered from engine output by
 [`tool/replay/dump_frames.dart`](tool/replay/dump_frames.dart) +
 [`doc/media/render_demo_gif.py`](doc/media/render_demo_gif.py) — not an
