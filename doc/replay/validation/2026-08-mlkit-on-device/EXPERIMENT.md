@@ -12,7 +12,7 @@ regenerates from this directory.
 `gen_page.py` (this directory) synthesizes a CJK page from a small
 common-hanzi vocabulary (deterministic, seed 95 — no copyrighted text)
 as HTML. The page is served to a Galaxy S25 over `adb reverse` and
-displayed in the consumer app's WebView; the app pipeline (screenshot →
+displayed in the capture app's WebView; the capture app's pipeline (screenshot →
 **ML Kit text recognition** → grouping) runs with its stabilization
 stream recorder enabled (`--dart-define=STAB_CAPTURE=true`, capture
 schema v1 — the same recorder that produced the 2026-07 streams).
@@ -22,8 +22,8 @@ device pixel ratio 3). The recorder did not write the `vp` viewport
 field at capture time (rig 2.1.0 added it): the 360×587 CSS px value in
 both headers was read from the recording WebView over the Chrome
 DevTools Protocol during the same 2026-08-25 session and stamped into
-the headers on 2026-08-29. The recorder-side writer is tracked in the
-same consumer issue as the scroll-stamp lag below (2552).
+the headers on 2026-08-29. The recorder-side writer is tracked by the
+producer's own tracker, together with the scroll-stamp lag below.
 
 | stream | shape (measured from the stream's own scroll stamps) | batches / obs |
 |---|---|---|
@@ -34,17 +34,17 @@ same consumer issue as the scroll-stamp lag below (2552).
 "14 micro-scroll oscillations (±20 CSS px)" — the script's intent, not
 the data. Reading the `sc[0]` field of every block shows the shape above.
 Two consequences: (1) the scroll offset the producer stamps on a capture
-can lag the screenshot by 100–150 px during motion (the app reads it from
-a pushed vitals frame, not at screenshot time —
-https://github.com/Abdallah01/ocr_translate_demo/issues/2552), so the same
+can lag the screenshot by 100–150 px during motion (the capture app read
+it from a pushed vitals frame, not at screenshot time; the producer fixed
+this on its side on 2026-08-29 — see the addendum below), so the same
 text line is reported at page-absolute positions that differ by that much
 between captures; (2) the last five captures are a fling, not a dwell,
 and the README demo GIF uses captures 0–18 only.
 
 Unlike the Tesseract corpus (rendered frames, photometric perturbation),
 the noise here is the real production stack end to end: WebView
-rasterization, screenshot compression, ML Kit segmentation, the app's own
-grouping, and the producer's scroll-stamp lag described above — including
+rasterization, screenshot compression, ML Kit segmentation, the capture
+app's own grouping, and the producer's scroll-stamp lag described above — including
 genuine per-frame **misrecognitions** (e.g. 于是→王是), which exercise
 the text-vote path.
 
@@ -75,18 +75,18 @@ remain, and n1-2 from 13.75 to 8.85.)
 > 3, scroll 6 — `mergeCount` 30→33 and 18→24) and keep them OUT of the
 > displacement buckets, since a confirmation moves nothing by
 > construction. Every bucket mean and count above is unchanged. (2) The
-> rig now models the consumer's bucket policy (#113). These two streams
+> rig now models the producer's bucket policy (#113). These two streams
 > predate the recorder's `bk` field, so the committed reports still run
 > on the viewport formula (`input.bucketPolicy: auto` →
-> `viewportFormula`); `--buckets=median` emulates the consumer's 2×
+> `viewportFormula`); `--buckets=median` emulates the reference producer's 2×
 > median block height rule from the tracked state and gives, on the
 > agreement arm: dwell buckets ≈ 103 px (80 at the start, 220 on the
 > fling tail), 36 merges, n1-2 8.71→10.18 over 18, n3-5 4.07 unchanged,
 > n6-10 0.19→**4.30 over six merges** (legacy 0.79→20.74 — the far
 > matches production geometry was said to lose come back at the
-> consumer's real bucket size), wellObs pconf 0.918→0.911; scroll
+> producer's real bucket size), wellObs pconf 0.918→0.911; scroll
 > buckets 103→171 px, 25 merges, n1-2 5.46→6.24 (legacy 6.57). So the
-> viewport-formula numbers UNDERSTATE the displacement the consumer's
+> viewport-formula numbers UNDERSTATE the displacement the producer's
 > steady-state geometry sees on this stream; a fresh capture with `bk`
 > will settle which.
 
@@ -125,15 +125,15 @@ redundant. On the 14 demo frames that takes the count from 23 to **15**
 5–8, two in frames 11–12 — are gone, and all 15 that remain are the lag —
 different text over an established box, or the same paragraph split
 into two side-by-side boxes 23–31 px below where it was — which no
-engine rule can tell from real new text (the consumer's issue for the
-lag is cited above). Two measured bars, both from this stream: the host
+engine rule can tell from real new text (the producer-side lag described
+in the Method section). Two measured bars, both from this stream: the host
 must only be a cached non-provisional block seen ONCE (the grouping
 flips every frame here, so a paragraph never reaches two observations
 before its line arrives), and containment is 0.8 because a second line
-hangs 3 px below its paragraph box (14 of 17 px inside). The app's own
+hangs 3 px below its paragraph box (14 of 17 px inside). The capture app's own
 dedup cascade runs after the engine and absorbs most of the lag pairs
 (its recorded `dedup` events for captures 16, 17 and 18 add 3, 0 and 2
-of 8, 5 and 7 incoming blocks), so the demo overstates what the app's
+of 8, 5 and 7 incoming blocks), so the demo overstates what the capture app's
 overlay shows. The
 agreement model damps established chains 2.8× at n3-5 (11.31→4.07; the
 four n6-10 merges go 0.79→0.19) while young blocks stay at parity (8.85
@@ -148,15 +148,16 @@ loop has nothing to anchor.
 ## Addendum 2026-08-29 — a stream that carries `bk` (`dwell-bk.jsonl`)
 
 Captured four days later on the same device, page and settings, after
-the consumer's recorder gained the `meta.bk` field (#113) and its
-capture-time scroll fix shipped (its issue 2552): 13 captures, 42
+the capture app's recorder gained the `meta.bk` field (#113) and the
+producer's capture-time scroll fix shipped: 13 captures, 42
 observations, the dwell scenario only (ten ±45 px micro-scrolls 1.5 s
 apart, then a fling). The recorder's first capture — taken while the
 restored tab still showed its previous page, before the test page had
 loaded — is not committed; that is why the capture ids start at 21.
-The scroll scenario could not be captured — after any relaunch the
-consumer's restored tab no longer scrolls by touch (its issue 2554);
-the walk pitfall, not this package's.
+The scroll scenario was not captured that day: the restored tab could
+not be scrolled by touch in that session (later traced to the test
+page's own inner scroller, not to the capture app) — a walk pitfall,
+not this package's.
 
 What it shows, per `dwell-bk.ab.json` (`--buckets=auto`, the default):
 
@@ -169,24 +170,24 @@ What it shows, per `dwell-bk.ab.json` (`--buckets=auto`, the default):
 (agreement arm, px per merge / count; legacy arm 0.25 / 0.76 on the
 same counts, no merge reached the 6–10 band; `nestedFragmentMerges` 0 —
 the grouping never flipped on this run.) Two readings. (1) **The
-consumer's real bucket sequence and the rig's median emulation agree on
-only two of the sizes applied** (105.3² and 102.7²): the consumer went
+capture app's real bucket sequence and the rig's median emulation agree on
+only two of the sizes applied** (105.3² and 102.7²): the capture app went
 to 80×100.45 where the emulation goes to 220², and its opening 80×88.05
-has no counterpart at all, because the consumer re-derives from ITS
+has no counterpart at all, because the capture app re-derives from ITS
 block set, which includes blocks the rig's tracked state has already
 dropped — so `auto` on a `bk`-carrying
 stream is the only faithful policy, and that is why the field exists.
 (2) On this stream **no policy moves a single merge**: every match
 partner sits inside the 3×3 cell neighbourhood at all of these sizes,
 the page being static for most captures and the displacements tiny
-(the consumer's scroll fix removed the lag family that produced the
+(the producer's scroll fix removed the lag family that produced the
 2.1.0 entry's far matches). The 2.1.0 question above — do the
 viewport-formula numbers understate the displacement production
 geometry sees? — is therefore answered "not on a still page"; the
 fling-tail comparison the earlier streams raised needs a scroll stream
-with `bk`, blocked by the consumer issue. The recorder in this stream
+with `bk`, not captured in that session (see above). The recorder in this stream
 still wrote one viewport record per animation frame while the browser
-bar collapsed (31 metas for 13 captures; the consumer coalesces them
+bar collapsed (31 metas for 13 captures; the capture app coalesces them
 since the same day) — the rig applies only the last before each batch,
 so the numbers are unaffected.
 
@@ -208,12 +209,12 @@ README's hero GIF renders from `dwell.jsonl` captures 0–18.
 python gen_page.py page.html
 python -m http.server 8907          # from the page's directory
 adb reverse tcp:8907 tcp:8907
-# build the consumer app with --dart-define=STAB_CAPTURE=true, set
+# build the capture app with --dart-define=STAB_CAPTURE=true, set
 # translation mode mlkit / overlay display / DOM extraction off, and
 # open http://localhost:8907/page.html; drive the two scenarios; pull
 # <documentsDir>/stab-capture/*.jsonl
 dart tool/replay/replay.dart ab-report dwell.jsonl   # 2.1.0: applies meta.vp; --viewport=360x587 for a stream without it
-dart tool/replay/replay.dart ab-report dwell.jsonl --buckets=median   # 2.2.0: the consumer's 2x-median bucket emulation (the note above)
+dart tool/replay/replay.dart ab-report dwell.jsonl --buckets=median   # 2.2.0: the reference producer's 2x-median bucket emulation (the note above)
 dart tool/replay/replay.dart ab-report dwell-bk.jsonl               # 2.2.0 addendum: applies the stream's own bk (auto); --buckets=formula|median for the comparison rows
 dart tool/replay/dump_frames.dart dwell.jsonl dump.json 2   # same viewport rule; --buckets=... as above
 python doc/media/render_demo_gif.py dump.json demo.gif "0,250,360,860" 1.25 14   # the 14 frames = captures 0-18
