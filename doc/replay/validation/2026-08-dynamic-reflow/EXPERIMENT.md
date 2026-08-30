@@ -375,12 +375,13 @@ stream and compares all EIGHT fields `_arm()` emits in
 `wellObservedPconfSaturated`, `meanTopLagByCapture`,
 `stepEventsByCapture`, `identityByCapture` — on all FOUR arms
 (`legacy`, `agreementWeighted`, `agreementSnap`, `agreementCoherent`)
-against the committed values, for 15 of the 17 streams. A missing
+against the committed values, for all 17 streams. A missing
 field, a missing arm, or a drifted number fails that stream by name.
-Two streams are exempt: `pushdown` and `rewrap`, this entry's own
-originals, still carry the pre-step-response 5-field / 2-arm schema and
-keep the older lenient (`containsKey`-guarded) check — tracked
-separately as #125.
+(Until 2026-08-30 two streams were exempt: `pushdown` and `rewrap`, this
+entry's own originals, still carried the pre-step-response 5-field /
+2-arm schema and took a lenient `containsKey`-guarded branch. #125
+regenerated both from their committed `.jsonl` and removed the branch —
+see the note under Reproduce below.)
 
 ### Boundary of what this proves
 
@@ -446,7 +447,9 @@ dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-mlkit-on-de
 Note: `pushdown.ab.json`/`rewrap.ab.json` were regenerated on 2026-08-30
 (#125) from the committed `.jsonl` streams — a deterministic step, unlike
 regenerating the streams themselves — and now carry the same four-arm,
-eight-field schema as every other committed report. Their `legacy` /
+eight-field schema as every other report the equivalence guard holds (the
+two `*.grouped.ab.json` pregroup reports in this directory sit outside
+that guard and keep their two-arm shape). Their `legacy` /
 `agreementWeighted` numbers are byte-identical to the historical snapshot
 they replaced (`mergeCount` / `nestedFragmentMerges` 271 / 0 and 288 / 0
 on both arms), so the entry above reads unchanged; the `pushdown-300` row

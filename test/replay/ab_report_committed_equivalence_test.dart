@@ -23,8 +23,10 @@
 // equality against a fresh replay rather than merely checked for
 // presence, and no longer silently skipped via a `containsKey` guard.
 // The `agreementSnap`/`agreementCoherent` arms must be present AND
-// carry that same schema, compared the same way. Applies to every
-// stream except the two carved out below.
+// carry that same schema, compared the same way. Applies to all 17
+// streams — the two dynamic-reflow originals were regenerated to the
+// full schema on 2026-08-30 (#125) and the lenient branch they took is
+// gone.
 import 'dart:convert';
 import 'dart:io';
 
@@ -55,6 +57,20 @@ const _streams = [
   'doc/replay/validation/2026-08-tesseract-matrix/ocr-jitter-dwell',
   'doc/replay/validation/2026-08-tesseract-matrix/scroll',
   'doc/replay/validation/2026-08-tesseract-matrix/stable-dwell',
+];
+
+/// The arms `abReport()` emits UNCONDITIONALLY, in its own order — the set
+/// every committed file must carry and match. The optional arms
+/// (`agreementCoherentFloor`, `agreementCoherentReanchor`) appear only
+/// when their tunable is set and are never committed. #127 pins this list
+/// against a live report: promoting an optional arm to a default, or
+/// adding a new one, without listing it here goes red instead of leaving
+/// that arm compared against nothing on all 17 committed files.
+const _defaultArms = [
+  'legacy',
+  'agreementWeighted',
+  'agreementSnap',
+  'agreementCoherent',
 ];
 
 /// #121: the WHOLE per-arm schema — every key `_arm()` returns in
@@ -128,28 +144,21 @@ void main() {
             reason: '$base: nestedFragmentMerges under StepResponse.damp '
                 'must be byte-identical to the committed reference');
 
-        // #121 (+ #125 for pushdown/rewrap): every committed file must carry the full
-        // per-arm schema, field for field — a missing OR drifted field
-        // here IS the regression the issue exists to catch, not
-        // something to skip.
-        _expectArmEquivalent(
-            base, 'agreementWeighted', freshArm, committedArm);
-        _expectArmEquivalent(
-            base,
-            'legacy',
-            fresh['legacy'] as Map<String, Object?>,
-            committed['legacy'] as Map<String, Object?>);
-
-        // #121: the two #116 candidate arms get the SAME full-schema
-        // equality check. Presence alone was vacuous coverage — every
+        // #121 (+ #125 for pushdown/rewrap): every committed file must
+        // carry the full per-arm schema on EVERY default arm, field for
+        // field — a missing OR drifted field here IS the regression the
+        // issue exists to catch, not something to skip. Presence alone
+        // was vacuous coverage for the two #116 candidate arms: every
         // number inside a regenerated `agreementSnap`/`agreementCoherent`
         // arm could drift with the key still there. They are not
         // duplicates of `agreementWeighted` either: a `snap` re-anchor or
         // a `coherentShift` batch vote moves `meanTopLagByCapture` and
         // `displacementByObsN` where `damp` leaves them, so these are the
         // only assertions in the suite pinning those numerics on the
-        // committed corpus.
-        for (final armName in ['agreementSnap', 'agreementCoherent']) {
+        // committed corpus. Iterating `_defaultArms` (pinned to the live
+        // report by #127 below) rather than a list written here keeps a
+        // newly promoted default arm from slipping past this loop.
+        for (final armName in _defaultArms) {
           expect(committed.keys, contains(armName),
               reason: '$base: committed .ab.json is missing the '
                   '$armName arm entirely (#121)');
@@ -175,11 +184,14 @@ void main() {
           .where((e) =>
               e.value is Map && (e.value as Map).containsKey('mergeCount'))
           .toList();
-      expect(
-          arms.map((e) => e.key),
-          containsAll(
-              ['legacy', 'agreementWeighted', 'agreementSnap', 'agreementCoherent']),
-          reason: 'precondition: the four StepResponse arms are present');
+      // Exact, ordered equality — not `containsAll`, which is a superset
+      // matcher: a fifth default arm would pass it, get its schema checked
+      // below, and never be compared against any committed file.
+      expect(arms.map((e) => e.key).toList(), _defaultArms,
+          reason: 'the default (unconditional) arms abReport() emits must '
+              'be exactly _defaultArms, in order — an arm promoted to or '
+              'added as a default and not listed there is compared against '
+              'nothing on all 17 committed references (#127)');
       for (final arm in arms) {
         expect((arm.value as Map<String, Object?>).keys.toList(), _armFields,
             reason: '${arm.key}: _armFields is a hand-written mirror of '

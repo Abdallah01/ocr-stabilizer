@@ -45,10 +45,15 @@
   report to the same full-schema equality with no lenient branch left. The
   guard's hand-written field list is checked against a live `abReport()`
   arm (a field added to the report and not to the list goes red instead of
-  silently un-pinning it). A new `experiment_doc_tables_test.dart` parses
-  the result tables of the four `EXPERIMENT.md` documents and checks every
-  per-arm cell against the committed `.ab.json` — or a live replay for the
-  `--coherent-floor=390` arm — at the document's display precision, so a
+  silently un-pinning it), and the guard's list of default arms is pinned
+  the same way (an arm promoted to a default and not listed there goes
+  red instead of being compared against nothing). A new
+  `experiment_doc_tables_test.dart` parses the result tables of the four
+  `EXPERIMENT.md` documents — its scope note names the tables it parses
+  and the ones it leaves out — and checks each per-arm cell against the
+  committed `.ab.json`, or a live replay for the `--coherent-floor` /
+  `--coherent-reanchor` sweeps, at the document's display precision: the
+  report value rendered to the cell's decimals must equal the cell, so a
   regeneration that moves a figure goes red instead of leaving the prose
   stale (two such cells had rotted unnoticed before).
 
