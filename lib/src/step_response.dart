@@ -70,6 +70,11 @@ enum StepResponse {
   /// `StabilizationEngine.coherentShiftFloorPx` (a mover clearing an
   /// absolute-pixel floor, clustered with the same tolerance) and
   /// `StabilizationEngine.coherentShiftReanchorMinBlocks` (the same
-  /// clustering at a lower count, share gate dropped).
+  /// clustering at a lower count, share gate dropped). A third opt-in,
+  /// `StabilizationEngine.coherentShiftAdoptAgreeing` (#119 item 2), does
+  /// not change who may vote: once a shift IS decided it also carries along
+  /// the matched pairs under the "moved" gate whose displacement agrees
+  /// with it, so a step that a group of short lines voted for reaches the
+  /// taller lines that made the same step.
   coherentShift,
 }

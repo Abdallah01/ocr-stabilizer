@@ -27,6 +27,9 @@
 //                                                          lag at the move, per floor
 //   dynamic-reflow  #119 candidate-2 re-anchor sweep       control stepEvents + pushdown-600
 //                                                          lag triple, per count
+//   dynamic-reflow  #119 candidate-3 adopt row             pushdown-150 coherent/adopt lag
+//                                                          triples + events, identity +2/+5,
+//                                                          merges; the other 16 streams identical
 //   mlkit-on-device "Result"                               displacement means, wellObserved pconf
 //   tesseract-matrix "Result"                              displacement means, pconf mean/p50
 //   paddleocr-matrix "Result"                              displacement means, pconf mean
@@ -106,6 +109,10 @@ Report floorReport(String base) => floorReportAt(base, 390);
 Report reanchorReportAt(String base, int minBlocks) => _sweeps.putIfAbsent(
     '$base@reanchor=$minBlocks',
     () => abReport(_stream(base), coherentShiftReanchorMinBlocks: minBlocks));
+
+/// The `--coherent-adopt` replay of #119's candidate-3 row (item 2).
+Report adoptReport(String base) => _sweeps.putIfAbsent('$base@adopt',
+    () => abReport(_stream(base), coherentShiftAdoptAgreeing: true));
 
 Arm arm(Report r, String name) {
   final a = r[name];
@@ -572,6 +579,51 @@ void main() {
       }
       expectAtDisplay(worst, pxIn(rows[2][1], 'ship rule row 3'),
           'ship rule: worst regression');
+    });
+
+    test('adopt row (candidate 3, #119 item 2): pushdown-150 replayed with '
+        'coherentShiftAdoptAgreeing; every other stream byte-identical', () {
+      final rows = tableRows(
+          reflowDoc,
+          '| stream | move cap | coherent (today) lag move/+3/+5 (stepEvents) '
+          '| adopt lag move/+3/+5 (stepEvents) | identity +2/+5 coherent '
+          '| identity +2/+5 adopt | merges coherent / adopt |');
+      expect(rows, hasLength(2));
+      final r = rows[0];
+      expect(r[0], 'pushdown-150');
+      final base = streamOf(r[0]);
+      final move = int.parse(r[1]);
+      final rep = adoptReport(base);
+      final coherent = arm(rep, 'agreementCoherent');
+      final adopt = arm(rep, 'agreementCoherentAdopt');
+      final damp = arm(rep, 'agreementWeighted');
+      expectStepArmCell(coherent, damp, move, r[2], 'adopt row: coherent');
+      expectStepArmCell(adopt, damp, move, r[3], 'adopt row: adopt');
+      for (final (col, a) in [(4, coherent), (5, adopt)]) {
+        final parts = r[col].split(' / ');
+        expect(parts, hasLength(2), reason: 'adopt row col $col: "${r[col]}"');
+        expectAtDisplay(
+            identityAt(a, move + 2), parts[0], 'adopt row col $col: +2');
+        expectAtDisplay(
+            identityAt(a, move + 5), parts[1], 'adopt row col $col: +5');
+      }
+      final merges = r[6].split(' / ');
+      expect(merges, hasLength(2));
+      expect(coherent['mergeCount'], int.parse(merges[0]),
+          reason: 'adopt row: coherent merges');
+      expect(adopt['mergeCount'], int.parse(merges[1]),
+          reason: 'adopt row: adopt merges');
+      // Row 2: the lever is a no-op on every other committed stream.
+      expect(rows[1][0], startsWith('all other 16'));
+      final others = _alias.values.where((b) => b != base).toSet();
+      expect(others, hasLength(16));
+      for (final other in others) {
+        final o = adoptReport(other);
+        expect(jsonEncode(arm(o, 'agreementCoherentAdopt')),
+            jsonEncode(arm(o, 'agreementCoherent')),
+            reason: '$other: the lever must be a no-op where no group forms '
+                'or every moved pair already votes');
+      }
     });
 
     test('re-anchor sweep (candidate 2): control stepEvents in total and '

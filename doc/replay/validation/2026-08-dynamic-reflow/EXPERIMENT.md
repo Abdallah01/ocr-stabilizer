@@ -613,6 +613,48 @@ documented as not-recommended, because it is the cheapest way for a
 consumer whose own corpus has large slabs that DO leave several matched
 movers behind to use the same machinery.
 
+### Candidate 3 — `coherentShiftAdoptAgreeing` (adopt the agreeing under-gate pairs). SHIPS, opt-in (#119 item 2).
+
+The 150 px step is a blind spot of a different kind from the 600 px one.
+There the quorum starves (one matched mover). Here the quorum FIRES — and
+reaches almost nobody. The "moved" gate is 3x each block's own height: on
+capture 7 of `pushdown-150` there are 27 eligible matched pairs; 3 of them
+(heights 36 / 50 / 51 px, gates 108 / 150 / 153) clear it and form a valid
+group, and 13 more (heights 57–62 px, gates 171–186) made the same ~161 px
+step and sit under their gate. `coherentShiftTolerance` is not the binding
+gate — the tolerance clustering never sees those 13, because the gate
+drops them before clustering runs. So the decided translation is applied
+to 3 pairs, the 13 damp and lag by the damped fraction for the rest of the
+stream, and from capture 9 on some of them fall out of tracking altogether
+(identity 0.821 at +2, 0.750 at +5).
+
+The lever does not change who may VOTE — the gate, the quorum and both
+fallbacks are untouched — it widens who FOLLOWS a vote that was reached
+anyway. Once a plan exists (from the quorum, the floor or the re-anchor),
+every eligible under-gate pair whose displacement is within
+`coherentShiftTolerance x min(own height, the group's median height)` — the
+quorum's own clustering rule — of the decided translation joins the
+members and is merged with the translation applied. A pair that merely
+jittered stays on damp and is never pushed past its own observation; a
+capture with no plan is untouched by construction, which is why no control
+can change under it.
+
+| stream | move cap | coherent (today) lag move/+3/+5 (stepEvents) | adopt lag move/+3/+5 (stepEvents) | identity +2/+5 coherent | identity +2/+5 adopt | merges coherent / adopt |
+|---|---|---|---|---|---|---|
+| pushdown-150 | 7 | 68.3 / 54.7 / 45.2 (3) | 6.0 / 19.7 / 20.5 (16) | 0.821 / 0.750 | 0.929 / 0.929 | 284 / 299 |
+| all other 16 streams | — | identical | identical | identical | identical | identical |
+
+Every other stream — the ten controls, and the six step streams where
+either no group forms (`pushdown-050`, `pushdown-600`, `rewrap`) or the
+group already covers every pair that moved (`pushdown-300`,
+`pushdown-300-early`, `pushdown-300-late`, `pushup-300`) — is byte-identical
+with the lever on. The 15 extra merges on `pushdown-150` are pairs that
+used to lag so far behind that later captures lost them and re-admitted
+new blocks; with the lever they stay tracked. The 50 px step stays out of
+reach: no pair ever clears its own gate there (largest displacement 46 px),
+so there is never a plan to follow — that blind spot is a property of the
+jitter allowance itself, not of this lever.
+
 ### Boundary of what this proves
 
 Everything the section above says about the corpus still applies: one
@@ -620,19 +662,23 @@ synthetic seed (93), one repetition per stream, no variance estimate on
 any number here. Two numbers in particular are single measurements
 carrying the whole result — the 377.0 px control maximum and the 406.2 px
 slab mover that together define the floor window — and a second seed
-could move either. The 150 px and 50 px blind spots are untouched by both
-candidates (neither lever has any path to a residual inside the jitter
-allowance). Nothing here measures device timing.
+could move either. The 50 px blind spot is untouched by all three
+candidates (no pair ever clears its own gate there, so there is nothing to
+vote and nothing to follow); the 150 px one is closed by candidate 3 on
+this corpus only — one seed, one repetition. Nothing here measures device
+timing.
 
 ### Reproduce
 
 ```
 dart tool/replay/replay.dart ab-report <stream>.jsonl --coherent-floor=390
 dart tool/replay/replay.dart ab-report <stream>.jsonl --coherent-reanchor=1
+dart tool/replay/replay.dart ab-report <stream>.jsonl --coherent-adopt
 ```
 
-Each adds one arm to the four already reported: `agreementCoherentFloor`
-and `agreementCoherentReanchor` respectively. Omit the flag and the
+Each adds one arm to the four already reported: `agreementCoherentFloor`,
+`agreementCoherentReanchor` and `agreementCoherentAdopt` respectively (the
+candidate-3 table above is `--coherent-adopt` on every stream). Omit the flag and the
 output is byte-identical to the four-arm form, so every committed
 `.ab.json` is unaffected. The tallies above were re-derived from the raw
 per-arm `stepEventsByCapture` / `meanTopLagByCapture` / `identityByCapture`

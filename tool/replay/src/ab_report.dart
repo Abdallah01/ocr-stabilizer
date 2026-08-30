@@ -27,12 +27,18 @@ import 'stats.dart';
 /// [coherentShiftReanchorMinBlocks] (#119): same contract, adding the arm
 /// `agreementCoherentReanchor` — `StepResponse.coherentShift` with the
 /// batch-level re-anchor enabled at this cluster size.
+///
+/// [coherentShiftAdoptAgreeing] (#119 item 2): same contract, adding the
+/// arm `agreementCoherentAdopt` — `StepResponse.coherentShift` with the
+/// agreeing under-gate pairs adopted into a decided shift. `false` (the
+/// default) omits the arm.
 Map<String, Object?> abReport(
   CaptureStream stream, {
   Viewport? viewport,
   BucketPolicy bucketPolicy = BucketPolicy.auto,
   double? coherentShiftFloorPx,
   int? coherentShiftReanchorMinBlocks,
+  bool coherentShiftAdoptAgreeing = false,
 }) {
   final effective = viewport ?? stream.viewport;
   final legacy = replay(stream,
@@ -89,6 +95,16 @@ Map<String, Object?> abReport(
           viewport: effective,
           useStreamViewport: false,
           bucketPolicy: bucketPolicy);
+  // #119 item 2: the adopt-agreeing arm, only computed when asked for.
+  final agreementCoherentAdopt = !coherentShiftAdoptAgreeing
+      ? null
+      : replay(stream,
+          model: PositionMergeModel.agreementWeighted,
+          stepResponse: StepResponse.coherentShift,
+          coherentShiftAdoptAgreeing: true,
+          viewport: effective,
+          useStreamViewport: false,
+          bucketPolicy: bucketPolicy);
 
   return {
     'mode': 'ab-report',
@@ -111,11 +127,14 @@ Map<String, Object?> abReport(
           'agreementCoherentFloor': bucketsJson(agreementCoherentFloor),
         if (agreementCoherentReanchor != null)
           'agreementCoherentReanchor': bucketsJson(agreementCoherentReanchor),
+        if (agreementCoherentAdopt != null)
+          'agreementCoherentAdopt': bucketsJson(agreementCoherentAdopt),
       },
       if (agreementCoherentFloor != null)
         'coherentShiftFloorPx': coherentShiftFloorPx,
       if (agreementCoherentReanchor != null)
         'coherentShiftReanchorMinBlocks': coherentShiftReanchorMinBlocks,
+      if (agreementCoherentAdopt != null) 'coherentShiftAdoptAgreeing': true,
     },
     'legacy': _arm(legacy, stream),
     'agreementWeighted': _arm(agreement, stream),
@@ -125,6 +144,8 @@ Map<String, Object?> abReport(
       'agreementCoherentFloor': _arm(agreementCoherentFloor, stream),
     if (agreementCoherentReanchor != null)
       'agreementCoherentReanchor': _arm(agreementCoherentReanchor, stream),
+    if (agreementCoherentAdopt != null)
+      'agreementCoherentAdopt': _arm(agreementCoherentAdopt, stream),
     'caveats': [
       'Arms may diverge in pairing over time: positions evolve per model, '
           'and matching is spatial+text. Compare mergeCount before reading '

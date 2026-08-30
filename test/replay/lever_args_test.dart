@@ -8,11 +8,17 @@ import '../../tool/replay/src/lever_args.dart';
 
 void main() {
   test('well-formed levers parse to their values with no error', () {
-    final r = parseLeverArgs(
-        ['ab-report', 'x.jsonl', '--coherent-floor=390', '--coherent-reanchor=2']);
+    final r = parseLeverArgs([
+      'ab-report',
+      'x.jsonl',
+      '--coherent-floor=390',
+      '--coherent-reanchor=2',
+      '--coherent-adopt',
+    ]);
     expect(r.error, isNull);
     expect(r.coherentFloorPx, 390);
     expect(r.coherentReanchorMinBlocks, 2);
+    expect(r.coherentAdoptAgreeing, isTrue);
   });
 
   test('absent levers parse to null with no error', () {
@@ -20,6 +26,22 @@ void main() {
     expect(r.error, isNull);
     expect(r.coherentFloorPx, isNull);
     expect(r.coherentReanchorMinBlocks, isNull);
+    expect(r.coherentAdoptAgreeing, isFalse);
+  });
+
+  test('a valued adopt flag is an error, never a silent skip (#119 item 2)',
+      () {
+    for (final bad in [
+      '--coherent-adopt=1',
+      '--coherent-adopt=true',
+      '--coherent-adopt=',
+      '--coherent-adoptx',
+    ]) {
+      final r = parseLeverArgs([bad]);
+      expect(r.error, isNotNull, reason: bad);
+      expect(r.error, contains(bad), reason: 'the message names the arg');
+      expect(r.coherentAdoptAgreeing, isFalse, reason: bad);
+    }
   });
 
   test('a malformed floor is an error, never a silent skip', () {

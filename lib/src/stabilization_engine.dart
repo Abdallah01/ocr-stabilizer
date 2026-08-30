@@ -234,6 +234,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     this.coherentShiftTolerance = 0.5,
     this.coherentShiftFloorPx,
     this.coherentShiftReanchorMinBlocks,
+    this.coherentShiftAdoptAgreeing = false,
   })  : _merger = merger,
         driftTracker =
             driftTracker ?? DriftTracker(submapMembership: submapMembership),
@@ -422,6 +423,33 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// leave several matched movers behind.
   final int? coherentShiftReanchorMinBlocks;
 
+  /// #119 item 2 — once a coherent shift IS decided (by the quorum, the
+  /// floor fallback or the re-anchor fallback), also carry along the
+  /// matched pairs that sat UNDER the "moved" gate but agree with the
+  /// decided translation. `false` (the default) reproduces 2.3.x numerics
+  /// bit-for-bit.
+  ///
+  /// The "moved" gate is a multiple of each block's OWN height
+  /// ([_agreementScale], 3x): a 150 px slab step carries a 36 px line past
+  /// its gate (108 px) but not a 60 px line past its gate (180 px). On the
+  /// measured 150 px pushdown capture three short movers therefore form a
+  /// valid group while 13 taller pairs that made the SAME step stay under
+  /// their gate and damp — the translation reaches 3 of the 16 pairs that
+  /// moved together, and the rest lag by the damped fraction.
+  ///
+  /// This lever does not touch who may VOTE (the gate, the quorum and the
+  /// fallbacks are exactly as they were) or what the vote is; it widens who
+  /// FOLLOWS a vote that was reached anyway. An eligible pair (the same
+  /// filters as the movers — not provisional, not a band or nested match,
+  /// not viewport-relative, not a carousel child) whose displacement is
+  /// within `coherentShiftTolerance x min(its own height, the group's
+  /// median height)` — the quorum's own clustering rule — of the decided
+  /// translation is added to the group's members and merged with the
+  /// translation applied, exactly like a voter. A capture where no group
+  /// forms is untouched by construction, which is why a control stream
+  /// that never fires cannot change under it.
+  final bool coherentShiftAdoptAgreeing;
+
   /// Lerp weight toward the fresh (drift-corrected) observation.
   double _positionMergeWeight(T fresh, T existing) {
     final freshConf = fresh.positionConfidence.raw;
@@ -457,6 +485,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     var heightBase = existing.absoluteRect.raw.height;
     if (!heightBase.isFinite || heightBase <= 0) heightBase = 16.0;
     return heightBase * _kAgreementJitterAllowance;
+  }
+
+  /// A block's own height with the same non-finite / non-positive fallback
+  /// [_agreementScale] uses (16 px) — the "moved" gate and the adoption
+  /// tolerance (#119 item 2) must agree on what a height is.
+  double _blockHeight(T block) {
+    final h = block.absoluteRect.raw.height;
+    return (!h.isFinite || h <= 0) ? 16.0 : h;
   }
 
   /// Merged position confidence for the current [positionMergeModel].
@@ -1139,6 +1175,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     final movedDy = <double>[];
     final movedHeight = <double>[];
     final movedRegionDrift = <Offset>[];
+    // #119 item 2: eligible pairs that sat under the "moved" gate, kept only
+    // when [coherentShiftAdoptAgreeing] is on (see `adoptAgreeing` below).
+    final agreeingExisting = <T>[];
+    final agreeingDisplacement = <Offset>[];
+    final agreeingHeight = <double>[];
+    final agreeingRegionDrift = <Offset>[];
     for (final entry in matchResults) {
       final fresh = entry.fresh;
       final r = entry.result;
@@ -1159,7 +1201,18 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       );
       final displacement =
           correctedRect.topLeft - existing.absoluteRect.raw.topLeft;
-      if (displacement.distance <= _agreementScale(existing)) continue;
+      if (displacement.distance <= _agreementScale(existing)) {
+        // #119 item 2: remember the under-gate pair — `adoptAgreeing`
+        // below may carry it along once a translation has been decided.
+        // Same frozen drift snapshot as a voter (#116 finding C).
+        if (coherentShiftAdoptAgreeing) {
+          agreeingExisting.add(existing);
+          agreeingDisplacement.add(displacement);
+          agreeingHeight.add(_blockHeight(existing));
+          agreeingRegionDrift.add(regionDrift);
+        }
+        continue;
+      }
 
       movedExisting.add(existing);
       movedDx.add(displacement.dx);
@@ -1353,20 +1406,49 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       return (translation: Offset(tx, ty), memberDrift: memberDrift);
     }
 
+    // ┌─── #119 item 2: adopt the agreeing under-gate pairs ─────────────
+    // Runs on whatever plan the quorum or a fallback decided; a null plan
+    // stays null. Membership only widens — no translation changes, and no
+    // pair that could not vote gets a vote. The tolerance is the quorum's
+    // own rule (`coherentShiftTolerance x min(own height, the group's
+    // median height)`), measured against the DECIDED translation, so an
+    // under-gate pair that merely moved a little (ordinary jitter) is left
+    // on damp and is never pushed past its own observation. The adopted
+    // pair's frozen drift snapshot is the one its displacement was computed
+    // with (#116 finding C), like every voting member's.
+    ({Offset translation, Map<T, Offset> memberDrift})? adoptAgreeing(
+      ({Offset translation, Map<T, Offset> memberDrift})? plan,
+    ) {
+      if (plan == null || !coherentShiftAdoptAgreeing) return plan;
+      if (agreeingExisting.isEmpty) return plan;
+      final groupHeight = RobustStats.median(
+          [for (final member in plan.memberDrift.keys) _blockHeight(member)]);
+      // Null only for an empty group, which no path above produces.
+      if (groupHeight == null) return plan;
+      final t = plan.translation;
+      for (var i = 0; i < agreeingExisting.length; i++) {
+        final tol = coherentShiftTolerance * min(agreeingHeight[i], groupHeight);
+        final diff = (agreeingDisplacement[i] - t).distance;
+        if (diff > tol) continue;
+        plan.memberDrift[agreeingExisting[i]] = agreeingRegionDrift[i];
+      }
+      return plan;
+    }
+
     // Too few movers for the quorum to have anything to cluster. Kept
     // here (rather than before the deterministic ordering above, where it
     // sat pre-#119) only so both fallbacks are already in scope; the
     // ordering computation it now runs after is pure, so the quorum path's
     // behaviour is unchanged.
     if (movedExisting.length < coherentShiftMinBlocks) {
-      return floorFallback() ?? reanchorFallback();
+      return adoptAgreeing(floorFallback() ?? reanchorFallback());
     }
 
     final bestGroup = searchWindow(coherentShiftMinBlocks);
 
-    if (bestGroup == null) return floorFallback() ?? reanchorFallback();
+    if (bestGroup == null) return adoptAgreeing(floorFallback() ?? reanchorFallback());
     if (bestGroup.length / movedExisting.length < coherentShiftMinShare) {
-      return floorFallback() ?? reanchorFallback();
+      return adoptAgreeing(floorFallback() ?? reanchorFallback());
     }
 
     // #116 finding E: these two force-unwraps are safe by construction,
@@ -1400,7 +1482,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     for (final j in bestGroup) {
       memberDrift[movedExisting[j]] = movedRegionDrift[j];
     }
-    return (translation: Offset(tx, ty), memberDrift: memberDrift);
+    return adoptAgreeing(
+        (translation: Offset(tx, ty), memberDrift: memberDrift));
   }
 
   // ── Drift propagation ────────────────────────────────────────────────

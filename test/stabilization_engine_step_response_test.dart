@@ -41,6 +41,7 @@ _Rig _engine({
   double coherentShiftTolerance = 0.5,
   double? coherentShiftFloorPx,
   int? coherentShiftReanchorMinBlocks,
+  bool coherentShiftAdoptAgreeing = false,
 }) {
   final log = <MergeResult>[];
   final engine = StabilizationEngine<_Block, void>(
@@ -57,6 +58,7 @@ _Rig _engine({
     coherentShiftTolerance: coherentShiftTolerance,
     coherentShiftFloorPx: coherentShiftFloorPx,
     coherentShiftReanchorMinBlocks: coherentShiftReanchorMinBlocks,
+    coherentShiftAdoptAgreeing: coherentShiftAdoptAgreeing,
   );
   return (engine: engine, log: log);
 }
