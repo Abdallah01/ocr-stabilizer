@@ -22,8 +22,9 @@
 // whole schema listed in `_armFields` below, each entry compared for
 // equality against a fresh replay rather than merely checked for
 // presence, and no longer silently skipped via a `containsKey` guard.
-// The `agreementSnap`/`agreementCoherent` arms must be present. Applies
-// to every stream except the two carved out below.
+// The `agreementSnap`/`agreementCoherent` arms must be present AND
+// carry that same schema, compared the same way. Applies to every
+// stream except the two carved out below.
 import 'dart:convert';
 import 'dart:io';
 
@@ -157,10 +158,24 @@ void main() {
             fresh['legacy'] as Map<String, Object?>,
             committed['legacy'] as Map<String, Object?>);
 
+        // #121: the two #116 candidate arms get the SAME full-schema
+        // equality check. Presence alone was vacuous coverage — every
+        // number inside a regenerated `agreementSnap`/`agreementCoherent`
+        // arm could drift with the key still there. They are not
+        // duplicates of `agreementWeighted` either: a `snap` re-anchor or
+        // a `coherentShift` batch vote moves `meanTopLagByCapture` and
+        // `displacementByObsN` where `damp` leaves them, so these are the
+        // only assertions in the suite pinning those numerics on the
+        // committed corpus.
         for (final armName in ['agreementSnap', 'agreementCoherent']) {
           expect(committed.keys, contains(armName),
               reason: '$base: committed .ab.json is missing the '
                   '$armName arm entirely (#121)');
+          _expectArmEquivalent(
+              base,
+              armName,
+              fresh[armName] as Map<String, Object?>,
+              committed[armName] as Map<String, Object?>);
         }
       });
     }
