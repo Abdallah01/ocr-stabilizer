@@ -83,13 +83,27 @@ this regime.**
 ## Boundary of what this proves
 
 Tesseract on clean rendered text produces mostly *photometric* jitter:
-the typical re-observation lands under 1 px (scroll p50 0.67 px legacy /
-0.56 px agreement). It is not purely photometric, though — about half of
+the typical re-observation on a young chain lands under 1 px
+(`scroll.ab.json` `displacementByObsN` **n1-2** p50 0.5 px legacy /
+0.355 px agreement, over 170 merges; the n3-5 medians are 1.432 legacy
+/ 0.624 agreement, so only the agreement arm stays under 1 px there).
+It is not purely photometric, though — about half of
 the lines observed across several scroll frames show one or two frames
 where the line box's extent flips by ~20 px (a mild, transient form of
 re-segmentation: the box extent changes, not the position). The
 page-absolute lift itself is verified by the same corpus: a line's lifted
 Y is identical across most frames taken at different scroll offsets.
+
+**Correction (PR #124).** The paragraph above read "scroll p50 0.67 px
+legacy / 0.56 px agreement" from this entry's first commit until now.
+Those are the *pre-2.1.0* report's n1-2 medians (0.667 / 0.559); the rig
+2.1.0 change to the corpus viewport moved them to 0.5 / 0.355, and the
+sentence was not re-derived through that regeneration, the 2.2.0 one, or
+#121's. Nothing about the corpus or the reading changes — the figures
+are now read straight out of the committed `scroll.ab.json`, and the
+bucket they come from is named, which the original sentence omitted (a
+bare "scroll p50" is what let it rot unnoticed across three
+regenerations).
 
 What the corpus does NOT reproduce is ML Kit's *persistent*
 high-amplitude re-segmentation (30–45 px effective residuals from
