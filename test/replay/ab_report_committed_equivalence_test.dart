@@ -17,13 +17,13 @@
 // that does. This is a regression guard on top of that proof, not a
 // substitute for it.
 //
-// #121 (on top of the above): a committed file's schema must carry the
-// per-capture step-response fields (`meanTopLagByCapture`,
-// `stepEventsByCapture`, `identityByCapture` on `legacy` and
-// `agreementWeighted`) and the `agreementSnap`/`agreementCoherent` arms
-// outright — a MISSING field/arm fails the stream instead of being
-// silently skipped via a `containsKey` guard, for every stream except
-// the two carved out below.
+// #121 (on top of the above): a committed file's `legacy` and
+// `agreementWeighted` arms must carry EVERY field `_arm()` emits — the
+// whole schema listed in `_armFields` below, each entry compared for
+// equality against a fresh replay rather than merely checked for
+// presence, and no longer silently skipped via a `containsKey` guard.
+// The `agreementSnap`/`agreementCoherent` arms must be present. Applies
+// to every stream except the two carved out below.
 import 'dart:convert';
 import 'dart:io';
 
@@ -58,27 +58,58 @@ const _streams = [
 
 /// #121: `pushdown`/`rewrap` are dynamic-reflow's original two streams —
 /// committed before the `variants/*` split (#116) and before the
-/// per-capture step-response fields existed at all. They carry the same
-/// missing-field/missing-arm gap as #121's nine, but are NOT in that
-/// issue's file list, so tightening their check is out of this guard's
-/// scope; they keep the pre-#121 lenient (`containsKey`-guarded) check
-/// below instead of the unconditional one every other stream gets.
+/// per-capture step-response fields existed at all. They still carry the
+/// 5-field / 2-arm schema that #121's nine files were regenerated out
+/// of, but are NOT in that issue's file list, so tightening their check
+/// is out of this guard's scope; they keep the pre-#121 lenient
+/// (`containsKey`-guarded) check below instead of the unconditional
+/// full-schema one every other stream gets.
 const _preStepResponseSchema = {
   'doc/replay/validation/2026-08-dynamic-reflow/pushdown',
   'doc/replay/validation/2026-08-dynamic-reflow/rewrap',
 };
 
-/// #121: fields the `legacy` and `agreementWeighted` arms must carry,
-/// checked for equality against a fresh replay (not just presence).
-const _stepResponseFields = [
+/// #121: the WHOLE per-arm schema — every key `_arm()` returns in
+/// `tool/replay/src/ab_report.dart`, in that function's own order. Each
+/// one is checked for equality against a fresh replay, not just for
+/// presence, so "the regeneration was purely additive" is enforced
+/// rather than declared. Keep this list in sync with `_arm()`: a field
+/// added there and not here is a field the committed references quietly
+/// stop being pinned on.
+const _armFields = [
+  'mergeCount',
+  'nestedFragmentMerges',
+  'displacementByObsN',
+  'wellObservedPconf',
+  'wellObservedPconfSaturated',
   'meanTopLagByCapture',
   'stepEventsByCapture',
   'identityByCapture',
 ];
 
+/// Assert `$base`'s committed [armName] arm carries every [_armFields]
+/// entry and that each equals the fresh replay's value. The arm name is
+/// interpolated into every `reason` so a red line says WHICH arm of
+/// which stream drifted, not just which stream.
+void _expectArmEquivalent(
+  String base,
+  String armName,
+  Map<String, Object?> freshArm,
+  Map<String, Object?> committedArm,
+) {
+  for (final field in _armFields) {
+    expect(committedArm.keys, contains(field),
+        reason: '$base/$armName: committed .ab.json is missing '
+            '$field (#121)');
+    expect(freshArm[field], committedArm[field],
+        reason: '$base/$armName: $field must be byte-identical to the '
+            'committed reference');
+  }
+}
+
 void main() {
   group('committed *.ab.json equivalence (#116 finding A guard, #121 '
-      'step-response field coverage)', () {
+      'committed-schema equality)', () {
     for (final base in _streams) {
       test(base, () {
         final stream =
@@ -115,27 +146,16 @@ void main() {
         }
 
         // #121: every other stream's committed file must carry the full
-        // step-response schema — a missing field/arm here IS the
-        // regression the issue exists to catch, not something to skip.
-        for (final field in _stepResponseFields) {
-          expect(committedArm.keys, contains(field),
-              reason: '$base/agreementWeighted: committed .ab.json is '
-                  'missing $field (#121)');
-          expect(freshArm[field], committedArm[field],
-              reason: '$base/agreementWeighted: $field must be '
-                  'byte-identical to the committed reference');
-        }
-
-        final committedLegacy = committed['legacy'] as Map<String, Object?>;
-        final freshLegacy = fresh['legacy'] as Map<String, Object?>;
-        for (final field in _stepResponseFields) {
-          expect(committedLegacy.keys, contains(field),
-              reason: '$base/legacy: committed .ab.json is missing '
-                  '$field (#121)');
-          expect(freshLegacy[field], committedLegacy[field],
-              reason: '$base/legacy: $field must be byte-identical to '
-                  'the committed reference');
-        }
+        // per-arm schema, field for field — a missing OR drifted field
+        // here IS the regression the issue exists to catch, not
+        // something to skip.
+        _expectArmEquivalent(
+            base, 'agreementWeighted', freshArm, committedArm);
+        _expectArmEquivalent(
+            base,
+            'legacy',
+            fresh['legacy'] as Map<String, Object?>,
+            committed['legacy'] as Map<String, Object?>);
 
         for (final armName in ['agreementSnap', 'agreementCoherent']) {
           expect(committed.keys, contains(armName),
