@@ -51,7 +51,8 @@ Future<void> main(List<String> args) async {
     return;
   }
 
-  // The two #119 levers, parsed strictly (a malformed value is an error,
+  // The three #119 levers (floor, re-anchor, adopt), parsed strictly (a
+  // malformed value is an error,
   // never a silent skip — PR #129 review CONF2) and recognised wherever
   // they sit in argv.
   final levers = parseLeverArgs(args);

@@ -6,10 +6,11 @@
 // have already rotted silently through a regeneration (caught by reviewers,
 // not by a test). This test parses the result tables listed below (by
 // exact header row) and checks each per-arm cell against the committed
-// report — or, for the #119 `--coherent-floor` / `--coherent-reanchor`
-// sweeps, against a live replay (`abReport(stream, coherentShiftFloorPx:
-// N)` / `coherentShiftReanchorMinBlocks: N`, deterministic over the
-// committed streams) — at the document's own display precision: the
+// report — or, for the #119 `--coherent-floor` / `--coherent-reanchor` /
+// `--coherent-adopt` sweeps, against a live replay (`abReport(stream,
+// coherentShiftFloorPx: N)` / `coherentShiftReanchorMinBlocks: N` /
+// `coherentShiftAdoptAgreeing: true`, deterministic over the committed
+// streams) — at the document's own display precision: the
 // report value rendered to the cell's decimals must equal the cell. Prose
 // claims stay out of scope by design (the issue's rule).
 //

@@ -4,7 +4,10 @@
 // arm's engine, on the #119 large-slab shape (a lone +190 mover among
 // five; see group (l) of test/stabilization_engine_step_response_test.dart):
 // the floor arm and the re-anchor arm each log ONE step event on the move
-// capture, and the baseline coherentShift arm logs none.
+// capture, and the baseline coherentShift arm logs none. The third lever
+// (`--coherent-adopt`, #119 item 2) is pinned on a quorum-FIRING shape
+// instead — three 30 px movers plus one 200 px pair making the same step:
+// 3 step events in the baseline arm, 4 in the adopt arm.
 import 'package:test/test.dart';
 
 import '../../tool/replay/src/ab_report.dart';

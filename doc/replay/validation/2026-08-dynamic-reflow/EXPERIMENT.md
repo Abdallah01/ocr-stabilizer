@@ -460,7 +460,8 @@ of this section's table is now checked against `pushdown.ab.json` directly
 
 The section above left `coherentShift` with two measured misses. This
 entry closes the larger one — `pushdown-600` — and records why the
-obvious-looking alternative cannot work.
+obvious-looking alternative cannot work; the candidate-3 section below
+(item 2, 2026-08-30) closes the smaller one, `pushdown-150`.
 
 ### What actually fails on the 600 px stream
 
@@ -644,9 +645,9 @@ can change under it.
 | pushdown-150 | 7 | 68.3 / 54.7 / 45.2 (3) | 6.0 / 19.7 / 20.5 (16) | 0.821 / 0.750 | 0.929 / 0.929 | 284 / 299 |
 | all other 16 streams | — | identical | identical | identical | identical | identical |
 
-Every other stream — the ten controls, and the six step streams where
-either no group forms (`pushdown-050`, `pushdown-600`, `rewrap`) or the
-group already covers every pair that moved (`pushdown-300`,
+Every other stream — the ten controls (`rewrap` among them), and the six
+step streams where either no group forms (`pushdown-050`, `pushdown-600`)
+or the group already covers every pair that moved (`pushdown-300`,
 `pushdown-300-early`, `pushdown-300-late`, `pushup-300`) — is byte-identical
 with the lever on. The 15 extra merges on `pushdown-150` are pairs that
 used to lag so far behind that later captures lost them and re-admitted

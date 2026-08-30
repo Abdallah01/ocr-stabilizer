@@ -74,7 +74,8 @@
   `EXPERIMENT.md` documents — its scope note names the tables it parses
   and the ones it leaves out — and checks each per-arm cell against the
   committed `.ab.json`, or a live replay for the `--coherent-floor` /
-  `--coherent-reanchor` sweeps, at the document's display precision: the
+  `--coherent-reanchor` / `--coherent-adopt` sweeps, at the document's
+  display precision: the
   report value rendered to the cell's decimals must equal the cell, so a
   regeneration that moves a figure goes red instead of leaving the prose
   stale (two such cells had rotted unnoticed before).
