@@ -11,7 +11,10 @@
 // --buckets=auto|formula|median (2.2.0, #113) picks the bucket policy —
 // `auto` (default) applies the stream's `meta.bk` where present, `formula`
 // is the 2.1.0 viewport formula only, `median` emulates the reference
-// consumer's 2× median block height rule.
+// consumer's 2× median block height rule; --coherent-floor=N (#119,
+// ab-report only) adds a fifth `agreementCoherentFloor` arm —
+// `StepResponse.coherentShift` with the absolute-pixel floor enabled at
+// N px. Omitted by default (no fifth arm).
 //
 // Output is a single JSON document on stdout (pipe to `jq`/a file).
 // Schema contract: doc/replay/capture_schema.md.
@@ -45,9 +48,21 @@ Future<void> main(List<String> args) async {
   int? floor;
   Viewport? viewportOverride;
   var bucketPolicy = BucketPolicy.auto;
+  double? coherentFloorPx;
   for (final a in args.skip(2)) {
     final m = RegExp(r'^--floor=(\d+)$').firstMatch(a);
     if (m != null) floor = int.parse(m.group(1)!);
+    final cf = RegExp(r'^--coherent-floor=([0-9.]+)$').firstMatch(a);
+    if (cf != null) {
+      final v = double.tryParse(cf.group(1)!);
+      if (v == null || !v.isFinite || v <= 0) {
+        stderr.writeln('--coherent-floor must be a finite number > 0 '
+            '(got: $a)');
+        exitCode = 64;
+        return;
+      }
+      coherentFloorPx = v;
+    }
     if (a.startsWith('--buckets')) {
       final p = bucketPolicyFromArg(a);
       if (p == null) {
@@ -98,7 +113,10 @@ Future<void> main(List<String> args) async {
           viewport: viewport,
           bucketPolicy: bucketPolicy);
     case 'ab-report':
-      report = abReport(stream, viewport: viewport, bucketPolicy: bucketPolicy);
+      report = abReport(stream,
+          viewport: viewport,
+          bucketPolicy: bucketPolicy,
+          coherentShiftFloorPx: coherentFloorPx);
     case 'live-report':
       report = liveReport(stream);
     default:

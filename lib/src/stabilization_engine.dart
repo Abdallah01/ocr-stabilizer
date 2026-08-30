@@ -109,6 +109,14 @@ const double _kAgreementJitterAllowance = 3.0;
 /// Maximum text vote entries per block to prevent OOM on noisy edges.
 const int _kMaxTextVotes = 5;
 
+/// Below this many pixels, a displacement component carries no direction
+/// (#119). Used only by `StabilizationEngine.coherentShiftFloorPx`'s
+/// direction-agreement check, so a group whose members agree on the axis
+/// that actually moved is not broken up by sub-pixel disagreement on the
+/// other one — real corpus movers report dx values like `-0.0` and `0.1`
+/// on a purely vertical slab.
+const double _kDirectionEpsilonPx = 1.0;
+
 /// Core stabilization engine: answers "is this block the same as that block,
 /// and what are its corrected coordinates?"
 ///
@@ -224,6 +232,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     this.coherentShiftMinBlocks = 3,
     this.coherentShiftMinShare = 0.5,
     this.coherentShiftTolerance = 0.5,
+    this.coherentShiftFloorPx,
   })  : _merger = merger,
         driftTracker =
             driftTracker ?? DriftTracker(submapMembership: submapMembership),
@@ -242,6 +251,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       coherentShiftMinBlocks: coherentShiftMinBlocks,
       coherentShiftMinShare: coherentShiftMinShare,
       coherentShiftTolerance: coherentShiftTolerance,
+      coherentShiftFloorPx: coherentShiftFloorPx,
     );
   }
 
@@ -329,6 +339,51 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// so this now says what the code does). Default `0.5`. See
   /// `_detectCoherentShift` for the exact clustering algorithm.
   final double coherentShiftTolerance;
+
+  /// #119 — the ABSOLUTE-PIXEL floor that admits a large-slab mover the
+  /// two count gates structurally cannot see. `null` (the default)
+  /// disables it, reproducing 2.3.0 behaviour bit-for-bit.
+  ///
+  /// [StepResponse.coherentShift]'s quorum
+  /// ([coherentShiftMinBlocks] / [coherentShiftMinShare]) reasons over the
+  /// pairs that survived the PRIMARY SPATIAL MATCH. A single-frame slab
+  /// big enough to push most lines out of the viewport is exactly the case
+  /// that starves it: the lines that truly moved are admitted as NEW
+  /// identities (no match, so no residual to vote with), and the one or
+  /// two stragglers that do still match cannot reach
+  /// [coherentShiftMinBlocks]. `_detectCoherentShift` then returns before
+  /// it ever clusters, and the whole capture falls through to
+  /// [StepResponse.damp] — measured, not inferred: on the validation
+  /// corpus's 600px-slab stream the reflow capture leaves exactly ONE
+  /// matched mover behind (12 eligible pairs, 10 unmatched admissions).
+  ///
+  /// When set, any moved pair whose drift-corrected displacement is at
+  /// least this many pixels is admitted to the vote on its own magnitude,
+  /// bypassing BOTH count gates. Floor-qualified movers must still agree
+  /// in DIRECTION with each other (a slab translates its content one way;
+  /// two movers heading opposite ways are not a shift and the median of
+  /// their displacements is a translation neither made). The winning
+  /// translation is their median displacement, applied only to those
+  /// members — every other pair in the batch damps exactly as before.
+  ///
+  /// **Why an absolute floor and not another height-relative multiplier.**
+  /// A multiple of the block's own agreement scale ([_agreementScale], 3x
+  /// its height) cannot separate these two populations, because a SHORT
+  /// block has a small scale and therefore reaches a high ratio at a
+  /// modest absolute displacement. On the validation corpus the slab's
+  /// surviving mover travels 406px at only 2.64x its own scale, while a
+  /// continuous-scroll control stream's ordinary motion reaches 3.63x at
+  /// 360px — the control out-ranks the real slab, so NO multiplier
+  /// admits one without the other (measured in #119; that is why the
+  /// earlier height-relative attempt was abandoned). Absolute pixels
+  /// order the two populations correctly. The corollary is that this
+  /// value is a PROPERTY OF THE CAPTURE GEOMETRY, not a universal
+  /// constant: it must be at least the largest displacement ordinary
+  /// scrolling produces between two consecutive captures on the
+  /// consumer's own device and capture cadence, and below the smallest
+  /// slab worth tracking. A consumer that captures less often, or scrolls
+  /// faster, needs a higher floor. Leaving it `null` is always safe.
+  final double? coherentShiftFloorPx;
 
   /// Lerp weight toward the fresh (drift-corrected) observation.
   double _positionMergeWeight(T fresh, T existing) {
@@ -484,6 +539,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     required int coherentShiftMinBlocks,
     required double coherentShiftMinShare,
     required double coherentShiftTolerance,
+    required double? coherentShiftFloorPx,
   }) {
     if (!snapThresholdMultiplier.isFinite || snapThresholdMultiplier <= 0.0) {
       throw ArgumentError.value(
@@ -513,6 +569,18 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         coherentShiftTolerance,
         'coherentShiftTolerance',
         'must be a finite value >= 0.0',
+      );
+    }
+    // #119: same silent-NaN class as the four above — an unchecked NaN
+    // floor makes `displacement >= floor` permanently false, so the
+    // option would look configured while never firing. `null` is exempt
+    // by design: that is the documented disabled state, not a hazard.
+    if (coherentShiftFloorPx != null &&
+        (!coherentShiftFloorPx.isFinite || coherentShiftFloorPx <= 0.0)) {
+      throw ArgumentError.value(
+        coherentShiftFloorPx,
+        'coherentShiftFloorPx',
+        'must be null (disabled) or a finite double > 0',
       );
     }
   }
@@ -1048,7 +1116,68 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       movedRegionDrift.add(regionDrift);
     }
 
-    if (movedExisting.length < coherentShiftMinBlocks) return null;
+    // ┌─── #119: the absolute-pixel floor fallback ────────────────────
+    // Tried ONLY where the ordinary quorum below declines (all three of
+    // its `return null` sites route here instead). Ordering matters: when
+    // a real group DOES qualify, the well-validated majority vote wins
+    // untouched, so enabling the floor cannot perturb any capture the
+    // quorum already handles — the floor is reachable only on captures
+    // that were falling through to damp anyway. See
+    // [coherentShiftFloorPx]'s doc for why the discriminating axis has to
+    // be absolute pixels rather than another multiple of the block's own
+    // height.
+    ({Offset translation, Map<T, Offset> memberDrift})? floorFallback() {
+      final floor = coherentShiftFloorPx;
+      if (floor == null) return null;
+
+      final qualified = <int>[];
+      for (var i = 0; i < movedExisting.length; i++) {
+        if (Offset(movedDx[i], movedDy[i]).distance >= floor) {
+          qualified.add(i);
+        }
+      }
+      if (qualified.isEmpty) return null;
+
+      // Direction agreement. A slab translates its content ONE way; two
+      // floor-qualified movers heading opposite ways are not a shift, and
+      // their median is a translation neither of them made. Checked per
+      // axis, ignoring components small enough to be jitter rather than
+      // travel, so a pair agreeing on dy but disagreeing on a sub-pixel
+      // dx is still a group. A single member is vacuously in agreement —
+      // which is the whole point of this path, since the starved-quorum
+      // case is precisely "only one mover survived the match".
+      var sawPos = false, sawNeg = false;
+      for (final j in qualified) {
+        if (movedDy[j] > _kDirectionEpsilonPx) sawPos = true;
+        if (movedDy[j] < -_kDirectionEpsilonPx) sawNeg = true;
+      }
+      if (sawPos && sawNeg) return null;
+      sawPos = false;
+      sawNeg = false;
+      for (final j in qualified) {
+        if (movedDx[j] > _kDirectionEpsilonPx) sawPos = true;
+        if (movedDx[j] < -_kDirectionEpsilonPx) sawNeg = true;
+      }
+      if (sawPos && sawNeg) return null;
+
+      // Non-null by construction: `qualified` is non-empty (checked
+      // above), and `RobustStats.median` returns null only on an empty
+      // list — the same argument the quorum path's own force-unwraps
+      // rest on.
+      final tx = RobustStats.median([for (final j in qualified) movedDx[j]])!;
+      final ty = RobustStats.median([for (final j in qualified) movedDy[j]])!;
+      // Identity-keyed for the same reason the quorum path's map is: `T`
+      // is the CONSUMER's type and may define VALUE equality, and two
+      // members in different drift regions must each keep their own
+      // frozen snapshot.
+      final memberDrift = Map<T, Offset>.identity();
+      for (final j in qualified) {
+        memberDrift[movedExisting[j]] = movedRegionDrift[j];
+      }
+      return (translation: Offset(tx, ty), memberDrift: memberDrift);
+    }
+
+    if (movedExisting.length < coherentShiftMinBlocks) return floorFallback();
 
     // Deterministic total order (#116, finding B fix): (dy, dx,
     // existing.top, existing.left, height), original index last as an
@@ -1120,9 +1249,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       }
     }
 
-    if (bestGroup == null) return null;
+    if (bestGroup == null) return floorFallback();
     if (bestGroup.length / movedExisting.length < coherentShiftMinShare) {
-      return null;
+      return floorFallback();
     }
 
     // #116 finding E: these two force-unwraps are safe by construction,

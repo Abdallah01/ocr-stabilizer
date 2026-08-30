@@ -39,6 +39,7 @@ _Rig _engine({
   int coherentShiftMinBlocks = 3,
   double coherentShiftMinShare = 0.5,
   double coherentShiftTolerance = 0.5,
+  double? coherentShiftFloorPx,
 }) {
   final log = <MergeResult>[];
   final engine = StabilizationEngine<_Block, void>(
@@ -53,6 +54,7 @@ _Rig _engine({
     coherentShiftMinBlocks: coherentShiftMinBlocks,
     coherentShiftMinShare: coherentShiftMinShare,
     coherentShiftTolerance: coherentShiftTolerance,
+    coherentShiftFloorPx: coherentShiftFloorPx,
   );
   return (engine: engine, log: log);
 }
@@ -110,6 +112,7 @@ void main() {
       int coherentShiftMinBlocks = 3,
       double coherentShiftMinShare = 0.5,
       double coherentShiftTolerance = 0.5,
+      double? coherentShiftFloorPx,
     }) {
       return StabilizationEngine<_Block, void>(
         merger: (existing, fresh, merge) => existing.applyMerge(merge),
@@ -117,6 +120,7 @@ void main() {
         coherentShiftMinBlocks: coherentShiftMinBlocks,
         coherentShiftMinShare: coherentShiftMinShare,
         coherentShiftTolerance: coherentShiftTolerance,
+        coherentShiftFloorPx: coherentShiftFloorPx,
       );
     }
 
@@ -162,6 +166,40 @@ void main() {
       expect(() => build(coherentShiftTolerance: -0.1),
           throwsA(isA<ArgumentError>()));
       expect(() => build(coherentShiftTolerance: 0.0), returnsNormally);
+    });
+
+    // #119: the floor is NULLABLE — null is the documented disabled state
+    // (2.3.0 behaviour bit-for-bit), not a hazard. Only a NON-null value is
+    // subject to the same silent-NaN failure class as the four tunables
+    // above: left unchecked, a NaN floor makes `displacement >= floor`
+    // permanently false, so the option would look configured while never
+    // firing.
+    test('coherentShiftFloorPx allows null (disabled) but rejects NaN, '
+        'non-finite and <= 0 when set', () {
+      expect(() => build(coherentShiftFloorPx: null), returnsNormally);
+      expect(() => build(coherentShiftFloorPx: double.nan),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftFloorPx: double.infinity),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftFloorPx: 0.0),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftFloorPx: -150.0),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftFloorPx: 390.0), returnsNormally);
+    });
+
+    // MUTATION-VERIFY TARGET (#119): the shipped default must be OFF, so a
+    // 2.3.0 consumer that upgrades gets byte-identical numerics until it
+    // opts in. Flipping the constructor default to any non-null value
+    // turns this red.
+    test('coherentShiftFloorPx defaults to null (OFF)', () {
+      final engine = StabilizationEngine<_Block, void>(
+        merger: (existing, fresh, merge) => existing.applyMerge(merge),
+      );
+      expect(engine.coherentShiftFloorPx, isNull,
+          reason: 'DEFAULT-OFF PIN: #119\'s absolute-pixel floor is opt-in; '
+              'shipping it enabled would change every consumer\'s numerics '
+              'without them asking');
     });
   });
 
@@ -886,6 +924,210 @@ void main() {
         mover(1900, 'four block text'),
       ]);
       expect(rig.log.every((m) => m.stepResponseApplied == null), isTrue);
+    });
+  });
+
+  // ===========================================================================
+  // (l)/(m) #119 candidate 1 — the ABSOLUTE-PIXEL FLOOR
+  // ===========================================================================
+  // `coherentShift`'s quorum is a SHARE-and-COUNT test over the pairs that
+  // survived the primary spatial match. A single-frame slab large enough to
+  // push most lines out of the viewport leaves too FEW matched movers behind
+  // for that quorum to ever see: the batch returns before clustering at
+  // `movedExisting.length < coherentShiftMinBlocks`, so the whole capture
+  // falls through to damp (group (f) pins that fall-through as today's
+  // intended behaviour).
+  //
+  // `coherentShiftFloorPx` is the opt-in escape hatch: a mover whose
+  // drift-corrected displacement clears an ABSOLUTE pixel floor is admitted
+  // on its own magnitude, bypassing BOTH count gates — the axis a
+  // height-relative multiplier structurally cannot reach, because a short
+  // block's scale is small enough that continuous scroll motion clears any
+  // ratio a real slab also clears. `null` (the default) keeps 2.3.0
+  // behaviour bit-for-bit.
+  group('(l) coherentShift + absolute floor (#119): a lone mover past the '
+      'floor qualifies despite the count gates', () {
+    // height 30 -> agreement scale 3x30 = 90 ("moved" gate). The lone mover
+    // travels +190px: past the moved gate, and past a 150px floor, while
+    // staying under the 200px default bucket height so the primary spatial
+    // match is guaranteed regardless of cell phase (see group (e)'s note).
+    test('1 mover at +190px with coherentShiftFloorPx=150 re-anchors; the '
+        'SAME batch stays damp-identical under the 2.3.0 default (floor '
+        'off)', () {
+      final floored = _engine(
+        stepResponse: StepResponse.coherentShift,
+        coherentShiftFloorPx: 150,
+      );
+      final today = _engine(stepResponse: StepResponse.coherentShift);
+      final damp = _engine(stepResponse: StepResponse.damp);
+
+      _Block mover(double top, String text) => _at(top, text: text);
+      List<_Block> batch1() => [
+            mover(50, 'one block text'),
+            mover(600, 'two block text'),
+            mover(1100, 'three block text'),
+            mover(1600, 'four block text'),
+            mover(2100, 'five block text'),
+          ];
+      // ONE mover (+190) among five — below coherentShiftMinBlocks(3) AND
+      // below coherentShiftMinShare(0.5). Only the absolute floor can
+      // admit it.
+      List<_Block> batch2() => [
+            mover(240, 'one block text'), // +190 (mover, > 150 floor)
+            mover(600, 'two block text'), // stays
+            mover(1100, 'three block text'), // stays
+            mover(1600, 'four block text'), // stays
+            mover(2100, 'five block text'), // stays
+          ];
+
+      for (final rig in [floored, today, damp]) {
+        rig.engine.stabilize(batch1());
+      }
+      final flooredResult = floored.engine.stabilize(batch2()).stableBlocks;
+      final todayResult = today.engine.stabilize(batch2()).stableBlocks;
+      final dampResult = damp.engine.stabilize(batch2()).stableBlocks;
+
+      _Block byText(List<_Block> blocks, String text) =>
+          blocks.firstWhere((b) => b.originalText == text);
+
+      final moved = byText(flooredResult, 'one block text');
+      expect(moved.observationCount, 2,
+          reason: 'sanity — the mover must have actually MERGED, or the '
+              'exact-landing assertion below is vacuous');
+      expect(moved.absoluteRect.raw.top, closeTo(240, 0.01),
+          reason: 'the floor-qualified mover becomes a coherent-shift '
+              'member of a group of one: its baseline is translated by the '
+              'group median (its own +190), so the merge lands on the '
+              'corrected fresh position rather than a damped fraction of '
+              'the residual');
+      expect(
+          floored.log
+              .firstWhere((m) => m.winningOriginalText == 'one block text')
+              .stepResponseApplied,
+          StepResponse.coherentShift,
+          reason: 'the floor admits a member to the COHERENT-SHIFT vote — '
+              'it is that mechanism (a translated baseline), not snap\'s '
+              'per-block full re-anchor, so it must report itself as '
+              'coherentShift');
+
+      // The 2.3.0 default (floor off) must be untouched.
+      final t = byText(todayResult, 'one block text');
+      final d = byText(dampResult, 'one block text');
+      expect(t.absoluteRect.raw.top, closeTo(d.absoluteRect.raw.top, 1e-9),
+          reason: 'DEFAULT-OFF PIN: with no coherentShiftFloorPx configured, '
+              'a lone mover never clears coherentShiftMinBlocks(3) and the '
+              'batch must stay bit-identical to damp — 2.3.0 behaviour '
+              'unchanged');
+      expect(today.log.every((m) => m.stepResponseApplied == null), isTrue,
+          reason: 'DEFAULT-OFF PIN: today\'s default sets no step response '
+              'on a sub-quorum batch');
+
+      // Non-movers must never be dragged along by a group they are not in.
+      for (final text in [
+        'two block text',
+        'three block text',
+        'four block text',
+        'five block text',
+      ]) {
+        final f = byText(flooredResult, text);
+        final dd = byText(dampResult, text);
+        expect(f.absoluteRect.raw.top, closeTo(dd.absoluteRect.raw.top, 1e-9),
+            reason: '$text: a non-mover is not a member of the '
+                'floor-qualified group and must stay damp-identical');
+      }
+    });
+  });
+
+  group('(m) coherentShift + absolute floor (#119): control — a mover under '
+      'the floor never fires', () {
+    // Same lone-mover shape as group (l), but +120px: past the "moved"
+    // gate (90) — so this is not merely "nothing moved" — and past plain
+    // snap's own threshold (1.5 x 90 = 135)? No: 120 < 135, deliberately.
+    // What matters here is that 120 is under the 150px floor, so the floor
+    // must decline it. This is the assertion that separates "the floor is
+    // load-bearing" from "any mover fires".
+    test('1 mover at +120px with coherentShiftFloorPx=150 stays '
+        'damp-identical', () {
+      final floored = _engine(
+        stepResponse: StepResponse.coherentShift,
+        coherentShiftFloorPx: 150,
+      );
+      final damp = _engine(stepResponse: StepResponse.damp);
+
+      _Block mover(double top, String text) => _at(top, text: text);
+      List<_Block> batch1() => [
+            mover(50, 'one block text'),
+            mover(600, 'two block text'),
+            mover(1100, 'three block text'),
+          ];
+      List<_Block> batch2() => [
+            mover(170, 'one block text'), // +120: moved, but under the floor
+            mover(600, 'two block text'),
+            mover(1100, 'three block text'),
+          ];
+
+      floored.engine.stabilize(batch1());
+      damp.engine.stabilize(batch1());
+      final flooredResult = floored.engine.stabilize(batch2()).stableBlocks;
+      final dampResult = damp.engine.stabilize(batch2()).stableBlocks;
+
+      for (final c in flooredResult) {
+        expect(c.observationCount, 2,
+            reason: '${c.originalText}: sanity — must have actually merged, '
+                'or "no fire" below would be vacuous');
+      }
+      for (final c in flooredResult) {
+        final d =
+            dampResult.firstWhere((b) => b.originalText == c.originalText);
+        expect(c.absoluteRect.raw.top, closeTo(d.absoluteRect.raw.top, 1e-9),
+            reason: '${c.originalText}: a 120px residual clears the "moved" '
+                'gate but not the 150px floor — the floor must decline it');
+      }
+      expect(floored.log.every((m) => m.stepResponseApplied == null), isTrue);
+    });
+
+    // Direction agreement: two floor-qualified movers heading OPPOSITE ways
+    // are not a coherent shift by any reading — a slab translates its
+    // content one way. Without this guard the "group" median of +190 and
+    // -190 is ~0 and both members would be re-anchored to a translation
+    // neither of them made.
+    test('2 floor-qualified movers in OPPOSITE directions never form a '
+        'group', () {
+      final floored = _engine(
+        stepResponse: StepResponse.coherentShift,
+        coherentShiftFloorPx: 150,
+      );
+      final damp = _engine(stepResponse: StepResponse.damp);
+
+      _Block mover(double top, String text) => _at(top, text: text);
+      List<_Block> batch1() => [
+            mover(400, 'one block text'),
+            mover(900, 'two block text'),
+            mover(1400, 'three block text'),
+          ];
+      List<_Block> batch2() => [
+            mover(590, 'one block text'), // +190
+            mover(710, 'two block text'), // -190
+            mover(1400, 'three block text'), // stays
+          ];
+
+      floored.engine.stabilize(batch1());
+      damp.engine.stabilize(batch1());
+      final flooredResult = floored.engine.stabilize(batch2()).stableBlocks;
+      final dampResult = damp.engine.stabilize(batch2()).stableBlocks;
+
+      for (final c in flooredResult) {
+        expect(c.observationCount, 2,
+            reason: '${c.originalText}: sanity — must have actually merged');
+      }
+      for (final c in flooredResult) {
+        final d =
+            dampResult.firstWhere((b) => b.originalText == c.originalText);
+        expect(c.absoluteRect.raw.top, closeTo(d.absoluteRect.raw.top, 1e-9),
+            reason: '${c.originalText}: +190 and -190 disagree in direction '
+                '— no coherent shift exists, so the batch stays damp');
+      }
+      expect(floored.log.every((m) => m.stepResponseApplied == null), isTrue);
     });
   });
 }
