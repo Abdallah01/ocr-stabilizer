@@ -35,6 +35,28 @@
   false-fires on 4 of 10 control streams; any higher count leaves the
   blind spot open. Kept for consumers whose own corpus has large slabs
   that do leave several matched movers behind.
+- **`StabilizationEngine.coherentShiftAdoptAgreeing` (#119 item 2)** — an
+  opt-in widening of who FOLLOWS a coherent shift, not of who may vote.
+  The "moved" gate is 3x each block's own height, so a 150 px slab step
+  carries a 36 px line past its gate but not a 60 px line past its 180 px
+  gate: on the 150 px validation stream three short movers vote a valid
+  shift while 13 taller pairs that made the same step stay under their
+  gate and damp, lagging by the damped fraction for the rest of the
+  stream. With the lever on, once a shift is decided (by the quorum, the
+  floor or the re-anchor), every eligible under-gate pair whose
+  displacement is within the quorum's own tolerance of the DECIDED
+  translation joins the group and is merged with it; a pair that merely
+  jittered stays on damp. `false` (the default) reproduces 2.3.x numerics
+  bit-for-bit. Evidence: the 17-stream A/B — 16 streams byte-identical
+  (every control, and every step stream where no group forms or every
+  pair already votes); on `pushdown-150` the move-capture lag drops
+  68.3 -> 6.0 px, the +3 / +5 lags 54.7 / 45.2 -> 19.7 / 20.5 px, identity
+  at +2 / +5 rises 0.821 / 0.750 -> 0.929 / 0.929 and 15 more merges land
+  (pairs that used to fall out of tracking stay tracked). The 50 px step
+  stays out of reach — no pair ever clears its own gate there, so there is
+  nothing to follow. `--coherent-adopt` adds an `agreementCoherentAdopt`
+  arm to `ab-report`. See the candidate-3 section of
+  `doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`.
 
 ### Internal
 - **Provenance guard hardening (#125, #127, #128).** The dynamic-reflow
@@ -52,7 +74,8 @@
   `EXPERIMENT.md` documents — its scope note names the tables it parses
   and the ones it leaves out — and checks each per-arm cell against the
   committed `.ab.json`, or a live replay for the `--coherent-floor` /
-  `--coherent-reanchor` sweeps, at the document's display precision: the
+  `--coherent-reanchor` / `--coherent-adopt` sweeps, at the document's
+  display precision: the
   report value rendered to the cell's decimals must equal the cell, so a
   regeneration that moves a figure goes red instead of leaving the prose
   stale (two such cells had rotted unnoticed before).

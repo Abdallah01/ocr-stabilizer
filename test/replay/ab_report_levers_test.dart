@@ -4,7 +4,10 @@
 // arm's engine, on the #119 large-slab shape (a lone +190 mover among
 // five; see group (l) of test/stabilization_engine_step_response_test.dart):
 // the floor arm and the re-anchor arm each log ONE step event on the move
-// capture, and the baseline coherentShift arm logs none.
+// capture, and the baseline coherentShift arm logs none. The third lever
+// (`--coherent-adopt`, #119 item 2) is pinned on a quorum-FIRING shape
+// instead — three 30 px movers plus one 200 px pair making the same step:
+// 3 step events in the baseline arm, 4 in the adopt arm.
 import 'package:test/test.dart';
 
 import '../../tool/replay/src/ab_report.dart';
@@ -54,6 +57,38 @@ void main() {
     expect(stepEventsAt(arm(report, 'agreementCoherentFloor'), 1), 0);
     expect(stepEventsAt(arm(report, 'agreementCoherent'), 2), 0,
         reason: 'the baseline arm is untouched by the lever');
+  });
+
+  // #119 item 2: a fixture where the quorum DOES fire — three 30 px movers
+  // (gate 90 px) stepping +150 — plus one 200 px block (gate 600 px) making
+  // the same step: under its gate, so it damps in the baseline arm and is
+  // adopted in the adopt arm. Step events on the move capture: 3 vs 4.
+  String tallBlock(double top) =>
+      '{"rect": [0, $top, 200, ${top + 200}], "otext": "tall paragraph text", '
+      '"pconf": 0.9, "tconf": 0.9, "obsN": 1, "prov": false, "provN": 0}';
+  String quorumObs(int cap, {double dy = 0}) =>
+      '{"t": "obs", "ts": $cap, "cap": $cap, "raw": 4, "blocks": ['
+      '${[
+        for (var i = 0; i < 3; i++) block(i, tops[i] + dy),
+        tallBlock(1600 + dy),
+      ].join(', ')}]}';
+  CaptureStream quorumStream() =>
+      CaptureStream.parse([meta, quorumObs(1), quorumObs(2, dy: 150)]);
+
+  test('coherentShiftAdoptAgreeing reaches the adopt arm: the agreeing '
+      'under-gate pair is one more step event on the move capture', () {
+    final report = abReport(quorumStream(), coherentShiftAdoptAgreeing: true);
+    expect(
+        (report['input'] as Map<String, Object?>)['coherentShiftAdoptAgreeing'],
+        isTrue);
+    expect(stepEventsAt(arm(report, 'agreementCoherent'), 2), 3,
+        reason: 'CONTROL — the quorum fires for the three movers; the tall '
+            'pair sits under its own gate');
+    expect(stepEventsAt(arm(report, 'agreementCoherentAdopt'), 2), 4,
+        reason: 'the lever must actually reach the arm engine: the tall '
+            'pair follows the decided shift');
+    expect(abReport(stream()).containsKey('agreementCoherentAdopt'), isFalse,
+        reason: 'without the lever no adopt arm is reported');
   });
 
   test('coherentShiftReanchorMinBlocks reaches the re-anchor arm', () {

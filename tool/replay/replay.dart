@@ -16,7 +16,10 @@
 // `StepResponse.coherentShift` with the absolute-pixel floor enabled at
 // N px; --coherent-reanchor=N (#119, ab-report only) likewise adds an
 // `agreementCoherentReanchor` arm with the batch-level re-anchor enabled
-// at cluster size N. Both omitted by default (no extra arms).
+// at cluster size N; --coherent-adopt (#119 item 2, ab-report only, no
+// value) adds an `agreementCoherentAdopt` arm — coherentShift with the
+// agreeing under-gate pairs adopted into a decided shift. All omitted by
+// default (no extra arms).
 //
 // Output is a single JSON document on stdout (pipe to `jq`/a file).
 // Schema contract: doc/replay/capture_schema.md.
@@ -48,7 +51,8 @@ Future<void> main(List<String> args) async {
     return;
   }
 
-  // The two #119 levers, parsed strictly (a malformed value is an error,
+  // The three #119 levers (floor, re-anchor, adopt), parsed strictly (a
+  // malformed value is an error,
   // never a silent skip — PR #129 review CONF2) and recognised wherever
   // they sit in argv.
   final levers = parseLeverArgs(args);
@@ -59,6 +63,7 @@ Future<void> main(List<String> args) async {
   }
   final coherentFloorPx = levers.coherentFloorPx;
   final coherentReanchorMinBlocks = levers.coherentReanchorMinBlocks;
+  final coherentAdoptAgreeing = levers.coherentAdoptAgreeing;
 
   int? floor;
   Viewport? viewportOverride;
@@ -120,7 +125,8 @@ Future<void> main(List<String> args) async {
           viewport: viewport,
           bucketPolicy: bucketPolicy,
           coherentShiftFloorPx: coherentFloorPx,
-          coherentShiftReanchorMinBlocks: coherentReanchorMinBlocks);
+          coherentShiftReanchorMinBlocks: coherentReanchorMinBlocks,
+          coherentShiftAdoptAgreeing: coherentAdoptAgreeing);
     case 'live-report':
       report = liveReport(stream);
     default:

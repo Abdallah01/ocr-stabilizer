@@ -281,6 +281,9 @@ BucketPolicy? bucketPolicyFromArg(String arg) {
 /// - [coherentShiftReanchorMinBlocks] (#119) — same contract as the floor
 ///   above: `null` (off) here, threaded only into `ab_report.dart`'s
 ///   optional `agreementCoherentReanchor` arm.
+/// - [coherentShiftAdoptAgreeing] (#119 item 2) — same contract: `false`
+///   (off) here, threaded only into the optional `agreementCoherentAdopt`
+///   arm.
 ReplayResult replay(
   CaptureStream stream, {
   BandFallbackConfig band = const BandFallbackConfig(),
@@ -288,6 +291,7 @@ ReplayResult replay(
   StepResponse stepResponse = StepResponse.damp,
   double? coherentShiftFloorPx,
   int? coherentShiftReanchorMinBlocks,
+  bool coherentShiftAdoptAgreeing = false,
   Viewport? viewport,
   bool useStreamViewport = true,
   BucketPolicy bucketPolicy = BucketPolicy.auto,
@@ -309,6 +313,7 @@ ReplayResult replay(
     stepResponse: stepResponse,
     coherentShiftFloorPx: coherentShiftFloorPx,
     coherentShiftReanchorMinBlocks: coherentShiftReanchorMinBlocks,
+    coherentShiftAdoptAgreeing: coherentShiftAdoptAgreeing,
     merger: (existing, fresh, m) {
       final merged = existing.applyMerge(m);
       final e = existing.absoluteRect.raw.center;

@@ -1,4 +1,4 @@
-// The two #119 lever flags of `replay.dart`, parsed strictly.
+// The #119 lever flags of `replay.dart`, parsed strictly.
 //
 // PR #129 review CONF2: the CLI used to match `--coherent-floor=<number>`
 // with a value regex, so a malformed value (`--coherent-floor=abc`, a
@@ -10,21 +10,29 @@
 typedef LeverArgs = ({
   double? coherentFloorPx,
   int? coherentReanchorMinBlocks,
+  bool coherentAdoptAgreeing,
   String? error,
 });
 
 const _kFloorFlag = '--coherent-floor';
 const _kReanchorFlag = '--coherent-reanchor';
+const _kAdoptFlag = '--coherent-adopt';
 
-LeverArgs _error(String message) =>
-    (coherentFloorPx: null, coherentReanchorMinBlocks: null, error: message);
+LeverArgs _error(String message) => (
+      coherentFloorPx: null,
+      coherentReanchorMinBlocks: null,
+      coherentAdoptAgreeing: false,
+      error: message,
+    );
 
-/// Parses `--coherent-floor=<px>` and `--coherent-reanchor=<count>` out of
-/// [args]. Absent flags yield `null`; a present-but-malformed flag yields a
-/// non-null [LeverArgs.error] naming the offending argument.
+/// Parses `--coherent-floor=<px>`, `--coherent-reanchor=<count>` and the
+/// bare `--coherent-adopt` (#119 item 2; it takes no value) out of [args].
+/// Absent flags yield `null` / `false`; a present-but-malformed flag yields
+/// a non-null [LeverArgs.error] naming the offending argument.
 LeverArgs parseLeverArgs(Iterable<String> args) {
   double? floor;
   int? reanchor;
+  var adopt = false;
   for (final a in args) {
     if (a.startsWith(_kFloorFlag)) {
       final raw = a.startsWith('$_kFloorFlag=')
@@ -46,11 +54,17 @@ LeverArgs parseLeverArgs(Iterable<String> args) {
             '$_kReanchorFlag=2 (got: $a)');
       }
       reanchor = v;
+    } else if (a.startsWith(_kAdoptFlag)) {
+      if (a != _kAdoptFlag) {
+        return _error('$_kAdoptFlag takes no value (got: $a)');
+      }
+      adopt = true;
     }
   }
   return (
     coherentFloorPx: floor,
     coherentReanchorMinBlocks: reanchor,
+    coherentAdoptAgreeing: adopt,
     error: null,
   );
 }
