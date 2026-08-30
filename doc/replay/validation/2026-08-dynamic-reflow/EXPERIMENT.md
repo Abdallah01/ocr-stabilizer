@@ -430,3 +430,179 @@ Note: `pushdown.ab.json`/`rewrap.ab.json` committed above predate the
 on the two `.jsonl` streams to see the four-arm output this section's
 table cites; they were deliberately left as the historical snapshot for
 the entry above rather than regenerated for this section.
+
+## Step response, closing the large-slab blind spot (#119, 2026-08-30)
+
+The section above left `coherentShift` with two measured misses. This
+entry closes the larger one — `pushdown-600` — and records why the
+obvious-looking alternative cannot work.
+
+### What actually fails on the 600 px stream
+
+Instrumenting `_detectCoherentShift` over all 17 streams (a throwaway
+`print` of every eligible pair, reverted before the first commit) settles
+a premise the issue had left open. On `pushdown-600`'s reflow capture:
+
+| capture | eligible pairs | unmatched (new identities) | pairs past the "moved" gate |
+|---|---|---|---|
+| 7 (the move) | 12 | 10 | **1** |
+
+The vote never reaches clustering, and never reaches
+`coherentShiftMinShare` at all: it returns at
+`movedExisting.length < coherentShiftMinBlocks` (1 < 3). **The failing
+gate is the COUNT, not the share** — so any lever framed as "qualify even
+when the share is too low" is a provable no-op on this stream. The blocks
+that really moved 600 px are admitted as new identities, where no step
+response of any kind can reach them; exactly one straggler still matches,
+and that one straggler is the whole opportunity.
+
+### Why the discriminating axis has to be absolute pixels
+
+The earlier height-relative attempt (a higher multiple of the block's own
+agreement scale) was refuted because a SHORT block has a small scale and
+therefore reaches a high ratio at modest travel. Ranking every stream's
+largest moved pair by both axes shows the inversion directly:
+
+| stream | kind | largest moved pair | its ratio vs own scale |
+|---|---|---|---|
+| pushdown-600 | the real slab | **406.2 px** | 2.64x |
+| tess-scroll | control | 377.0 px | 1.65x |
+| paddle-scroll | control | 360.0 px | **3.63x** |
+| rewrap | control | 339.4 px | 1.80x |
+| mlkit-dwell | control | 149.0 px | 2.87x |
+
+On the ratio axis two controls **out-rank** the real slab, so no
+multiplier admits the slab without also admitting them — a structural
+ceiling, not a tuning gap. On the absolute-pixel axis the ordering is
+correct and a separating window exists: **(377.0, 406.2] px**. Note this
+also kills the "≥ 4x the block's own height OR ≥ N px" disjunction: 4x
+height is 1.33x scale, which `paddle-scroll` clears at 10.9x.
+
+### Candidate 1 — `coherentShiftFloorPx` (absolute-pixel floor). SHIPS.
+
+A moved pair whose drift-corrected displacement clears an absolute floor
+is admitted to the vote on its own magnitude, bypassing BOTH count gates,
+provided the floor-qualified movers agree in direction. Tried **only
+where the ordinary quorum declines**, so every capture the majority vote
+already handles is untouched — which is why the regression column below
+is uniformly 0.000. Default `null` = off.
+
+Replayed at 390 px (`--coherent-floor=390`).
+
+#### Control streams (10) — zero step events, zero drift
+
+| stream | merges (damp / floor) | coherent stepEvents | floor stepEvents | max lag delta vs coherent | verdict |
+|---|---|---|---|---|---|
+| rewrap | 288 / 288 | 0 | **0** | 0.000 px | PASS |
+| tess-stable-dwell | 312 / 312 | 0 | **0** | 0.000 px | PASS |
+| tess-jitter-dwell | 308 / 308 | 0 | **0** | 0.000 px | PASS |
+| tess-scroll | 312 / 312 | 0 | **0** | 0.000 px | PASS |
+| paddle-stable-dwell | 330 / 330 | 0 | **0** | 0.000 px | PASS |
+| paddle-jitter-dwell | 330 / 330 | 0 | **0** | 0.000 px | PASS |
+| paddle-scroll | 322 / 322 | 0 | **0** | 0.000 px | PASS |
+| mlkit-dwell | 33 / 33 | 0 | **0** | 0.000 px | PASS |
+| mlkit-dwell-bk | 15 / 15 | 0 | **0** | 0.000 px | PASS |
+| mlkit-scroll | 24 / 24 | 0 | **0** | 0.000 px | PASS |
+| **tally** | | | **0 events** | | **10/10** |
+
+#### Step streams (7)
+
+| stream | move cap | damp lag move/+3/+5 | coherent (today) | **floor 390** | floor stepEvents | identity at move (damp / coherent / floor) | step-rule verdict |
+|---|---|---|---|---|---|---|---|
+| pushdown-300 | 7 | 123.8 / 77.3 / 70.2 | 4.5 / 17.0 / 3.5 | **4.5 / 17.0 / 3.5** | 9 | 0.769 / 0.769 / 0.769 | PASS |
+| pushdown-050 | 7 | 25.9 / 25.5 / 28.9 | 25.9 / 25.5 / 28.9 | **25.9 / 25.5 / 28.9** | 0 | 0.900 / 0.900 / 0.900 | FAIL |
+| pushdown-150 | 7 | 82.5 / 66.5 / 59.1 | 68.3 / 54.7 / 45.2 | **68.3 / 54.7 / 45.2** | 3 | 0.964 / 0.964 / 0.964 | FAIL |
+| pushdown-600 | 7 | 30.7 / 26.1 / 14.5 | 30.7 / 26.1 / 14.5 | **1.4 / 20.7 / 12.4** | 1 | 0.545 / 0.545 / 0.545 | FAIL |
+| pushup-300 | 7 | 155.1 / 92.7 / 67.3 | 9.4 / 19.3 / 4.2 | **9.4 / 19.3 / 4.2** | 11 | 0.667 / 0.667 / 0.667 | PASS |
+| pushdown-300-early | 3 | 113.1 / 54.7 / 48.0 | 7.0 / 5.9 / 5.5 | **7.0 / 5.9 / 5.5** | 10 | 0.769 / 0.769 / 0.769 | PASS |
+| pushdown-300-late | 10 | 135.6 / n/a / n/a | 9.9 / n/a / n/a | **9.9 / n/a / n/a** | 9 | 0.731 / 0.731 / 0.731 | PASS |
+| **tally** | | | | | | | **4/7** |
+
+Identity at move ties across all three arms on every row, exactly as the
+section above predicted it would — no `StepResponse` can fire before the
+move capture, so the pre-move match set is identical. It is reported here
+for completeness and, as #119 item 3 asked, it again discriminated
+nothing.
+
+**Combined A/B tally: 10 + 4 = 14/17 — unchanged from today's
+`coherentShift`, and that is the honest headline.** The lever fixes the
+600 px stream's lag AT the move (30.7 -> 1.4 px, a 96% cut) but that
+stream still fails the section-above *step rule*, which demands lag be
+halved at move AND +3 AND +5. Damp's own +3/+5 on this stream are already
+low (26.1 / 14.5) because most blocks became new identities with fresh,
+un-lagged positions, so the mean is diluted and halving it is a bar the
+one straggler cannot move alone: the floor gets +3 to 20.7 and +5 to 12.4,
+better than damp on every capture but short of half. A single re-anchored
+block is a real fix for the tracked box a reader sees drifting, and is
+still not enough to flip a mean-over-all-merges scoring rule.
+
+#### Ship rule (#119's own, distinct from the A/B step rule)
+
+| criterion | result |
+|---|---|
+| 0 step events on all 10 controls | **PASS** — 0 |
+| 600 px stream lag < 10 px within 2 captures of the move | **PASS** — 1.4 px AT the move |
+| no stream coherent wins today worse by > 0.5 px | **PASS** — worst regression 0.000 px |
+
+#### Floor sensitivity — the window is real but thin
+
+| floor | controls | pushdown-600 | ships |
+|---|---|---|---|
+| 375 px | **FAIL** — `tess-scroll` fires 2 events (its 377 px mover) | 1.4 px | no |
+| 390 px | 0 events | **1.4 px** | **yes** |
+| 400 px | 0 events | **1.4 px** | **yes** |
+| 410 px | 0 events | 30.7 px — above the 406.2 px mover, never fires | no |
+
+The window is bounded on both sides by single measurements on one seed:
+377.0 px (a control's largest scroll step) below, 406.2 px (the slab's
+sole surviving mover) above. Treat 390 as calibrated to THIS corpus's
+capture cadence, not as a universal constant — the tunable's doc comment
+says the same. A consumer capturing less often, or scrolling faster,
+needs a higher floor; leaving it `null` is always safe.
+
+### Candidate 2 — `coherentShiftReanchorMinBlocks` (batch re-anchor). DOES NOT SHIP.
+
+Same clustering, share gate dropped, only the required COUNT lowered;
+the winning cluster's median displacement is applied to its own members
+only. No magnitude axis at all — and that is exactly why it fails, in a
+pincer that closes from both sides:
+
+| count | control stepEvents (streams firing) | pushdown-600 lag move/+3/+5 | combined tally | verdict |
+|---|---|---|---|---|
+| 1 | **17** (rewrap 4, tess-scroll 2, paddle-scroll 9, mlkit-dwell 2) | 1.4 / 20.7 / 12.3 | 10/17 | FAIL — reaches the slab, breaks 4 controls |
+| 2 | **4** (rewrap 4) | 30.7 / 26.1 / 14.5 | 13/17 | FAIL — breaks a control AND misses the slab |
+| 3 | 0 | 30.7 / 26.1 / 14.5 | 14/17 | FAIL — clean, but identical to today |
+
+The starved-quorum case is starved all the way to ONE surviving mover, so
+only a count of 1 reaches it — and one mover is equally what ordinary
+scroll and OCR jitter produce on the controls. Any count above 1 leaves
+the 600 px case exactly where it was. **The count axis cannot separate the
+two populations at any value.** The tunable is kept, defaulted off and
+documented as not-recommended, because it is the cheapest way for a
+consumer whose own corpus has large slabs that DO leave several matched
+movers behind to use the same machinery.
+
+### Boundary of what this proves
+
+Everything the section above says about the corpus still applies: one
+synthetic seed (93), one repetition per stream, no variance estimate on
+any number here. Two numbers in particular are single measurements
+carrying the whole result — the 377.0 px control maximum and the 406.2 px
+slab mover that together define the floor window — and a second seed
+could move either. The 150 px and 50 px blind spots are untouched by both
+candidates (neither lever has any path to a residual inside the jitter
+allowance). Nothing here measures device timing.
+
+### Reproduce
+
+```
+dart tool/replay/replay.dart ab-report <stream>.jsonl --coherent-floor=390
+dart tool/replay/replay.dart ab-report <stream>.jsonl --coherent-reanchor=1
+```
+
+Each adds one arm to the four already reported: `agreementCoherentFloor`
+and `agreementCoherentReanchor` respectively. Omit the flag and the
+output is byte-identical to the four-arm form, so every committed
+`.ab.json` is unaffected. The tallies above were re-derived from the raw
+per-arm `stepEventsByCapture` / `meanTopLagByCapture` / `identityByCapture`
+maps of all 17 streams, not from any summary.

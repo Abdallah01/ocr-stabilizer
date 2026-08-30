@@ -1,3 +1,37 @@
+## Unreleased
+
+### Added
+- **`StabilizationEngine.coherentShiftFloorPx` (#119)** — an opt-in
+  absolute-pixel floor that closes `StepResponse.coherentShift`'s
+  large-slab blind spot. When a single-frame layout step is big enough
+  that most lines leave the viewport, too few movers survive the primary
+  spatial match for the `coherentShiftMinBlocks` / `coherentShiftMinShare`
+  quorum to see (measured: on the 600 px validation stream the move
+  capture leaves exactly ONE matched mover), so the whole capture fell
+  through to damp. A moved pair clearing this absolute floor is now
+  admitted on its own magnitude, bypassing both count gates, provided the
+  floor-qualified movers agree in direction — and only where the ordinary
+  quorum already declined, so captures the majority vote handles are
+  untouched. `null` (the default) reproduces 2.3.0 numerics bit-for-bit.
+  Evidence: the 17-stream A/B re-run at 390 px — 0 step events on all 10
+  controls, 0.000 px regression on every stream, and the 600 px stream's
+  lag at the move cut 30.7 -> 1.4 px. The floor must be calibrated to the
+  consumer's own capture cadence; a height-relative multiplier
+  provably cannot do this job (on the corpus a scroll control reaches
+  3.63x its own scale while the real slab is only 2.64x). See
+  `doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`'s
+  "closing the large-slab blind spot" section.
+- **`StabilizationEngine.coherentShiftReanchorMinBlocks` (#119)** — an
+  opt-in relaxation of the same quorum on the COUNT axis instead
+  (clustering unchanged, share gate dropped, the winning cluster
+  re-anchored by its own median). `null` (the default) reproduces 2.3.0
+  numerics bit-for-bit. Documented as **not recommended** and measured as
+  such: only a count of 1 reaches the large-slab case, and a single mover
+  is equally what ordinary scroll and OCR jitter produce, so it
+  false-fires on 4 of 10 control streams; any higher count leaves the
+  blind spot open. Kept for consumers whose own corpus has large slabs
+  that do leave several matched movers behind.
+
 ## 2.3.0 - 2026-08-29
 
 ### Changed
