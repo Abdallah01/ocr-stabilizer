@@ -10,9 +10,13 @@
   capture leaves exactly ONE matched mover), so the whole capture fell
   through to damp. A moved pair clearing this absolute floor is now
   admitted on its own magnitude, bypassing both count gates, provided the
-  floor-qualified movers agree in direction — and only where the ordinary
-  quorum already declined, so captures the majority vote handles are
-  untouched. `null` (the default) reproduces 2.3.0 numerics bit-for-bit.
+  floor-qualified movers agree in direction AND cluster within the
+  quorum's own tolerance (the largest such cluster is re-anchored by its
+  own median; a floor-qualified mover outside it stays on damp, so no
+  member is ever pushed past its own observation) — and only where the
+  ordinary quorum already declined, so captures the majority vote handles
+  are untouched. `null` (the default) reproduces 2.3.0 numerics
+  bit-for-bit.
   Evidence: the 17-stream A/B re-run at 390 px — 0 step events on all 10
   controls, 0.000 px regression on every stream, and the 600 px stream's
   lag at the move cut 30.7 -> 1.4 px. The floor must be calibrated to the

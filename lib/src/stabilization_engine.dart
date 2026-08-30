@@ -329,6 +329,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// technically the largest but still a minority of what moved is more
   /// likely several small independent shifts than one coherent layout
   /// step. Default `0.5`.
+  ///
+  /// Neither #119 opt-in fallback applies this gate — that is their point:
+  /// with [coherentShiftFloorPx] or [coherentShiftReanchorMinBlocks] set, a
+  /// minority cluster CAN be re-anchored (its own members only) where the
+  /// quorum would have damped it. Both are `null` by default, so the gate
+  /// above is the whole story for the 2.3.0 configuration.
   final double coherentShiftMinShare;
 
   /// [StepResponse.coherentShift] clustering tolerance: a moved pair
@@ -361,12 +367,17 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   ///
   /// When set, any moved pair whose drift-corrected displacement is at
   /// least this many pixels is admitted to the vote on its own magnitude,
-  /// bypassing BOTH count gates. Floor-qualified movers must still agree
-  /// in DIRECTION with each other (a slab translates its content one way;
-  /// two movers heading opposite ways are not a shift and the median of
-  /// their displacements is a translation neither made). The winning
-  /// translation is their median displacement, applied only to those
-  /// members — every other pair in the batch damps exactly as before.
+  /// bypassing BOTH count gates and the [coherentShiftMinShare] gate.
+  /// Floor-qualified movers must still agree in DIRECTION with each other
+  /// (a slab translates its content one way; two movers heading opposite
+  /// ways are not a shift and the median of their displacements is a
+  /// translation neither made) AND in MAGNITUDE: they are clustered with
+  /// the same tolerance rule as the quorum ([coherentShiftTolerance] x
+  /// block height), a lone mover being its own cluster, and only the
+  /// largest cluster is re-anchored, by its own median (PR #129 review
+  /// C1). Every other pair in the batch — including a floor-qualified
+  /// mover outside that cluster — damps exactly as before, so no member
+  /// is ever re-anchored by a translation it did not make.
   ///
   /// **Why an absolute floor and not another height-relative multiplier.**
   /// A multiple of the block's own agreement scale ([_agreementScale], 3x
@@ -1040,6 +1051,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   // their own agreement scale ("moved"), cluster the moved displacements,
   // and — if a big-enough, big-enough-a-share group agrees — return its
   // median displacement as the batch shift every member's merge applies.
+  // Where that quorum declines, the two #119 opt-in fallbacks (the
+  // absolute-pixel floor, then the batch-level re-anchor; both off by
+  // default) get a turn, each re-anchoring its own members only.
   // └──────────────────────────────────────────────────────────────────
 
   /// Detect a per-batch coherent shift among [matchResults] (a DRY,
@@ -1052,7 +1066,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// concept to detect "moved" against — documented no-op, see
   /// [StepResponse]), when fewer than [coherentShiftMinBlocks] pairs moved
   /// at all, or when the largest valid window fails either
-  /// [coherentShiftMinBlocks] or [coherentShiftMinShare].
+  /// [coherentShiftMinBlocks] or [coherentShiftMinShare] — unless one of
+  /// the #119 opt-in fallbacks ([coherentShiftFloorPx], then
+  /// [coherentShiftReanchorMinBlocks]) admits a group at one of those three
+  /// decline points. Both are `null` by default, so the plain statement
+  /// holds for the 2.3.0 configuration.
   ///
   /// **Eligible pairs** — ordinary text matches only: excludes band
   /// admissions and nested fragments (never in `matchResults` as a
@@ -1154,66 +1172,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       movedRegionDrift.add(regionDrift);
     }
 
-    // ┌─── #119: the absolute-pixel floor fallback ────────────────────
-    // Tried ONLY where the ordinary quorum below declines (all three of
-    // its `return null` sites route here instead). Ordering matters: when
-    // a real group DOES qualify, the well-validated majority vote wins
-    // untouched, so enabling the floor cannot perturb any capture the
-    // quorum already handles — the floor is reachable only on captures
-    // that were falling through to damp anyway. See
-    // [coherentShiftFloorPx]'s doc for why the discriminating axis has to
-    // be absolute pixels rather than another multiple of the block's own
-    // height.
-    ({Offset translation, Map<T, Offset> memberDrift})? floorFallback() {
-      final floor = coherentShiftFloorPx;
-      if (floor == null) return null;
-
-      final qualified = <int>[];
-      for (var i = 0; i < movedExisting.length; i++) {
-        if (Offset(movedDx[i], movedDy[i]).distance >= floor) {
-          qualified.add(i);
-        }
-      }
-      if (qualified.isEmpty) return null;
-
-      // Direction agreement. A slab translates its content ONE way; two
-      // floor-qualified movers heading opposite ways are not a shift, and
-      // their median is a translation neither of them made. Checked per
-      // axis, ignoring components small enough to be jitter rather than
-      // travel, so a pair agreeing on dy but disagreeing on a sub-pixel
-      // dx is still a group. A single member is vacuously in agreement —
-      // which is the whole point of this path, since the starved-quorum
-      // case is precisely "only one mover survived the match".
-      var sawPos = false, sawNeg = false;
-      for (final j in qualified) {
-        if (movedDy[j] > _kDirectionEpsilonPx) sawPos = true;
-        if (movedDy[j] < -_kDirectionEpsilonPx) sawNeg = true;
-      }
-      if (sawPos && sawNeg) return null;
-      sawPos = false;
-      sawNeg = false;
-      for (final j in qualified) {
-        if (movedDx[j] > _kDirectionEpsilonPx) sawPos = true;
-        if (movedDx[j] < -_kDirectionEpsilonPx) sawNeg = true;
-      }
-      if (sawPos && sawNeg) return null;
-
-      // Non-null by construction: `qualified` is non-empty (checked
-      // above), and `RobustStats.median` returns null only on an empty
-      // list — the same argument the quorum path's own force-unwraps
-      // rest on.
-      final tx = RobustStats.median([for (final j in qualified) movedDx[j]])!;
-      final ty = RobustStats.median([for (final j in qualified) movedDy[j]])!;
-      // Identity-keyed for the same reason the quorum path's map is: `T`
-      // is the CONSUMER's type and may define VALUE equality, and two
-      // members in different drift regions must each keep their own
-      // frozen snapshot.
-      final memberDrift = Map<T, Offset>.identity();
-      for (final j in qualified) {
-        memberDrift[movedExisting[j]] = movedRegionDrift[j];
-      }
-      return (translation: Offset(tx, ty), memberDrift: memberDrift);
-    }
+    // The #119 absolute-pixel floor fallback is defined below
+    // `searchWindow`, whose clustering it reuses (PR #129 review C1).
 
     // Deterministic total order (#116, finding B fix): (dy, dx,
     // existing.top, existing.left, height), original index last as an
@@ -1262,11 +1222,15 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     //
     // Parameterised on [minSize] (#119) purely so the re-anchor fallback
     // below can reuse the identical clustering at its own count — the
-    // quorum path passes [coherentShiftMinBlocks] and is unchanged.
-    List<int>? searchWindow(int minSize) {
-      for (var size = movedExisting.length; size >= minSize; size--) {
-        for (var start = 0; start + size <= order.length; start++) {
-          final window = order.sublist(start, start + size);
+    // quorum path passes [coherentShiftMinBlocks] and is unchanged. The
+    // optional [among] (PR #129 review C1) restricts the scan to a subset
+    // of `order` — the floor fallback clusters only its floor-qualified
+    // movers — and MUST already be in `order`'s sequence.
+    List<int>? searchWindow(int minSize, {List<int>? among}) {
+      final scan = among ?? order;
+      for (var size = scan.length; size >= minSize; size--) {
+        for (var start = 0; start + size <= scan.length; start++) {
+          final window = scan.sublist(start, start + size);
           final wDx = RobustStats.median([for (final j in window) movedDx[j]]);
           final wDy = RobustStats.median([for (final j in window) movedDy[j]]);
           final wHeight =
@@ -1285,6 +1249,81 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         }
       }
       return null;
+    }
+
+    // ┌─── #119: the absolute-pixel floor fallback ────────────────────
+    // Tried ONLY where the ordinary quorum below declines (all three of
+    // its `return null` sites route here instead). Ordering matters: when
+    // a real group DOES qualify, the well-validated majority vote wins
+    // untouched, so enabling the floor cannot perturb any capture the
+    // quorum already handles — the floor is reachable only on captures
+    // that were falling through to damp anyway. See
+    // [coherentShiftFloorPx]'s doc for why the discriminating axis has to
+    // be absolute pixels rather than another multiple of the block's own
+    // height.
+    ({Offset translation, Map<T, Offset> memberDrift})? floorFallback() {
+      final floor = coherentShiftFloorPx;
+      if (floor == null) return null;
+
+      final qualified = <int>{};
+      for (var i = 0; i < movedExisting.length; i++) {
+        if (Offset(movedDx[i], movedDy[i]).distance >= floor) {
+          qualified.add(i);
+        }
+      }
+      if (qualified.isEmpty) return null;
+
+      // Direction agreement. A slab translates its content ONE way; two
+      // floor-qualified movers heading opposite ways are not a shift, and
+      // their median is a translation neither of them made. Checked per
+      // axis, ignoring components small enough to be jitter rather than
+      // travel, so a pair agreeing on dy but disagreeing on a sub-pixel
+      // dx is still a group. A single member is vacuously in agreement —
+      // which is the whole point of this path, since the starved-quorum
+      // case is precisely "only one mover survived the match".
+      var sawPos = false, sawNeg = false;
+      for (final j in qualified) {
+        if (movedDy[j] > _kDirectionEpsilonPx) sawPos = true;
+        if (movedDy[j] < -_kDirectionEpsilonPx) sawNeg = true;
+      }
+      if (sawPos && sawNeg) return null;
+      sawPos = false;
+      sawNeg = false;
+      for (final j in qualified) {
+        if (movedDx[j] > _kDirectionEpsilonPx) sawPos = true;
+        if (movedDx[j] < -_kDirectionEpsilonPx) sawNeg = true;
+      }
+      if (sawPos && sawNeg) return null;
+
+      // Magnitude agreement (PR #129 review C1 / C5). Direction alone let
+      // a +35 mover be re-anchored by a +110 group median — 37.5 px PAST
+      // its own observation, worse than damp — and let a purely
+      // horizontal and a purely vertical mover "agree" and drag each other
+      // diagonally. So the floor-qualified movers are clustered with the
+      // SAME tolerance rule the quorum uses, at a minimum size of ONE (a
+      // lone mover is its own cluster — the starved-quorum case this path
+      // exists for), and only the winning cluster is re-anchored; every
+      // other qualified mover stays on damp. A size-1 window always
+      // validates (its member IS its median), so for a non-empty set the
+      // search cannot come back empty — the null check is belt and braces.
+      final group = searchWindow(1,
+          among: [for (final j in order) if (qualified.contains(j)) j]);
+      if (group == null) return null;
+
+      // Non-null by construction: `group` is non-empty, and
+      // `RobustStats.median` returns null only on an empty list — the
+      // same argument the quorum path's own force-unwraps rest on.
+      final tx = RobustStats.median([for (final j in group) movedDx[j]])!;
+      final ty = RobustStats.median([for (final j in group) movedDy[j]])!;
+      // Identity-keyed for the same reason the quorum path's map is: `T`
+      // is the CONSUMER's type and may define VALUE equality, and two
+      // members in different drift regions must each keep their own
+      // frozen snapshot.
+      final memberDrift = Map<T, Offset>.identity();
+      for (final j in group) {
+        memberDrift[movedExisting[j]] = movedRegionDrift[j];
+      }
+      return (translation: Offset(tx, ty), memberDrift: memberDrift);
     }
 
     // ┌─── #119 candidate 2: the batch-level re-anchor ────────────────

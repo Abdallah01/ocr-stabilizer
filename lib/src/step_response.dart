@@ -64,6 +64,12 @@ enum StepResponse {
   /// baseline — so a member's residual against the shift is small and its
   /// confidence stays high, while non-member pairs in the same batch merge
   /// exactly as [damp]. When no group qualifies, the whole batch is
-  /// bit-identical to [damp].
+  /// bit-identical to [damp] — in the default configuration. Two opt-in
+  /// fallbacks (#119), both `null` by default, can still re-anchor their
+  /// own members where that quorum declined:
+  /// `StabilizationEngine.coherentShiftFloorPx` (a mover clearing an
+  /// absolute-pixel floor, clustered with the same tolerance) and
+  /// `StabilizationEngine.coherentShiftReanchorMinBlocks` (the same
+  /// clustering at a lower count, share gate dropped).
   coherentShift,
 }

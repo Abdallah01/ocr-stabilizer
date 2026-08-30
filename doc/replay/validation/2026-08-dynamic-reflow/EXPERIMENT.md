@@ -482,7 +482,13 @@ height is 1.33x scale, which `paddle-scroll` clears at 10.9x.
 
 A moved pair whose drift-corrected displacement clears an absolute floor
 is admitted to the vote on its own magnitude, bypassing BOTH count gates,
-provided the floor-qualified movers agree in direction. Tried **only
+provided the floor-qualified movers agree in direction and cluster within
+the quorum's own tolerance (the largest such cluster is re-anchored by its
+own median; a floor-qualified mover outside it stays on damp — added after
+the PR #129 review, which showed the earlier median-of-all rule pushing a
++35 px mover 37.5 px past its own observation in a magnitude-mixed set;
+the 17-stream numbers below are unaffected, since no stream produces a
+multi-mover floor group). Tried **only
 where the ordinary quorum declines**, so every capture the majority vote
 already handles is untouched — which is why the regression column below
 is uniformly 0.000. Default `null` = off.

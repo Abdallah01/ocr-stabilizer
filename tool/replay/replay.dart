@@ -27,6 +27,7 @@ import 'dart:io';
 import 'src/ab_report.dart';
 import 'src/capture_stream.dart';
 import 'src/freeze_report.dart';
+import 'src/lever_args.dart';
 import 'src/live_report.dart';
 import 'src/replay_session.dart' show BucketPolicy, bucketPolicyFromArg;
 
@@ -47,35 +48,24 @@ Future<void> main(List<String> args) async {
     return;
   }
 
+  // The two #119 levers, parsed strictly (a malformed value is an error,
+  // never a silent skip — PR #129 review CONF2) and recognised wherever
+  // they sit in argv.
+  final levers = parseLeverArgs(args);
+  if (levers.error != null) {
+    stderr.writeln(levers.error);
+    exitCode = 64;
+    return;
+  }
+  final coherentFloorPx = levers.coherentFloorPx;
+  final coherentReanchorMinBlocks = levers.coherentReanchorMinBlocks;
+
   int? floor;
   Viewport? viewportOverride;
   var bucketPolicy = BucketPolicy.auto;
-  double? coherentFloorPx;
-  int? coherentReanchorMinBlocks;
   for (final a in args.skip(2)) {
     final m = RegExp(r'^--floor=(\d+)$').firstMatch(a);
     if (m != null) floor = int.parse(m.group(1)!);
-    final cf = RegExp(r'^--coherent-floor=([0-9.]+)$').firstMatch(a);
-    if (cf != null) {
-      final v = double.tryParse(cf.group(1)!);
-      if (v == null || !v.isFinite || v <= 0) {
-        stderr.writeln('--coherent-floor must be a finite number > 0 '
-            '(got: $a)');
-        exitCode = 64;
-        return;
-      }
-      coherentFloorPx = v;
-    }
-    final cr = RegExp(r'^--coherent-reanchor=(\d+)$').firstMatch(a);
-    if (cr != null) {
-      final v = int.parse(cr.group(1)!);
-      if (v < 1) {
-        stderr.writeln('--coherent-reanchor must be >= 1 (got: $a)');
-        exitCode = 64;
-        return;
-      }
-      coherentReanchorMinBlocks = v;
-    }
     if (a.startsWith('--buckets')) {
       final p = bucketPolicyFromArg(a);
       if (p == null) {
