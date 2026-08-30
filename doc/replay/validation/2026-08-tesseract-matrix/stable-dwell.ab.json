@@ -18,6 +18,14 @@
       "agreementWeighted": {
         "policy": "viewportFormula",
         "sizes": []
+      },
+      "agreementSnap": {
+        "policy": "viewportFormula",
+        "sizes": []
+      },
+      "agreementCoherent": {
+        "policy": "viewportFormula",
+        "sizes": []
       }
     }
   },
@@ -61,7 +69,49 @@
       "p90": 1.0,
       "max": 1.0
     },
-    "wellObservedPconfSaturated": 1.0
+    "wellObservedPconfSaturated": 1.0,
+    "meanTopLagByCapture": {
+      "1": null,
+      "2": 0.0,
+      "3": 0.0,
+      "4": 0.0,
+      "5": 0.19,
+      "6": 0.063,
+      "7": 0.095,
+      "8": 0.056,
+      "9": 0.14,
+      "10": 0.09,
+      "11": 0.06,
+      "12": 0.04
+    },
+    "stepEventsByCapture": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+      "6": 0,
+      "7": 0,
+      "8": 0,
+      "9": 0,
+      "10": 0,
+      "11": 0,
+      "12": 0
+    },
+    "identityByCapture": {
+      "1": 0.0,
+      "2": 0.933,
+      "3": 0.933,
+      "4": 0.933,
+      "5": 0.933,
+      "6": 0.933,
+      "7": 0.933,
+      "8": 1.0,
+      "9": 1.0,
+      "10": 0.933,
+      "11": 0.933,
+      "12": 0.933
+    }
   },
   "agreementWeighted": {
     "mergeCount": 312,
@@ -103,7 +153,217 @@
       "p90": 0.956,
       "max": 0.958
     },
-    "wellObservedPconfSaturated": 0.0
+    "wellObservedPconfSaturated": 0.0,
+    "meanTopLagByCapture": {
+      "1": null,
+      "2": 0.0,
+      "3": 0.0,
+      "4": 0.0,
+      "5": 0.25,
+      "6": 0.032,
+      "7": 0.131,
+      "8": 0.036,
+      "9": 0.216,
+      "10": 0.051,
+      "11": 0.048,
+      "12": 0.046
+    },
+    "stepEventsByCapture": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+      "6": 0,
+      "7": 0,
+      "8": 0,
+      "9": 0,
+      "10": 0,
+      "11": 0,
+      "12": 0
+    },
+    "identityByCapture": {
+      "1": 0.0,
+      "2": 0.933,
+      "3": 0.933,
+      "4": 0.933,
+      "5": 0.933,
+      "6": 0.933,
+      "7": 0.933,
+      "8": 1.0,
+      "9": 1.0,
+      "10": 0.933,
+      "11": 0.933,
+      "12": 0.933
+    }
+  },
+  "agreementSnap": {
+    "mergeCount": 312,
+    "nestedFragmentMerges": 0,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 60,
+        "mean": 0.096,
+        "p50": 0.0,
+        "p90": 0.25,
+        "max": 1.25
+      },
+      "n3-5": {
+        "count": 84,
+        "mean": 0.036,
+        "p50": 0.006,
+        "p90": 0.063,
+        "max": 0.688
+      },
+      "n6-10": {
+        "count": 140,
+        "mean": 0.021,
+        "p50": 0.005,
+        "p90": 0.047,
+        "max": 0.41
+      },
+      "n11+": {
+        "count": 28,
+        "mean": 0.011,
+        "p50": 0.005,
+        "p90": 0.027,
+        "max": 0.051
+      }
+    },
+    "wellObservedPconf": {
+      "count": 196,
+      "mean": 0.94,
+      "p50": 0.942,
+      "p90": 0.956,
+      "max": 0.958
+    },
+    "wellObservedPconfSaturated": 0.0,
+    "meanTopLagByCapture": {
+      "1": null,
+      "2": 0.0,
+      "3": 0.0,
+      "4": 0.0,
+      "5": 0.25,
+      "6": 0.032,
+      "7": 0.131,
+      "8": 0.036,
+      "9": 0.216,
+      "10": 0.051,
+      "11": 0.048,
+      "12": 0.046
+    },
+    "stepEventsByCapture": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+      "6": 0,
+      "7": 0,
+      "8": 0,
+      "9": 0,
+      "10": 0,
+      "11": 0,
+      "12": 0
+    },
+    "identityByCapture": {
+      "1": 0.0,
+      "2": 0.933,
+      "3": 0.933,
+      "4": 0.933,
+      "5": 0.933,
+      "6": 0.933,
+      "7": 0.933,
+      "8": 1.0,
+      "9": 1.0,
+      "10": 0.933,
+      "11": 0.933,
+      "12": 0.933
+    }
+  },
+  "agreementCoherent": {
+    "mergeCount": 312,
+    "nestedFragmentMerges": 0,
+    "displacementByObsN": {
+      "n1-2": {
+        "count": 60,
+        "mean": 0.096,
+        "p50": 0.0,
+        "p90": 0.25,
+        "max": 1.25
+      },
+      "n3-5": {
+        "count": 84,
+        "mean": 0.036,
+        "p50": 0.006,
+        "p90": 0.063,
+        "max": 0.688
+      },
+      "n6-10": {
+        "count": 140,
+        "mean": 0.021,
+        "p50": 0.005,
+        "p90": 0.047,
+        "max": 0.41
+      },
+      "n11+": {
+        "count": 28,
+        "mean": 0.011,
+        "p50": 0.005,
+        "p90": 0.027,
+        "max": 0.051
+      }
+    },
+    "wellObservedPconf": {
+      "count": 196,
+      "mean": 0.94,
+      "p50": 0.942,
+      "p90": 0.956,
+      "max": 0.958
+    },
+    "wellObservedPconfSaturated": 0.0,
+    "meanTopLagByCapture": {
+      "1": null,
+      "2": 0.0,
+      "3": 0.0,
+      "4": 0.0,
+      "5": 0.25,
+      "6": 0.032,
+      "7": 0.131,
+      "8": 0.036,
+      "9": 0.216,
+      "10": 0.051,
+      "11": 0.048,
+      "12": 0.046
+    },
+    "stepEventsByCapture": {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+      "6": 0,
+      "7": 0,
+      "8": 0,
+      "9": 0,
+      "10": 0,
+      "11": 0,
+      "12": 0
+    },
+    "identityByCapture": {
+      "1": 0.0,
+      "2": 0.933,
+      "3": 0.933,
+      "4": 0.933,
+      "5": 0.933,
+      "6": 0.933,
+      "7": 0.933,
+      "8": 1.0,
+      "9": 1.0,
+      "10": 0.933,
+      "11": 0.933,
+      "12": 0.933
+    }
   },
   "caveats": [
     "Arms may diverge in pairing over time: positions evolve per model, and matching is spatial+text. Compare mergeCount before reading displacement deltas.",

@@ -358,11 +358,29 @@ files were regenerated from the fixed engine; the diff is confined to
 and `agreementSnap` are byte-identical, confirming none of the other
 arms leaked drift from the fix. This pass also surfaced a pre-existing,
 unrelated gap: the 9 corpus-control `.ab.json` files outside
-`variants/` (the on-device, PaddleOCR and Tesseract streams) were never
-regenerated since the step-response fields were added, so they carry
-none of `agreementSnap`/`agreementCoherent` and only a partial `legacy`/
-`agreementWeighted` — tracked as #121, out of scope for this pass since
-none of those 9 files changed.
+`variants/` (the on-device, PaddleOCR and Tesseract streams) had not
+been regenerated since the step-response fields were added, so they
+carried none of `agreementSnap`/`agreementCoherent` and only a partial
+`legacy`/`agreementWeighted`. None of those 9 files changed in this
+pass; the gap was tracked as #121 and closed by **PR #124**, which
+regenerated all nine with each corpus' own documented `ab-report`
+invocation (default flags — `auto` bucket policy, the stream's own
+`meta.vp`/`meta.bk`).
+
+That regeneration is additive by test rather than by assertion.
+`test/replay/ab_report_committed_equivalence_test.dart` replays every
+stream and compares all EIGHT fields `_arm()` emits in
+`tool/replay/src/ab_report.dart` — `mergeCount`,
+`nestedFragmentMerges`, `displacementByObsN`, `wellObservedPconf`,
+`wellObservedPconfSaturated`, `meanTopLagByCapture`,
+`stepEventsByCapture`, `identityByCapture` — on all FOUR arms
+(`legacy`, `agreementWeighted`, `agreementSnap`, `agreementCoherent`)
+against the committed values, for 15 of the 17 streams. A missing
+field, a missing arm, or a drifted number fails that stream by name.
+Two streams are exempt: `pushdown` and `rewrap`, this entry's own
+originals, still carry the pre-step-response 5-field / 2-arm schema and
+keep the older lenient (`containsKey`-guarded) check — tracked
+separately as #125.
 
 ### Boundary of what this proves
 
