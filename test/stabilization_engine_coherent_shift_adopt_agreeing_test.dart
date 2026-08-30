@@ -210,8 +210,11 @@ void main() {
         'NOT adopted (a banner is not body text)', () {
       final on = _run(adopt: true, tallVr: true);
       expect(on.steps[_tall], isNull,
-          reason: 'agreeing and under-gate, but viewport-relative pairs '
-              'are filtered before the under-gate list is built');
+          reason: 'agreeing and under-gate, but TWO layers refuse it: the '
+              'under-gate collection filter and the merge-side '
+              'stepResponseEligible conjunction (#116 finding D). Removing '
+              'either alone keeps this green — that is the defense working; '
+              'removing both goes red (mutation-verified)');
       expect(on.tops[_tall], lessThan(949.5),
           reason: 'merged as damp — short of the full step');
       for (final t in _short) {
@@ -226,8 +229,8 @@ void main() {
         'child that made the same step under its gate is NOT adopted', () {
       final on = _run(adopt: true, tallCarousel: true);
       expect(on.steps[_tall], isNull,
-          reason: 'carousel children are filtered before the under-gate '
-              'list is built');
+          reason: 'carousel children are refused by the same two layers as '
+              'the viewport-relative case above');
       expect(on.tops[_tall], lessThan(949.5));
       for (final t in _short) {
         expect(on.steps[t], StepResponse.coherentShift);
