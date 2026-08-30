@@ -11,7 +11,12 @@
 // --buckets=auto|formula|median (2.2.0, #113) picks the bucket policy —
 // `auto` (default) applies the stream's `meta.bk` where present, `formula`
 // is the 2.1.0 viewport formula only, `median` emulates the reference
-// consumer's 2× median block height rule.
+// consumer's 2× median block height rule; --coherent-floor=N (#119,
+// ab-report only) adds a fifth `agreementCoherentFloor` arm —
+// `StepResponse.coherentShift` with the absolute-pixel floor enabled at
+// N px; --coherent-reanchor=N (#119, ab-report only) likewise adds an
+// `agreementCoherentReanchor` arm with the batch-level re-anchor enabled
+// at cluster size N. Both omitted by default (no extra arms).
 //
 // Output is a single JSON document on stdout (pipe to `jq`/a file).
 // Schema contract: doc/replay/capture_schema.md.
@@ -22,6 +27,7 @@ import 'dart:io';
 import 'src/ab_report.dart';
 import 'src/capture_stream.dart';
 import 'src/freeze_report.dart';
+import 'src/lever_args.dart';
 import 'src/live_report.dart';
 import 'src/replay_session.dart' show BucketPolicy, bucketPolicyFromArg;
 
@@ -41,6 +47,18 @@ Future<void> main(List<String> args) async {
     exitCode = 66;
     return;
   }
+
+  // The two #119 levers, parsed strictly (a malformed value is an error,
+  // never a silent skip — PR #129 review CONF2) and recognised wherever
+  // they sit in argv.
+  final levers = parseLeverArgs(args);
+  if (levers.error != null) {
+    stderr.writeln(levers.error);
+    exitCode = 64;
+    return;
+  }
+  final coherentFloorPx = levers.coherentFloorPx;
+  final coherentReanchorMinBlocks = levers.coherentReanchorMinBlocks;
 
   int? floor;
   Viewport? viewportOverride;
@@ -98,7 +116,11 @@ Future<void> main(List<String> args) async {
           viewport: viewport,
           bucketPolicy: bucketPolicy);
     case 'ab-report':
-      report = abReport(stream, viewport: viewport, bucketPolicy: bucketPolicy);
+      report = abReport(stream,
+          viewport: viewport,
+          bucketPolicy: bucketPolicy,
+          coherentShiftFloorPx: coherentFloorPx,
+          coherentShiftReanchorMinBlocks: coherentReanchorMinBlocks);
     case 'live-report':
       report = liveReport(stream);
     default:

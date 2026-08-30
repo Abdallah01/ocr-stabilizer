@@ -18,10 +18,21 @@ import 'stats.dart';
 /// produced its numbers (null = the engine's default buckets). Recording
 /// the parameter alone printed null for a replay that ran on the header
 /// viewport (PR #111 review).
+/// [coherentShiftFloorPx] (#119): when set, adds a fifth arm,
+/// `agreementCoherentFloor` — `StepResponse.coherentShift` with the
+/// absolute-pixel floor enabled at this many pixels. `null` (the default)
+/// omits the arm entirely, so every committed `.ab.json` and every
+/// existing arm is unaffected by this parameter's mere existence.
+///
+/// [coherentShiftReanchorMinBlocks] (#119): same contract, adding the arm
+/// `agreementCoherentReanchor` — `StepResponse.coherentShift` with the
+/// batch-level re-anchor enabled at this cluster size.
 Map<String, Object?> abReport(
   CaptureStream stream, {
   Viewport? viewport,
   BucketPolicy bucketPolicy = BucketPolicy.auto,
+  double? coherentShiftFloorPx,
+  int? coherentShiftReanchorMinBlocks,
 }) {
   final effective = viewport ?? stream.viewport;
   final legacy = replay(stream,
@@ -56,6 +67,28 @@ Map<String, Object?> abReport(
       viewport: effective,
       useStreamViewport: false,
       bucketPolicy: bucketPolicy);
+  // #119: the absolute-pixel floor arm, only computed when a floor is
+  // passed (see this function's doc).
+  final agreementCoherentFloor = coherentShiftFloorPx == null
+      ? null
+      : replay(stream,
+          model: PositionMergeModel.agreementWeighted,
+          stepResponse: StepResponse.coherentShift,
+          coherentShiftFloorPx: coherentShiftFloorPx,
+          viewport: effective,
+          useStreamViewport: false,
+          bucketPolicy: bucketPolicy);
+  // #119: the batch-level re-anchor arm, only computed when a cluster
+  // size is passed (see this function's doc).
+  final agreementCoherentReanchor = coherentShiftReanchorMinBlocks == null
+      ? null
+      : replay(stream,
+          model: PositionMergeModel.agreementWeighted,
+          stepResponse: StepResponse.coherentShift,
+          coherentShiftReanchorMinBlocks: coherentShiftReanchorMinBlocks,
+          viewport: effective,
+          useStreamViewport: false,
+          bucketPolicy: bucketPolicy);
 
   return {
     'mode': 'ab-report',
@@ -74,12 +107,24 @@ Map<String, Object?> abReport(
         'agreementWeighted': bucketsJson(agreement),
         'agreementSnap': bucketsJson(agreementSnap),
         'agreementCoherent': bucketsJson(agreementCoherent),
+        if (agreementCoherentFloor != null)
+          'agreementCoherentFloor': bucketsJson(agreementCoherentFloor),
+        if (agreementCoherentReanchor != null)
+          'agreementCoherentReanchor': bucketsJson(agreementCoherentReanchor),
       },
+      if (agreementCoherentFloor != null)
+        'coherentShiftFloorPx': coherentShiftFloorPx,
+      if (agreementCoherentReanchor != null)
+        'coherentShiftReanchorMinBlocks': coherentShiftReanchorMinBlocks,
     },
     'legacy': _arm(legacy, stream),
     'agreementWeighted': _arm(agreement, stream),
     'agreementSnap': _arm(agreementSnap, stream),
     'agreementCoherent': _arm(agreementCoherent, stream),
+    if (agreementCoherentFloor != null)
+      'agreementCoherentFloor': _arm(agreementCoherentFloor, stream),
+    if (agreementCoherentReanchor != null)
+      'agreementCoherentReanchor': _arm(agreementCoherentReanchor, stream),
     'caveats': [
       'Arms may diverge in pairing over time: positions evolve per model, '
           'and matching is spatial+text. Compare mergeCount before reading '

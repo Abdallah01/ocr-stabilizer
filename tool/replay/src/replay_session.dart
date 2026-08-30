@@ -273,11 +273,21 @@ BucketPolicy? bucketPolicyFromArg(String arg) {
 ///   explicitly for the same reason; its `agreementSnap` and
 ///   `agreementCoherent` arms are the ones that pass `snap` /
 ///   `coherentShift`.
+/// - [coherentShiftFloorPx] (#119) defaults to `null` (off) here, same
+///   precedent as [stepResponse] above — `ab_report.dart` threads a
+///   non-null value only into its optional `agreementCoherentFloor` arm,
+///   so every existing arm's numerics are unaffected by this parameter's
+///   mere existence.
+/// - [coherentShiftReanchorMinBlocks] (#119) — same contract as the floor
+///   above: `null` (off) here, threaded only into `ab_report.dart`'s
+///   optional `agreementCoherentReanchor` arm.
 ReplayResult replay(
   CaptureStream stream, {
   BandFallbackConfig band = const BandFallbackConfig(),
   PositionMergeModel model = PositionMergeModel.legacy,
   StepResponse stepResponse = StepResponse.damp,
+  double? coherentShiftFloorPx,
+  int? coherentShiftReanchorMinBlocks,
   Viewport? viewport,
   bool useStreamViewport = true,
   BucketPolicy bucketPolicy = BucketPolicy.auto,
@@ -297,6 +307,8 @@ ReplayResult replay(
     bandFallback: band,
     positionMergeModel: model,
     stepResponse: stepResponse,
+    coherentShiftFloorPx: coherentShiftFloorPx,
+    coherentShiftReanchorMinBlocks: coherentShiftReanchorMinBlocks,
     merger: (existing, fresh, m) {
       final merged = existing.applyMerge(m);
       final e = existing.absoluteRect.raw.center;
