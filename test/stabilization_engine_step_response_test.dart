@@ -40,6 +40,7 @@ _Rig _engine({
   double coherentShiftMinShare = 0.5,
   double coherentShiftTolerance = 0.5,
   double? coherentShiftFloorPx,
+  int? coherentShiftReanchorMinBlocks,
 }) {
   final log = <MergeResult>[];
   final engine = StabilizationEngine<_Block, void>(
@@ -55,6 +56,7 @@ _Rig _engine({
     coherentShiftMinShare: coherentShiftMinShare,
     coherentShiftTolerance: coherentShiftTolerance,
     coherentShiftFloorPx: coherentShiftFloorPx,
+    coherentShiftReanchorMinBlocks: coherentShiftReanchorMinBlocks,
   );
   return (engine: engine, log: log);
 }
@@ -113,6 +115,7 @@ void main() {
       double coherentShiftMinShare = 0.5,
       double coherentShiftTolerance = 0.5,
       double? coherentShiftFloorPx,
+      int? coherentShiftReanchorMinBlocks,
     }) {
       return StabilizationEngine<_Block, void>(
         merger: (existing, fresh, merge) => existing.applyMerge(merge),
@@ -121,6 +124,7 @@ void main() {
         coherentShiftMinShare: coherentShiftMinShare,
         coherentShiftTolerance: coherentShiftTolerance,
         coherentShiftFloorPx: coherentShiftFloorPx,
+        coherentShiftReanchorMinBlocks: coherentShiftReanchorMinBlocks,
       );
     }
 
@@ -198,6 +202,33 @@ void main() {
       );
       expect(engine.coherentShiftFloorPx, isNull,
           reason: 'DEFAULT-OFF PIN: #119\'s absolute-pixel floor is opt-in; '
+              'shipping it enabled would change every consumer\'s numerics '
+              'without them asking');
+    });
+
+    // #119 candidate 2: an integer COUNT, so the hazard is not NaN but a
+    // value < 1 — which would make its own window search accept an empty
+    // group, the same unreachable-vs-lenient failure class
+    // `coherentShiftMinBlocks` guards against.
+    test('coherentShiftReanchorMinBlocks allows null (disabled) but rejects '
+        '< 1 when set', () {
+      expect(
+          () => build(coherentShiftReanchorMinBlocks: null), returnsNormally);
+      expect(() => build(coherentShiftReanchorMinBlocks: 0),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftReanchorMinBlocks: -2),
+          throwsA(isA<ArgumentError>()));
+      expect(() => build(coherentShiftReanchorMinBlocks: 1), returnsNormally);
+    });
+
+    // MUTATION-VERIFY TARGET (#119): as with the floor above, the shipped
+    // default must be OFF.
+    test('coherentShiftReanchorMinBlocks defaults to null (OFF)', () {
+      final engine = StabilizationEngine<_Block, void>(
+        merger: (existing, fresh, merge) => existing.applyMerge(merge),
+      );
+      expect(engine.coherentShiftReanchorMinBlocks, isNull,
+          reason: 'DEFAULT-OFF PIN: #119\'s batch-level re-anchor is opt-in; '
               'shipping it enabled would change every consumer\'s numerics '
               'without them asking');
     });
@@ -1128,6 +1159,144 @@ void main() {
                 '— no coherent shift exists, so the batch stays damp');
       }
       expect(floored.log.every((m) => m.stepResponseApplied == null), isTrue);
+    });
+  });
+
+  // ===========================================================================
+  // (n)/(o) #119 candidate 2 — the BATCH-LEVEL RE-ANCHOR
+  // ===========================================================================
+  // The other axis on which the starved quorum could be relaxed: keep the
+  // tolerance clustering exactly as it is, drop the SHARE gate entirely,
+  // and lower only the count required to act — then re-anchor the winning
+  // cluster's members alone (never the whole batch) by their median
+  // residual. `coherentShiftReanchorMinBlocks` (null = OFF, the default) is
+  // that count. Unlike the floor, this lever has no magnitude axis at all:
+  // it acts on agreement and quantity only.
+  group('(n) coherentShift + batch re-anchor (#119): a sub-quorum cluster '
+      'acts when the re-anchor count admits it', () {
+    test('2 consistent movers among 5 with coherentShiftReanchorMinBlocks=2 '
+        're-anchor; the SAME batch stays damp-identical under the 2.3.0 '
+        'default (re-anchor off)', () {
+      final reanchor = _engine(
+        stepResponse: StepResponse.coherentShift,
+        coherentShiftReanchorMinBlocks: 2,
+      );
+      final today = _engine(stepResponse: StepResponse.coherentShift);
+      final damp = _engine(stepResponse: StepResponse.damp);
+
+      _Block mover(double top, String text) => _at(top, text: text);
+      List<_Block> batch1() => [
+            mover(50, 'one block text'),
+            mover(600, 'two block text'),
+            mover(1100, 'three block text'),
+            mover(1600, 'four block text'),
+            mover(2100, 'five block text'),
+          ];
+      // 2 movers of +190 among 5: below coherentShiftMinBlocks(3) and at a
+      // share of 1.0 among MOVERS (the share gate is over movers, not the
+      // batch) — what actually blocks them today is the count.
+      List<_Block> batch2() => [
+            mover(240, 'one block text'), // +190
+            mover(790, 'two block text'), // +190
+            mover(1100, 'three block text'), // stays
+            mover(1600, 'four block text'), // stays
+            mover(2100, 'five block text'), // stays
+          ];
+
+      for (final rig in [reanchor, today, damp]) {
+        rig.engine.stabilize(batch1());
+      }
+      final reResult = reanchor.engine.stabilize(batch2()).stableBlocks;
+      final todayResult = today.engine.stabilize(batch2()).stableBlocks;
+      final dampResult = damp.engine.stabilize(batch2()).stableBlocks;
+
+      _Block byText(List<_Block> blocks, String text) =>
+          blocks.firstWhere((b) => b.originalText == text);
+
+      for (final text in ['one block text', 'two block text']) {
+        final expectedTop = byText(batch1(), text).absoluteRect.raw.top + 190;
+        final r = byText(reResult, text);
+        expect(r.observationCount, 2,
+            reason: '$text: sanity — must have actually MERGED, or the '
+                'exact-landing assertion below is vacuous');
+        expect(r.absoluteRect.raw.top, closeTo(expectedTop, 0.01),
+            reason: '$text: the cluster median (+190) is applied as the '
+                'members\' baseline translation, so the merge lands on the '
+                'corrected fresh position');
+        expect(
+            reanchor.log
+                .firstWhere((m) => m.winningOriginalText == text)
+                .stepResponseApplied,
+            StepResponse.coherentShift);
+
+        final t = byText(todayResult, text);
+        final d = byText(dampResult, text);
+        expect(t.absoluteRect.raw.top, closeTo(d.absoluteRect.raw.top, 1e-9),
+            reason: '$text: DEFAULT-OFF PIN — with no re-anchor count '
+                'configured, 2 movers never clear coherentShiftMinBlocks(3) '
+                'and the batch stays bit-identical to damp');
+      }
+      expect(today.log.every((m) => m.stepResponseApplied == null), isTrue);
+
+      // Members only — the rest of the batch keeps damping.
+      for (final text in [
+        'three block text',
+        'four block text',
+        'five block text',
+      ]) {
+        final r = byText(reResult, text);
+        final d = byText(dampResult, text);
+        expect(r.absoluteRect.raw.top, closeTo(d.absoluteRect.raw.top, 1e-9),
+            reason: '$text: a non-member must be left on damp, not dragged '
+                'by a cluster it is not in');
+      }
+    });
+  });
+
+  group('(o) coherentShift + batch re-anchor (#119): control — a cluster '
+      'below the re-anchor count never fires', () {
+    test('2 consistent movers with coherentShiftReanchorMinBlocks=3 stay '
+        'damp-identical', () {
+      final reanchor = _engine(
+        stepResponse: StepResponse.coherentShift,
+        coherentShiftReanchorMinBlocks: 3,
+      );
+      final damp = _engine(stepResponse: StepResponse.damp);
+
+      _Block mover(double top, String text) => _at(top, text: text);
+      List<_Block> batch1() => [
+            mover(50, 'one block text'),
+            mover(600, 'two block text'),
+            mover(1100, 'three block text'),
+            mover(1600, 'four block text'),
+            mover(2100, 'five block text'),
+          ];
+      List<_Block> batch2() => [
+            mover(240, 'one block text'), // +190
+            mover(790, 'two block text'), // +190
+            mover(1100, 'three block text'), // stays
+            mover(1600, 'four block text'), // stays
+            mover(2100, 'five block text'), // stays
+          ];
+
+      reanchor.engine.stabilize(batch1());
+      damp.engine.stabilize(batch1());
+      final reResult = reanchor.engine.stabilize(batch2()).stableBlocks;
+      final dampResult = damp.engine.stabilize(batch2()).stableBlocks;
+
+      for (final c in reResult) {
+        expect(c.observationCount, 2,
+            reason: '${c.originalText}: sanity — must have actually merged, '
+                'or "no fire" below would be vacuous');
+      }
+      for (final c in reResult) {
+        final d =
+            dampResult.firstWhere((b) => b.originalText == c.originalText);
+        expect(c.absoluteRect.raw.top, closeTo(d.absoluteRect.raw.top, 1e-9),
+            reason: '${c.originalText}: the cluster is size 2, below the '
+                'configured re-anchor count of 3 — it must not fire');
+      }
+      expect(reanchor.log.every((m) => m.stepResponseApplied == null), isTrue);
     });
   });
 }

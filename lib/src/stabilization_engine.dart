@@ -233,6 +233,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     this.coherentShiftMinShare = 0.5,
     this.coherentShiftTolerance = 0.5,
     this.coherentShiftFloorPx,
+    this.coherentShiftReanchorMinBlocks,
   })  : _merger = merger,
         driftTracker =
             driftTracker ?? DriftTracker(submapMembership: submapMembership),
@@ -252,6 +253,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       coherentShiftMinShare: coherentShiftMinShare,
       coherentShiftTolerance: coherentShiftTolerance,
       coherentShiftFloorPx: coherentShiftFloorPx,
+      coherentShiftReanchorMinBlocks: coherentShiftReanchorMinBlocks,
     );
   }
 
@@ -384,6 +386,30 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// slab worth tracking. A consumer that captures less often, or scrolls
   /// faster, needs a higher floor. Leaving it `null` is always safe.
   final double? coherentShiftFloorPx;
+
+  /// #119 — relax [StepResponse.coherentShift]'s quorum on the COUNT axis
+  /// instead of the magnitude one. `null` (the default) disables it,
+  /// reproducing 2.3.0 behaviour bit-for-bit.
+  ///
+  /// When set, and the ordinary quorum has declined, the same tolerance
+  /// clustering runs again at this (lower) minimum size with the
+  /// [coherentShiftMinShare] gate dropped entirely; the winning cluster's
+  /// median displacement is applied to ITS OWN MEMBERS ONLY, leaving every
+  /// other pair in the batch on [StepResponse.damp].
+  ///
+  /// Unlike [coherentShiftFloorPx] this lever has no magnitude axis at
+  /// all — it acts on agreement and quantity. That is also its measured
+  /// weakness on the validation corpus, and the reason it is documented
+  /// rather than recommended: the starved-quorum case is starved all the
+  /// way down to ONE surviving mover, so only a value of 1 reaches it —
+  /// and a single mover is equally what ordinary scroll and OCR jitter
+  /// produce on the control streams, which then false-fire. Any value
+  /// above 1 leaves the large-slab case exactly where it was. The count
+  /// axis cannot separate the two populations; see
+  /// [coherentShiftFloorPx], which can. Prefer it, and reach for this
+  /// only where a consumer's own corpus shows large slabs that reliably
+  /// leave several matched movers behind.
+  final int? coherentShiftReanchorMinBlocks;
 
   /// Lerp weight toward the fresh (drift-corrected) observation.
   double _positionMergeWeight(T fresh, T existing) {
@@ -540,6 +566,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     required double coherentShiftMinShare,
     required double coherentShiftTolerance,
     required double? coherentShiftFloorPx,
+    required int? coherentShiftReanchorMinBlocks,
   }) {
     if (!snapThresholdMultiplier.isFinite || snapThresholdMultiplier <= 0.0) {
       throw ArgumentError.value(
@@ -581,6 +608,17 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         coherentShiftFloorPx,
         'coherentShiftFloorPx',
         'must be null (disabled) or a finite double > 0',
+      );
+    }
+    // #119: an integer COUNT, so the hazard is not NaN but a value < 1 —
+    // which would let its own window search accept an empty group, the
+    // same unreachable-vs-lenient class `coherentShiftMinBlocks` guards.
+    if (coherentShiftReanchorMinBlocks != null &&
+        coherentShiftReanchorMinBlocks < 1) {
+      throw ArgumentError.value(
+        coherentShiftReanchorMinBlocks,
+        'coherentShiftReanchorMinBlocks',
+        'must be null (disabled) or >= 1',
       );
     }
   }
@@ -1177,8 +1215,6 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       return (translation: Offset(tx, ty), memberDrift: memberDrift);
     }
 
-    if (movedExisting.length < coherentShiftMinBlocks) return floorFallback();
-
     // Deterministic total order (#116, finding B fix): (dy, dx,
     // existing.top, existing.left, height), original index last as an
     // always-harmless final tiebreak. The OLD algorithm sorted by dy
@@ -1214,44 +1250,84 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       });
 
     // Find the LARGEST contiguous (in the deterministic order above)
-    // window whose members all sit within `coherentShiftTolerance x
-    // min(member's own height, the window's OWN median height)` of the
-    // window's OWN median displacement — validated against the window's
-    // FINAL membership, never an incremental running state a scan order
-    // could bias (the old bug). Search sizes largest-first so the first
-    // valid window found is the largest; ties within a size break toward
-    // the leftmost (smallest start index) window in the deterministic
-    // order, so the search is fully reproducible.
-    List<int>? bestGroup;
-    for (var size = movedExisting.length;
-        bestGroup == null && size >= coherentShiftMinBlocks;
-        size--) {
-      for (var start = 0; start + size <= order.length; start++) {
-        final window = order.sublist(start, start + size);
-        final wDx = RobustStats.median([for (final j in window) movedDx[j]]);
-        final wDy = RobustStats.median([for (final j in window) movedDy[j]]);
-        final wHeight =
-            RobustStats.median([for (final j in window) movedHeight[j]]);
-        // Only reachable if `window` were empty — `size` never goes
-        // below `coherentShiftMinBlocks`, which the constructor already
-        // enforces to be >= 1 (finding E: explicit non-null handling
-        // instead of a force-unwrap that would crash on this case).
-        if (wDx == null || wDy == null || wHeight == null) continue;
-        final valid = window.every((j) {
-          final tol = coherentShiftTolerance * min(movedHeight[j], wHeight);
-          final diff = Offset(movedDx[j] - wDx, movedDy[j] - wDy).distance;
-          return diff <= tol;
-        });
-        if (valid) {
-          bestGroup = window;
-          break;
+    // window of at least [minSize] whose members all sit within
+    // `coherentShiftTolerance x min(member's own height, the window's OWN
+    // median height)` of the window's OWN median displacement — validated
+    // against the window's FINAL membership, never an incremental running
+    // state a scan order could bias (the old bug). Search sizes
+    // largest-first so the first valid window found is the largest; ties
+    // within a size break toward the leftmost (smallest start index)
+    // window in the deterministic order, so the search is fully
+    // reproducible.
+    //
+    // Parameterised on [minSize] (#119) purely so the re-anchor fallback
+    // below can reuse the identical clustering at its own count — the
+    // quorum path passes [coherentShiftMinBlocks] and is unchanged.
+    List<int>? searchWindow(int minSize) {
+      for (var size = movedExisting.length; size >= minSize; size--) {
+        for (var start = 0; start + size <= order.length; start++) {
+          final window = order.sublist(start, start + size);
+          final wDx = RobustStats.median([for (final j in window) movedDx[j]]);
+          final wDy = RobustStats.median([for (final j in window) movedDy[j]]);
+          final wHeight =
+              RobustStats.median([for (final j in window) movedHeight[j]]);
+          // Only reachable if `window` were empty — `size` never goes
+          // below `minSize`, which the constructor already enforces to be
+          // >= 1 for both callers (finding E: explicit non-null handling
+          // instead of a force-unwrap that would crash on this case).
+          if (wDx == null || wDy == null || wHeight == null) continue;
+          final valid = window.every((j) {
+            final tol = coherentShiftTolerance * min(movedHeight[j], wHeight);
+            final diff = Offset(movedDx[j] - wDx, movedDy[j] - wDy).distance;
+            return diff <= tol;
+          });
+          if (valid) return window;
         }
       }
+      return null;
     }
 
-    if (bestGroup == null) return floorFallback();
+    // ┌─── #119 candidate 2: the batch-level re-anchor ────────────────
+    // The other axis the starved quorum could be relaxed on: keep the
+    // tolerance clustering exactly as it is, drop the SHARE gate outright,
+    // and lower only the COUNT required to act — then apply the winning
+    // cluster's median displacement to its own members alone, leaving
+    // every other pair in the batch on damp. No magnitude axis at all,
+    // which is precisely what distinguishes it from
+    // [coherentShiftFloorPx]. Tried after the floor, so a consumer that
+    // sets both gets the magnitude-gated answer first.
+    ({Offset translation, Map<T, Offset> memberDrift})? reanchorFallback() {
+      final minN = coherentShiftReanchorMinBlocks;
+      if (minN == null) return null;
+      final group = searchWindow(minN);
+      if (group == null) return null;
+      // Non-null by construction, same argument as the quorum path's own
+      // force-unwraps: `group` is a non-empty window (`minN >= 1` is
+      // enforced at construction) and `RobustStats.median` returns null
+      // only on an empty list.
+      final tx = RobustStats.median([for (final j in group) movedDx[j]])!;
+      final ty = RobustStats.median([for (final j in group) movedDy[j]])!;
+      final memberDrift = Map<T, Offset>.identity();
+      for (final j in group) {
+        memberDrift[movedExisting[j]] = movedRegionDrift[j];
+      }
+      return (translation: Offset(tx, ty), memberDrift: memberDrift);
+    }
+
+    // Too few movers for the quorum to have anything to cluster. Kept
+    // here (rather than before the deterministic ordering above, where it
+    // sat pre-#119) only so both fallbacks are already in scope; the
+    // ordering computation it now runs after is pure, so the quorum path's
+    // behaviour is unchanged.
+    if (movedExisting.length < coherentShiftMinBlocks) {
+      return floorFallback() ?? reanchorFallback();
+    }
+
+    final bestGroup = searchWindow(coherentShiftMinBlocks);
+
+    if (bestGroup == null) return floorFallback() ?? reanchorFallback();
     if (bestGroup.length / movedExisting.length < coherentShiftMinShare) {
-      return floorFallback();
+      return floorFallback() ?? reanchorFallback();
     }
 
     // #116 finding E: these two force-unwraps are safe by construction,

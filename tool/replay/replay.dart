@@ -14,7 +14,9 @@
 // consumer's 2× median block height rule; --coherent-floor=N (#119,
 // ab-report only) adds a fifth `agreementCoherentFloor` arm —
 // `StepResponse.coherentShift` with the absolute-pixel floor enabled at
-// N px. Omitted by default (no fifth arm).
+// N px; --coherent-reanchor=N (#119, ab-report only) likewise adds an
+// `agreementCoherentReanchor` arm with the batch-level re-anchor enabled
+// at cluster size N. Both omitted by default (no extra arms).
 //
 // Output is a single JSON document on stdout (pipe to `jq`/a file).
 // Schema contract: doc/replay/capture_schema.md.
@@ -49,6 +51,7 @@ Future<void> main(List<String> args) async {
   Viewport? viewportOverride;
   var bucketPolicy = BucketPolicy.auto;
   double? coherentFloorPx;
+  int? coherentReanchorMinBlocks;
   for (final a in args.skip(2)) {
     final m = RegExp(r'^--floor=(\d+)$').firstMatch(a);
     if (m != null) floor = int.parse(m.group(1)!);
@@ -62,6 +65,16 @@ Future<void> main(List<String> args) async {
         return;
       }
       coherentFloorPx = v;
+    }
+    final cr = RegExp(r'^--coherent-reanchor=(\d+)$').firstMatch(a);
+    if (cr != null) {
+      final v = int.parse(cr.group(1)!);
+      if (v < 1) {
+        stderr.writeln('--coherent-reanchor must be >= 1 (got: $a)');
+        exitCode = 64;
+        return;
+      }
+      coherentReanchorMinBlocks = v;
     }
     if (a.startsWith('--buckets')) {
       final p = bucketPolicyFromArg(a);
@@ -116,7 +129,8 @@ Future<void> main(List<String> args) async {
       report = abReport(stream,
           viewport: viewport,
           bucketPolicy: bucketPolicy,
-          coherentShiftFloorPx: coherentFloorPx);
+          coherentShiftFloorPx: coherentFloorPx,
+          coherentShiftReanchorMinBlocks: coherentReanchorMinBlocks);
     case 'live-report':
       report = liveReport(stream);
     default:
