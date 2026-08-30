@@ -14,10 +14,16 @@
 // #122 re-dumped both committed corpora (the ML Kit hero dwell stream and
 // the Tesseract twin's jitter-dwell stream) under both values and found
 // byte-identical output on each — `coherentShift` never fires on either
-// control stream, so the pin was removed. ab_report.dart's own
-// `agreement` arm still pins `StepResponse.damp` outright (its committed
-// `.ab.json` baselines depend on it) — this tool no longer claims parity
-// with that pin, only with its positionMergeModel choice.
+// control stream, so the pin was removed. Neither half of that is a
+// one-time hand measurement: `test/demo_gif_provenance_test.dart` rebuilds
+// this construction for both corpora and asserts the two dumps are
+// byte-identical AND that the step response fired zero times, so a future
+// change that makes `coherentShift` fire on either stream goes red here
+// rather than silently invalidating the README captions.
+// ab_report.dart's own `agreement` arm still pins `StepResponse.damp`
+// outright (its committed `.ab.json` baselines depend on it) — this tool
+// no longer claims parity with that pin, only with its positionMergeModel
+// choice.
 //
 // Usage: dart tool/replay/dump_frames.dart <capture.jsonl> <out.json>
 //            [retention] [--viewport=WxH] [--buckets=auto|formula|median]

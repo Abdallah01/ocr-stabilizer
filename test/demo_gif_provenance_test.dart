@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';
@@ -17,6 +18,143 @@ import '../tool/replay/src/replay_session.dart';
 // really damps it, in the exact page region the GIF shows. If the corpus
 // is swapped, the default model changes, or stabilization stops damping
 // this stream, the caption is false and this test goes red.
+//
+// #122 added a second claim to both captions: the committed frames were
+// rendered under the pre-2.3.0 `StepResponse.damp`, and re-dumping the
+// same corpus under the current default is byte-identical, so the
+// captions' "defaults" wording survives without a re-render. That
+// comparison was a one-time manual dump diff; [dumpDemoFrames] re-runs it
+// here on every test run, for BOTH corpora, so neither the equality nor
+// the "coherentShift never fires on this control stream" reason for it
+// stays a prose claim.
+
+/// Replays [stream] through `tool/replay/dump_frames.dart`'s construction —
+/// the tool that renders both README demo GIFs — and returns the frame dump
+/// it would write, plus every step response the engine actually applied.
+///
+/// Each capture is returned JSON-encoded, so comparing two dumps is
+/// literally the captions' "byte-identical frames and counts" claim, over
+/// the same three per-capture sets `dump_frames.dart` writes (`raw` /
+/// `stable` / `tracked`). One string per capture rather than one for the
+/// whole dump so a mismatch reports capture indices instead of printing
+/// two 50 KB blobs.
+///
+/// [retention] is that corpus's documented render value (`missedFrameRetention`
+/// — see each corpus entry's dump command). [stepResponse] left null
+/// constructs the engine exactly as `dump_frames.dart` does since #122:
+/// unset, so it follows `StabilizationEngine`'s own default; the returned
+/// `engine` is what each GIF's canary reads that default off.
+({
+  StabilizationEngine<ReplayBlock, Object> engine,
+  List<String> frames,
+  List<StepResponse> applied,
+}) dumpDemoFrames(
+  CaptureStream stream, {
+  required int retention,
+  StepResponse? stepResponse,
+}) {
+  final applied = <StepResponse>[];
+  ReplayBlock merge(ReplayBlock existing, ReplayBlock fresh, MergeResult m) {
+    final s = m.stepResponseApplied;
+    if (s != null) applied.add(s);
+    return existing.applyMerge(m);
+  }
+
+  // Two ctor calls, not one with a nullable argument: "left unset" is the
+  // thing under test on the default arm — passing a resolved value would
+  // read the default here instead of in the engine.
+  final engine = stepResponse == null
+      ? StabilizationEngine<ReplayBlock, Object>(
+          positionMergeModel: PositionMergeModel.agreementWeighted,
+          missedFrameRetention: retention,
+          merger: merge,
+        )
+      : StabilizationEngine<ReplayBlock, Object>(
+          positionMergeModel: PositionMergeModel.agreementWeighted,
+          missedFrameRetention: retention,
+          stepResponse: stepResponse,
+          merger: merge,
+        );
+  final viewport = stream.viewport;
+  if (viewport != null) {
+    engine.updateViewport(
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height,
+    );
+  }
+  // The same applier and default policy dump_frames.dart runs, so this
+  // dump cannot drift from the committed one.
+  final buckets = BucketPolicyApplier(engine, BucketPolicy.auto);
+  final frames = <String>[];
+  for (final batch in stream.batches) {
+    buckets.beforeBatch(batch);
+    final result = engine.stabilize(batch.blocks);
+    Map<String, Object> enc(ReplayBlock b) => {
+          'rect': [
+            b.absoluteRect.raw.left,
+            b.absoluteRect.raw.top,
+            b.absoluteRect.raw.right,
+            b.absoluteRect.raw.bottom,
+          ],
+          'text': b.originalText,
+          'obs': b.observationCount,
+        };
+    frames.add(jsonEncode({
+      'cap': batch.captureId,
+      'raw': [for (final b in batch.blocks) enc(b)],
+      'stable': [for (final b in result.stableBlocks) enc(b)],
+      'tracked': [for (final b in engine.spatialIndex.allBlocks) enc(b)],
+    }));
+  }
+  return (engine: engine, frames: frames, applied: applied);
+}
+
+/// Asserts the #122 provenance claim for one demo corpus: the engine's
+/// default step response is still the one [expectedDefault] names, and
+/// dumping [stream] under it is byte-identical to dumping it under the
+/// `damp` the committed GIF was rendered with — because the step response
+/// never fires on this control stream.
+void expectDefaultStepResponseChangesNothing(
+  CaptureStream stream, {
+  required int retention,
+  required StepResponse expectedDefault,
+  required String gif,
+}) {
+  final defaulted = dumpDemoFrames(stream, retention: retention);
+  expect(defaulted.engine.stepResponse, expectedDefault,
+      reason: 'the $gif caption says "defaults" and names '
+          '${expectedDefault.name}; if the default step response changes, '
+          'the caption names the wrong value and the equality below is '
+          'about the wrong pair (#122)');
+  // The mechanism first, because it is the reason the equality below holds
+  // and it names the problem in one line when it breaks.
+  expect(defaulted.applied, isEmpty,
+      reason: 'the $gif dump is unchanged by the default step response only '
+          'because that response never fires on this control stream (#122, '
+          'stated in prose by tool/replay/dump_frames.dart) — if it starts '
+          'firing, the caption needs re-verifying even if the frames below '
+          'still match');
+  final rendered = dumpDemoFrames(
+    stream,
+    retention: retention,
+    stepResponse: StepResponse.damp,
+  );
+  expect(defaulted.frames, hasLength(rendered.frames.length),
+      reason: 'the $gif caption claims identical frame COUNTS under the '
+          'current default and under the ${StepResponse.damp.name} the GIF '
+          'was rendered with (#122)');
+  final divergedAt = [
+    for (var i = 0; i < defaulted.frames.length; i++)
+      if (defaulted.frames[i] != rendered.frames[i]) i,
+  ];
+  expect(divergedAt, isEmpty,
+      reason: 'the $gif caption claims byte-identical frames under the '
+          'current default and under the ${StepResponse.damp.name} the GIF '
+          'was rendered with (#122); these capture indices no longer match, '
+          'so re-render the GIF or reword the caption — dump both with '
+          'tool/replay/dump_frames.dart to see how they differ');
+}
+
 void main() {
   test(
       'hero GIF (ML Kit): dwell stream shows real jitter the default '
@@ -40,6 +178,20 @@ void main() {
         reason: 'the demo cut must end at capture 18');
     expect(stream.batches[14].captureId, greaterThan(18),
         reason: 'everything after the cut is the fling');
+
+    // Caption: "StabilizationEngine defaults, currently
+    // StepResponse.coherentShift since 2.3.0", on frames rendered under
+    // the pre-2.3.0 damp. The displacement measurements below go through
+    // replay(), whose OWN stepResponse default stays pinned to damp on
+    // purpose (see replay_session.dart), so they never exercise the
+    // engine's real default — this block does, in dump_frames.dart's
+    // construction with the entry's documented retention 2.
+    expectDefaultStepResponseChangesNothing(
+      stream,
+      retention: 2,
+      expectedDefault: StepResponse.coherentShift,
+      gif: 'hero',
+    );
 
     double establishedDisp(PositionMergeModel model) {
       // Nested-fragment confirmations (#112) move nothing by construction
@@ -104,7 +256,10 @@ void main() {
       // tool/replay/dump_frames.dart's construction and found
       // byte-identical output — coherentShift never fires on this
       // control stream — so the pin now follows the current default
-      // again, same as positionMergeModel below.
+      // again, same as positionMergeModel below. That re-dump is not a
+      // one-time hand measurement any more: the
+      // expectDefaultStepResponseChangesNothing call below re-runs both
+      // halves of it (the equality AND the zero fire count) every run.
     );
     expect(engine.positionMergeModel, PositionMergeModel.agreementWeighted,
         reason: 'the README caption says "defaults"; if the default model '
@@ -114,6 +269,14 @@ void main() {
             'response changes, re-verify this GIF\'s frames are still '
             'byte-identical under it (#122) before trusting the caption '
             'again, and re-render if not');
+    // …and that re-verification, run here rather than by hand. The corpus
+    // entry's dump command uses no retention.
+    expectDefaultStepResponseChangesNothing(
+      stream,
+      retention: 0,
+      expectedDefault: StepResponse.coherentShift,
+      gif: 'Tesseract twin',
+    );
     // 2.1.0: replay on the corpus viewport, as replay()/dump_frames do —
     // the 200 px default buckets are not production geometry.
     expect(stream.viewport, isNotNull,
