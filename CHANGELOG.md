@@ -36,6 +36,22 @@
   blind spot open. Kept for consumers whose own corpus has large slabs
   that do leave several matched movers behind.
 
+### Internal
+- **Provenance guard hardening (#125, #127, #128).** The dynamic-reflow
+  originals `pushdown.ab.json` / `rewrap.ab.json` were regenerated from
+  their committed streams and carry the full four-arm, eight-field schema
+  (their `legacy` / `agreementWeighted` numerics are unchanged), so
+  `ab_report_committed_equivalence_test.dart` now holds every committed
+  report to the same full-schema equality with no lenient branch left. The
+  guard's hand-written field list is checked against a live `abReport()`
+  arm (a field added to the report and not to the list goes red instead of
+  silently un-pinning it). A new `experiment_doc_tables_test.dart` parses
+  the result tables of the four `EXPERIMENT.md` documents and checks every
+  per-arm cell against the committed `.ab.json` — or a live replay for the
+  `--coherent-floor=390` arm — at the document's display precision, so a
+  regeneration that moves a figure goes red instead of leaving the prose
+  stale (two such cells had rotted unnoticed before).
+
 ## 2.3.0 - 2026-08-29
 
 ### Changed

@@ -57,26 +57,21 @@ const _streams = [
   'doc/replay/validation/2026-08-tesseract-matrix/stable-dwell',
 ];
 
-/// #121: `pushdown`/`rewrap` are dynamic-reflow's original two streams —
-/// committed before the `variants/*` split (#116) and before the
-/// per-capture step-response fields existed at all. They still carry the
-/// 5-field / 2-arm schema that #121's nine files were regenerated out
-/// of, but are NOT in that issue's file list, so tightening their check
-/// is out of this guard's scope; they keep the pre-#121 lenient
-/// (`containsKey`-guarded) check below instead of the unconditional
-/// full-schema one every other stream gets.
-const _preStepResponseSchema = {
-  'doc/replay/validation/2026-08-dynamic-reflow/pushdown',
-  'doc/replay/validation/2026-08-dynamic-reflow/rewrap',
-};
-
 /// #121: the WHOLE per-arm schema — every key `_arm()` returns in
 /// `tool/replay/src/ab_report.dart`, in that function's own order. Each
 /// one is checked for equality against a fresh replay, not just for
 /// presence, so "the regeneration was purely additive" is enforced
-/// rather than declared. Keep this list in sync with `_arm()`: a field
-/// added there and not here is a field the committed references quietly
-/// stop being pinned on.
+/// rather than declared. #127: this list is no longer kept in sync by
+/// hand — the schema-sync group at the bottom builds a real arm through
+/// `abReport()` and asserts its keys ARE this list, so a field added to
+/// `_arm()` and not here goes red instead of silently un-pinning that
+/// field on all 17 committed references.
+///
+/// #125: `pushdown`/`rewrap` (dynamic-reflow's original two streams) were
+/// regenerated from their committed `.jsonl` on 2026-08-30 and carry this
+/// full schema too, so the pre-#121 lenient (`containsKey`-guarded) branch
+/// they used to take is gone — every committed report is held to the same
+/// unconditional full-schema equality.
 const _armFields = [
   'mergeCount',
   'nestedFragmentMerges',
@@ -133,20 +128,7 @@ void main() {
             reason: '$base: nestedFragmentMerges under StepResponse.damp '
                 'must be byte-identical to the committed reference');
 
-        if (_preStepResponseSchema.contains(base)) {
-          // Pre-#121-schema streams: the original lenient check — only
-          // assert a field the committed file actually claims to carry.
-          // Out of #121's scope (see the const's doc comment above).
-          if (committedArm.containsKey('identityByCapture')) {
-            expect(freshArm['identityByCapture'],
-                committedArm['identityByCapture'],
-                reason: '$base: identityByCapture under StepResponse.damp '
-                    'must be byte-identical to the committed reference');
-          }
-          return;
-        }
-
-        // #121: every other stream's committed file must carry the full
+        // #121 (+ #125 for pushdown/rewrap): every committed file must carry the full
         // per-arm schema, field for field — a missing OR drifted field
         // here IS the regression the issue exists to catch, not
         // something to skip.
@@ -179,5 +161,30 @@ void main() {
         }
       });
     }
+  });
+
+  group('#127 schema sync: _armFields mirrors _arm()', () {
+    test(
+        'every arm abReport() emits carries EXACTLY the _armFields keys, in '
+        '_arm()\'s own order — a field added there and not here would '
+        'silently un-pin it on all 17 committed references', () {
+      final stream = CaptureStream.parse(
+          File('${_streams.first}.jsonl').readAsLinesSync());
+      final fresh = abReport(stream);
+      final arms = fresh.entries
+          .where((e) =>
+              e.value is Map && (e.value as Map).containsKey('mergeCount'))
+          .toList();
+      expect(
+          arms.map((e) => e.key),
+          containsAll(
+              ['legacy', 'agreementWeighted', 'agreementSnap', 'agreementCoherent']),
+          reason: 'precondition: the four StepResponse arms are present');
+      for (final arm in arms) {
+        expect((arm.value as Map<String, Object?>).keys.toList(), _armFields,
+            reason: '${arm.key}: _armFields is a hand-written mirror of '
+                '_arm() — the two have drifted (#127)');
+      }
+    });
   });
 }

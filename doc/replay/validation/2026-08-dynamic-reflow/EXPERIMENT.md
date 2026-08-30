@@ -443,11 +443,15 @@ dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-paddleocr-m
 dart tool/replay/replay.dart ab-report doc/replay/validation/2026-08-mlkit-on-device/dwell.jsonl                # + dwell-bk.jsonl, scroll.jsonl
 ```
 
-Note: `pushdown.ab.json`/`rewrap.ab.json` committed above predate the
-`StepResponse` arms (`legacy`/`agreementWeighted` only) — rerun `ab-report`
-on the two `.jsonl` streams to see the four-arm output this section's
-table cites; they were deliberately left as the historical snapshot for
-the entry above rather than regenerated for this section.
+Note: `pushdown.ab.json`/`rewrap.ab.json` were regenerated on 2026-08-30
+(#125) from the committed `.jsonl` streams — a deterministic step, unlike
+regenerating the streams themselves — and now carry the same four-arm,
+eight-field schema as every other committed report. Their `legacy` /
+`agreementWeighted` numbers are byte-identical to the historical snapshot
+they replaced (`mergeCount` / `nestedFragmentMerges` 271 / 0 and 288 / 0
+on both arms), so the entry above reads unchanged; the `pushdown-300` row
+of this section's table is now checked against `pushdown.ab.json` directly
+(`test/replay/experiment_doc_tables_test.dart`, #128).
 
 ## Step response, closing the large-slab blind spot (#119, 2026-08-30)
 
