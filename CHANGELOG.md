@@ -95,7 +95,7 @@
   `SpatialBlockIndex.setBucketSizes` (#113).** Set the spatial-index
   bucket sizes directly, with the same re-keying contract as
   `updateViewport`, for consumers whose bucket policy is not the
-  viewport formula (the reference consumer switches to 2× the median
+  viewport formula (the reference producer switches to 2× the median
   block height once it has enough blocks) and for the replay rig.
   `updateBucketSizes` PINS the sizes: a later `updateViewport` keeps them
   (a non-formula policy is not silently reverted by the next rotation)
@@ -123,7 +123,7 @@
   median`: `auto` (default) applies the stream's `bk` exactly where the
   producer applied it and falls back to the viewport formula for a
   stream without it; `formula` is the 2.1.0 behaviour; `median` emulates
-  the reference consumer's rule (from the 4th tracked block on, both
+  the reference producer's rule (from the 4th tracked block on, both
   sides = clamp(2 × median tracked-block height, 80, 220)) from the
   stream alone. Reports record `input.bucketPolicy` and the sizes each
   arm applied (`bucketsApplied`).
@@ -240,7 +240,7 @@
   the field existed and carry a value (360×587) read from the recording
   WebView during the capture session and stamped into the header
   afterwards — their entry says so, and the recorder-side writer is
-  tracked in the consumer's issue cited there. The three validation
+  tracked by the producer's own tracker. The three validation
   entries carry a dated note. `tool/replay/src/replay_session.dart`
   lists what the rig still does not model: a consumer's own matching
   stage, bucket adaptation beyond the viewport formula, `contextualCheck`,
