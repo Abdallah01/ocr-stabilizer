@@ -33,10 +33,14 @@ and `lib/src/default_tracked_block.dart` for the pattern.
 
 ## Public API discipline
 
-Changes that alter the shape of `TrackedBlock`, `ObservableBlock`, `MergeResult`,
-or `StabilizationEngine` are breaking. Pre-1.0, a breaking change requires a
-minor version bump and a `CHANGELOG.md` `### Breaking` entry with a diff-style
-migration block.
+Within a major series (2.x today), API surface changes are additive.
+Changes that alter the shape of `TrackedBlock`, `ObservableBlock`,
+`MergeResult`, or `StabilizationEngine` are compile-breaking and wait for
+the next major, with a `CHANGELOG.md` `### Breaking` entry carrying a
+diff-style migration block. A behavioral-default change (numerics,
+matching) may ride a minor version, but only with a CHANGELOG entry that
+names an exact configuration reproducing the prior numerics bit-for-bit —
+the escape-hatch convention; `doc/CONTRACT.md` G5 keeps the table.
 
 ## Release flow
 

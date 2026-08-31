@@ -283,7 +283,13 @@ BucketPolicy? bucketPolicyFromArg(String arg) {
 ///   optional `agreementCoherentReanchor` arm.
 /// - [coherentShiftAdoptAgreeing] (#119 item 2) — same contract: `false`
 ///   (off) here, threaded only into the optional `agreementCoherentAdopt`
-///   arm.
+///   arm. NOTE this rig default deliberately DIVERGES from the engine's
+///   ctor default (`true` since 2.4.0): the rig's base arms are named
+///   configurations pinned against committed reports, so they must not
+///   drift when an engine default flips — every arm passes the flag
+///   explicitly, and the shipping-default configuration is represented by
+///   the `agreementCoherentAdopt` arm, not the base `agreementCoherent`
+///   one, from 2.4.0 on.
 ReplayResult replay(
   CaptureStream stream, {
   BandFallbackConfig band = const BandFallbackConfig(),

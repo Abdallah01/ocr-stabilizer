@@ -614,7 +614,7 @@ documented as not-recommended, because it is the cheapest way for a
 consumer whose own corpus has large slabs that DO leave several matched
 movers behind to use the same machinery.
 
-### Candidate 3 — `coherentShiftAdoptAgreeing` (adopt the agreeing under-gate pairs). SHIPS, opt-in (#119 item 2).
+### Candidate 3 — `coherentShiftAdoptAgreeing` (adopt the agreeing under-gate pairs). SHIPS — opt-in at the time of this entry (#119 item 2); the engine default since 2.4.0.
 
 The 150 px step is a blind spot of a different kind from the 600 px one.
 There the quorum starves (one matched mover). Here the quorum FIRES — and

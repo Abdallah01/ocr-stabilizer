@@ -102,7 +102,7 @@ dependencies:
 > (`pushdown-150` lag at the move 68.3 -> 6.0 px, identity
 > 0.821 -> 0.929, 15 extra merges retained). Pass
 > `coherentShiftAdoptAgreeing: false` for 2.3.x numerics bit-for-bit.
-> Also new (both opt-in, `null` = off = 2.3.0 numerics): the
+> Also new (both opt-in; `null` = the option stays off): the
 > `coherentShiftFloorPx` absolute-pixel floor closing the large-slab
 > blind spot — see [Calibrating `coherentShiftFloorPx`](#calibrating-coherentshiftfloorpx) —
 > and `coherentShiftReanchorMinBlocks` (documented, not recommended —

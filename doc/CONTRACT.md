@@ -22,9 +22,12 @@ model"; first-sighting behavior exercised throughout
 
 **G2 — Identity survives jitter.** A re-observed block merges into its
 tracked identity rather than spawning a duplicate, through the primary
-match, the opt-in band-relaxed path (`BandFallbackConfig`), and nested
+match, the opt-in band-relaxed path (`BandFallbackConfig`;
+`test/stabilization_engine_band_admit_test.dart`), and nested
 re-observation (a paragraph re-seen as one of its own lines confirms the
-paragraph, 2.2.0). Intra-batch duplicates are resolved by spatial NMS.
+paragraph, 2.2.0; `test/stabilization_engine_nested_fragment_test.dart`).
+Intra-batch duplicates are resolved by spatial NMS
+(`test/stabilization_engine_nms_test.dart`).
 
 **G3 — Corrections are bounded.** Drift correction is clamped to the median
 block height per region (`DriftTracker`). A coherent-shift plan re-anchors
@@ -53,12 +56,19 @@ The two #119 fallbacks (`coherentShiftFloorPx`,
 them unset reproduces the un-floored quorum bit-for-bit.
 
 **G6 — Defaults are evidence-backed and regeneratable.** Every default
-numerics change is backed by a committed replay corpus and an A/B report
-that a test can regenerate and compare byte-for-byte
-(`test/replay/ab_report_committed_equivalence_test.dart`); the experiment
-documents' result tables are parsed and checked against the committed
-reports (`test/replay/experiment_doc_tables_test.dart`); the demo GIF's
-frames are pinned to engine output (`test/demo_gif_provenance_test.dart`).
+numerics change is backed by a committed replay corpus and an A/B check a
+test re-runs on every suite run. The mechanism has two tiers, both
+enforced: the four base arms of every committed `.ab.json` report are
+regenerated and compared byte-for-byte
+(`test/replay/ab_report_committed_equivalence_test.dart`), and the
+experiment documents' result tables are parsed and checked cell-by-cell —
+against the committed reports for the base arms, and against a LIVE
+replay of the committed streams, at the document's display precision, for
+the #119 lever sweeps (floor / re-anchor / adopt-agreeing), whose arms
+are deliberately not committed
+(`test/replay/experiment_doc_tables_test.dart` — its header names which).
+The demo GIF's frames are pinned to engine output
+(`test/demo_gif_provenance_test.dart`).
 
 **G7 — Consumer callbacks are never swallowed.** A throwing band predicate
 surfaces as a typed `BandPredicateException` with the original stack; a

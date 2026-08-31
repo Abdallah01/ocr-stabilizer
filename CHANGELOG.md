@@ -40,8 +40,10 @@
   own median; a floor-qualified mover outside it stays on damp, so no
   member is ever pushed past its own observation) — and only where the
   ordinary quorum already declined, so captures the majority vote handles
-  are untouched. `null` (the default) reproduces 2.3.0 numerics
-  bit-for-bit.
+  are untouched. `null` (the default) keeps the floor OFF, reproducing
+  the un-floored quorum bit-for-bit (this option in isolation; the
+  release's own adopt-agreeing default flip is what changes numerics —
+  see Changed above).
   Evidence: the 17-stream A/B re-run at 390 px — 0 step events on all 10
   controls, 0.000 px regression on every stream, and the 600 px stream's
   lag at the move cut 30.7 -> 1.4 px. The floor must be calibrated to the
@@ -53,8 +55,10 @@
 - **`StabilizationEngine.coherentShiftReanchorMinBlocks` (#119)** — an
   opt-in relaxation of the same quorum on the COUNT axis instead
   (clustering unchanged, share gate dropped, the winning cluster
-  re-anchored by its own median). `null` (the default) reproduces 2.3.0
-  numerics bit-for-bit. Documented as **not recommended** and measured as
+  re-anchored by its own median). `null` (the default) keeps this
+  fallback OFF, reproducing the unrelaxed quorum bit-for-bit (this option
+  in isolation — see the Changed entry for the release's default flip).
+  Documented as **not recommended** and measured as
   such: only a count of 1 reaches the large-slab case, and a single mover
   is equally what ordinary scroll and OCR jitter produce, so it
   false-fires on 4 of 10 control streams; any higher count leaves the
