@@ -286,14 +286,20 @@ void main() {
               'with no group is untouched by construction');
     });
 
-    // MUTATION-VERIFY TARGET (#119 item 2): opt-in, like the two fallbacks.
-    test('defaults to OFF', () {
+    // MUTATION-VERIFY TARGET (#119 item 2 → 2.4.0 default).
+    test('defaults to ON since 2.4.0', () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
       );
-      expect(engine.coherentShiftAdoptAgreeing, isFalse,
-          reason: 'DEFAULT-OFF PIN: shipping it enabled would change the '
-              'numerics for every consumer without them asking');
+      expect(engine.coherentShiftAdoptAgreeing, isTrue,
+          reason: 'DEFAULT-ON PIN (2.4.0): the 17-stream A/B measured the '
+              'lever as strictly-better-or-identical (16 streams '
+              'byte-identical incl. every control; pushdown-150 lag '
+              '68.3 -> 6.0 px, identity 0.821 -> 0.929). A capture where '
+              'no shift is decided is untouched by construction, so a '
+              'consumer that never sees a coherent step sees no change; '
+              '`coherentShiftAdoptAgreeing: false` restores 2.3.x '
+              'numerics bit-for-bit');
     });
   });
 }

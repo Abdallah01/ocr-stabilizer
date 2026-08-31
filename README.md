@@ -8,6 +8,11 @@ afterthought: identity tracking, dedup, and text voting are exactly what
 keeps an extraction pipeline consistent across re-captures, while the
 position-merge refinements matter most for rendered overlays.
 
+**The 2.x contract** — what the package guarantees, what it deliberately
+does not do, and what is yours to configure — is one page:
+[`doc/CONTRACT.md`](doc/CONTRACT.md). It is the release-stability promise
+behind every 2.x version.
+
 Pure Dart — usable in Flutter apps and server-side pipelines alike.
 Built for event-driven OCR pipelines — e.g. screenshots captured on
 scroll-settle at 1–2 Hz — where translated overlays must remain stable as
@@ -24,8 +29,9 @@ last five captures are a momentum fling and are cut from the demo — see
 the entry's correction note), 3-frame ghost trails, the same drawing rule
 on both panels. Left: the boxes exactly as the production pipeline reports
 them each frame, including the producer's scroll-stamp lag. Right: the
-engine's tracked state (`StabilizationEngine` defaults, currently
-`StepResponse.coherentShift` since 2.3.0, plus `missedFrameRetention: 2`),
+engine's tracked state (`StabilizationEngine` defaults — currently
+`StepResponse.coherentShift` since 2.3.0 and `coherentShiftAdoptAgreeing`
+since 2.4.0 — plus `missedFrameRetention: 2`),
 replayed on the device viewport. Boxes still overlap on the right in the
 last frames: the producer's lagged frames put different text over boxes
 the engine rightly holds — the entry counts and explains them (15 pairs
@@ -83,8 +89,25 @@ counts are evidence depth, never a readiness ladder:
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^2.3.0
+  ocr_stabilizer: ^2.4.0
 ```
+
+> **What's new in 2.4.0** — `coherentShiftAdoptAgreeing` is now the
+> default ([#119](https://github.com/Abdallah01/ocr-stabilizer/issues/119) item 2): once a coherent shift IS decided, the matched
+> pairs that sat under their own "moved" gate but agree with the decided
+> translation follow it, instead of lagging by the damped fraction. The
+> 17-stream A/B measured 16 streams byte-identical — every control
+> included; a capture where no shift is decided is untouched by
+> construction — and the one affected stream strictly better
+> (`pushdown-150` lag at the move 68.3 -> 6.0 px, identity
+> 0.821 -> 0.929, 15 extra merges retained). Pass
+> `coherentShiftAdoptAgreeing: false` for 2.3.x numerics bit-for-bit.
+> Also new (both opt-in, `null` = off = 2.3.0 numerics): the
+> `coherentShiftFloorPx` absolute-pixel floor closing the large-slab
+> blind spot — see [Calibrating `coherentShiftFloorPx`](#calibrating-coherentshiftfloorpx) —
+> and `coherentShiftReanchorMinBlocks` (documented, not recommended —
+> its doc comment measures why). The 2.x guarantees now live in one
+> page: [`doc/CONTRACT.md`](doc/CONTRACT.md).
 
 > **What's new in 2.3.0** — the default `StepResponse` is now
 > `coherentShift` ([#116](https://github.com/Abdallah01/ocr-stabilizer/issues/116)): when a batch of blocks moves together (a real
@@ -304,6 +327,36 @@ Recommended adoption flow for callers that want band coverage: ship with
 once the ratios justify it. Staying on `off` permanently is also valid —
 it disables the band path entirely and pays no extra cost.
 
+### Calibrating `coherentShiftFloorPx`
+
+The floor admits a single surviving mover to the coherent-shift vote on its
+own magnitude — the fix for slabs so large that too few matched movers
+survive for the quorum to see. It is **a property of your capture
+geometry, not a universal constant**, which is why it ships `null`
+(disabled, always safe) instead of with a default:
+
+1. **Lower bound:** measure the largest displacement ORDINARY scrolling
+   produces between two consecutive captures on your device and capture
+   cadence (replay your own captures, or read the largest per-frame move
+   on a scroll-only session). The floor must sit ABOVE it, or scroll
+   fires step events. On the validation corpus this bound is 377 px (a
+   control's largest scroll step).
+2. **Upper bound:** the smallest single-frame slab you need tracked. The
+   floor must sit BELOW the displacement such a slab leaves on its
+   surviving mover — 406 px on the corpus's 600 px slab.
+3. Pick inside the window and re-run your controls: the corpus ships at
+   390 px with 0 step events on all 10 control streams and the 600 px
+   slab's lag cut 30.7 -> 1.4 px. A consumer capturing less often, or
+   scrolling faster, needs a HIGHER floor (ordinary between-capture moves
+   are bigger); if your window is empty — your scrolling moves farther
+   per capture than your smallest slab — leave it `null`.
+
+A height-relative multiplier provably cannot replace this calibration: on
+the corpus a scroll control reaches 3.63x its own scale while the real
+slab's mover travels at only 2.64x, so NO multiplier admits one without
+the other. Full derivation and the sensitivity table:
+`doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`.
+
 ## Core Components
 
 ### TrackedBlock\<T\>
@@ -400,6 +453,16 @@ flags. Higher weight means more constrained coordinate space:
 | Normal | 10 | Unrestricted page scroll |
 
 ### ParagraphGrouper (v1.2.0+)
+
+**The boundary first: `StabilizationEngine` does not know what a paragraph
+is. Consumers decide the unit of tracking** — lines, paragraphs, DOM
+nodes; the engine tracks whatever you feed `stabilize()`. This grouper is
+a downstream convenience for consumers that want translation-sized units,
+not part of the engine's identity model, and its translation-request
+defaults are not the engine's opinion about text structure
+([#101](https://github.com/Abdallah01/ocr-stabilizer/issues/101); the
+measured case for grouping AFTER tracking, not before, is in the
+dynamic-reflow entry's pre-grouped addendum).
 
 Groups engine-level OCR blocks into paragraph-level units — the step between
 raw OCR output and translation/layout consumers. OCR engines return blocks
@@ -590,7 +653,9 @@ Deliberate trade-offs, each with a tracking issue for discussion:
 - **Paragraph grouping assumes a single text region.** The Otsu gap threshold
   is derived batch-globally; multi-column pages are handled by per-merge
   guards, not per-region statistics. [#91](https://github.com/Abdallah01/ocr-stabilizer/issues/91).
-- **"Paragraphs" are translation units.** `maxParagraphBlocks: 3` +
+- **The engine does not know what a paragraph is — the unit of tracking is
+  consumer-decided.** `ParagraphGrouper` is a downstream convenience whose
+  "paragraphs" are translation units: `maxParagraphBlocks: 3` +
   `maxParagraphRunes: 200` size units for bounded translation requests, and
   sentence-end explosion of multi-line blocks is a hard boundary. Default
   semantics: [#100](https://github.com/Abdallah01/ocr-stabilizer/issues/100); punctuation modes: [#99](https://github.com/Abdallah01/ocr-stabilizer/issues/99); a named strategy API: [#101](https://github.com/Abdallah01/ocr-stabilizer/issues/101).

@@ -3,7 +3,7 @@ description: >-
   Real-time OCR overlay stabilization engine — drift correction,
   spatial indexing, block tracking, CJK-aware paragraph grouping.
   Pure Dart; Flutter-ready.
-version: 2.3.0
+version: 2.4.0
 homepage: https://github.com/Abdallah01/ocr-stabilizer
 repository: https://github.com/Abdallah01/ocr-stabilizer
 issue_tracker: https://github.com/Abdallah01/ocr-stabilizer/issues
