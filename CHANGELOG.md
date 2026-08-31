@@ -1,4 +1,29 @@
-## Unreleased
+## 2.4.0 - 2026-09-01
+
+### Changed
+- **`coherentShiftAdoptAgreeing` is now the default (#119 item 2).** Once
+  a coherent shift IS decided (by the quorum or a configured fallback),
+  the matched pairs that sat under their own "moved" gate but agree with
+  the decided translation now follow it by default, instead of lagging by
+  the damped fraction. Evidence (the 17-stream A/B, candidate-3 section of
+  `doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`): 16
+  streams byte-identical — every control included, because a capture where
+  no shift is decided is untouched by construction — and the one affected
+  stream strictly better (`pushdown-150` move-capture lag 68.3 -> 6.0 px,
+  +3/+5 lags 54.7/45.2 -> 19.7/20.5 px, identity at +2/+5
+  0.821/0.750 -> 0.929/0.929, 15 additional merges retained). The demo-GIF
+  provenance pin re-verified the demo corpus byte-identical under the new
+  default in the release run. Pass `coherentShiftAdoptAgreeing: false`
+  to reproduce 2.3.x numerics bit-for-bit — the same escape-hatch
+  convention as 2.3.0's `stepResponse: StepResponse.damp`.
+- **The 2.x contract is now one page** — `doc/CONTRACT.md`: the
+  guarantees, the intentionally-unsupported cases (each with its tracking
+  issue), and the consumer-configurable behaviors, each citing its
+  enforcing test or validation entry. The README links it from the top,
+  states the engine/grouper boundary at the `ParagraphGrouper` section
+  (#101 — the engine does not know what a paragraph is; consumers decide
+  the unit of tracking), and adds a calibration recipe for
+  `coherentShiftFloorPx`.
 
 ### Added
 - **`StabilizationEngine.coherentShiftFloorPx` (#119)** — an opt-in
@@ -15,8 +40,10 @@
   own median; a floor-qualified mover outside it stays on damp, so no
   member is ever pushed past its own observation) — and only where the
   ordinary quorum already declined, so captures the majority vote handles
-  are untouched. `null` (the default) reproduces 2.3.0 numerics
-  bit-for-bit.
+  are untouched. `null` (the default) keeps the floor OFF, reproducing
+  the un-floored quorum bit-for-bit (this option in isolation; the
+  release's own adopt-agreeing default flip is what changes numerics —
+  see Changed above).
   Evidence: the 17-stream A/B re-run at 390 px — 0 step events on all 10
   controls, 0.000 px regression on every stream, and the 600 px stream's
   lag at the move cut 30.7 -> 1.4 px. The floor must be calibrated to the
@@ -28,8 +55,10 @@
 - **`StabilizationEngine.coherentShiftReanchorMinBlocks` (#119)** — an
   opt-in relaxation of the same quorum on the COUNT axis instead
   (clustering unchanged, share gate dropped, the winning cluster
-  re-anchored by its own median). `null` (the default) reproduces 2.3.0
-  numerics bit-for-bit. Documented as **not recommended** and measured as
+  re-anchored by its own median). `null` (the default) keeps this
+  fallback OFF, reproducing the unrelaxed quorum bit-for-bit (this option
+  in isolation — see the Changed entry for the release's default flip).
+  Documented as **not recommended** and measured as
   such: only a count of 1 reaches the large-slab case, and a single mover
   is equally what ordinary scroll and OCR jitter produce, so it
   false-fires on 4 of 10 control streams; any higher count leaves the
@@ -46,8 +75,9 @@
   floor or the re-anchor), every eligible under-gate pair whose
   displacement is within the quorum's own tolerance of the DECIDED
   translation joins the group and is merged with it; a pair that merely
-  jittered stays on damp. `false` (the default) reproduces 2.3.x numerics
-  bit-for-bit. Evidence: the 17-stream A/B — 16 streams byte-identical
+  jittered stays on damp. `false` reproduces 2.3.x numerics bit-for-bit
+  (the lever shipped default-ON in this release — see Changed above).
+  Evidence: the 17-stream A/B — 16 streams byte-identical
   (every control, and every step stream where no group forms or every
   pair already votes); on `pushdown-150` the move-capture lag drops
   68.3 -> 6.0 px, the +3 / +5 lags 54.7 / 45.2 -> 19.7 / 20.5 px, identity

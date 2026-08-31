@@ -234,7 +234,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     this.coherentShiftTolerance = 0.5,
     this.coherentShiftFloorPx,
     this.coherentShiftReanchorMinBlocks,
-    this.coherentShiftAdoptAgreeing = false,
+    this.coherentShiftAdoptAgreeing = true,
   })  : _merger = merger,
         driftTracker =
             driftTracker ?? DriftTracker(submapMembership: submapMembership),
@@ -380,12 +380,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// mover outside that cluster — damps exactly as before, so no member
   /// is ever re-anchored by a translation it did not make.
   ///
-  /// The one exception is [coherentShiftAdoptAgreeing] (#119 item 2, off
-  /// by default): with it on, an under-gate pair whose displacement agrees
-  /// with the decided cluster median (within the quorum's own tolerance)
-  /// is carried along as well — still never a translation it did not, to
-  /// within that tolerance, make. Off, the paragraph above is the whole
-  /// story.
+  /// The one exception is [coherentShiftAdoptAgreeing] (#119 item 2, on
+  /// by default since 2.4.0): with it on, an under-gate pair whose
+  /// displacement agrees with the decided cluster median (within the
+  /// quorum's own tolerance) is carried along as well — still never a
+  /// translation it did not, to within that tolerance, make. Off, the
+  /// paragraph above is the whole story.
   ///
   /// **Why an absolute floor and not another height-relative multiplier.**
   /// A multiple of the block's own agreement scale ([_agreementScale], 3x
@@ -415,9 +415,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// [coherentShiftMinShare] gate dropped entirely; the winning cluster's
   /// median displacement is applied to ITS OWN MEMBERS ONLY, leaving every
   /// other pair in the batch on [StepResponse.damp] — except, with
-  /// [coherentShiftAdoptAgreeing] on (#119 item 2, off by default), an
-  /// under-gate pair that agrees with the winning cluster's median, which
-  /// is adopted for this fallback exactly as for the quorum.
+  /// [coherentShiftAdoptAgreeing] on (#119 item 2, the default since
+  /// 2.4.0), an under-gate pair that agrees with the winning cluster's
+  /// median, which is adopted for this fallback exactly as for the quorum.
   ///
   /// Unlike [coherentShiftFloorPx] this lever has no magnitude axis at
   /// all — it acts on agreement and quantity. That is also its measured
@@ -436,8 +436,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// #119 item 2 — once a coherent shift IS decided (by the quorum, the
   /// floor fallback or the re-anchor fallback), also carry along the
   /// matched pairs that sat UNDER the "moved" gate but agree with the
-  /// decided translation. `false` (the default) reproduces 2.3.x numerics
-  /// bit-for-bit.
+  /// decided translation. `true` (the default since 2.4.0; the 17-stream
+  /// A/B measured 16 streams byte-identical, every control included, and
+  /// the one affected stream strictly better — pushdown-150 lag at the
+  /// move 68.3 -> 6.0 px, identity 0.821 -> 0.929). Pass `false` to
+  /// reproduce 2.3.x numerics bit-for-bit.
   ///
   /// The "moved" gate is a multiple of each block's OWN height
   /// ([_agreementScale], 3x): a 150 px slab step carries a 36 px line past
@@ -1101,9 +1104,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   // Where that quorum declines, the two #119 opt-in fallbacks (the
   // absolute-pixel floor, then the batch-level re-anchor; both off by
   // default) get a turn, each re-anchoring its own members only. Whatever
-  // plan is decided, `coherentShiftAdoptAgreeing` (#119 item 2, off by
-  // default) then carries along the eligible under-gate pairs that agree
-  // with it — membership widens, the translation never changes.
+  // plan is decided, `coherentShiftAdoptAgreeing` (#119 item 2, ON by
+  // default since 2.4.0) then carries along the eligible under-gate pairs
+  // that agree with it — membership widens, the translation never changes.
   // └──────────────────────────────────────────────────────────────────
 
   /// Detect a per-batch coherent shift among [matchResults] (a DRY,

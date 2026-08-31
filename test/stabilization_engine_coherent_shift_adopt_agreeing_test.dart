@@ -6,8 +6,9 @@
 // gate), but 13 taller pairs that made the SAME step sit under their gate
 // (3x a 57-62 px height = 171-186 px > 150) and damp — so the decided
 // translation reaches 3 of the 16 pairs that moved together, and the rest
-// lag by the damped fraction. `coherentShiftAdoptAgreeing` (opt-in, default
-// OFF) carries an eligible under-gate pair along once a translation has
+// lag by the damped fraction. `coherentShiftAdoptAgreeing` (the default
+// since 2.4.0; `false` restores 2.3.x numerics bit-for-bit) carries an
+// eligible under-gate pair along once a translation has
 // been decided, if its displacement is within the quorum's own tolerance
 // (`coherentShiftTolerance x min(own height, the group's median height)`)
 // of that translation. It never changes who may VOTE or what the vote is.
@@ -114,7 +115,8 @@ const _voterTop = {_a: 650.0, _b: 750.0, _c: 850.0};
 void main() {
   group('coherentShiftAdoptAgreeing (#119 item 2)', () {
     test(
-        'OFF (default): the quorum fires for the three short movers, and the '
+        'OFF (the 2.3.x numerics escape): the quorum fires for the three '
+        'short movers, and the '
         'tall pair that made the same step damps short of its observation — '
         'the blind spot the lever closes', () {
       final off = _run(adopt: false);
@@ -286,14 +288,20 @@ void main() {
               'with no group is untouched by construction');
     });
 
-    // MUTATION-VERIFY TARGET (#119 item 2): opt-in, like the two fallbacks.
-    test('defaults to OFF', () {
+    // MUTATION-VERIFY TARGET (#119 item 2 → 2.4.0 default).
+    test('defaults to ON since 2.4.0', () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
       );
-      expect(engine.coherentShiftAdoptAgreeing, isFalse,
-          reason: 'DEFAULT-OFF PIN: shipping it enabled would change the '
-              'numerics for every consumer without them asking');
+      expect(engine.coherentShiftAdoptAgreeing, isTrue,
+          reason: 'DEFAULT-ON PIN (2.4.0): the 17-stream A/B measured the '
+              'lever as strictly-better-or-identical (16 streams '
+              'byte-identical incl. every control; pushdown-150 lag '
+              '68.3 -> 6.0 px, identity 0.821 -> 0.929). A capture where '
+              'no shift is decided is untouched by construction, so a '
+              'consumer that never sees a coherent step sees no change; '
+              '`coherentShiftAdoptAgreeing: false` restores 2.3.x '
+              'numerics bit-for-bit');
     });
   });
 }

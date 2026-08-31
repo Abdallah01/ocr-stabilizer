@@ -8,6 +8,7 @@ or provenance.
 
 | Path | What it is |
 |---|---|
+| [`CONTRACT.md`](CONTRACT.md) | **The 2.x contract** — guarantees, intentionally-unsupported cases, consumer-configurable behaviors; each claim cites its enforcing test, validation entry, or tracking issue. |
 | [`replay/capture_schema.md`](replay/capture_schema.md) | The JSONL capture schema (v1) every corpus below uses. |
 | [`replay/validation/2026-07-scale-sweep/`](replay/validation/2026-07-scale-sweep/) | **ML Kit.** Provenance for the 3× jitter allowance: displacement + confidence per allowance scale, both position models. Report JSONs only — the underlying capture streams contain third-party page text and are not distributable. |
 | [`replay/validation/2026-07-perblock-scale/`](replay/validation/2026-07-perblock-scale/) | **ML Kit.** The 1.1.0 per-block agreement scale: six-scenario before/after. Report JSONs only, same reason. |

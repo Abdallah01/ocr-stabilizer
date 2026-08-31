@@ -126,6 +126,12 @@ void expectDefaultStepResponseChangesNothing(
           '${expectedDefault.name}; if the default step response changes, '
           'the caption names the wrong value and the equality below is '
           'about the wrong pair (#122)');
+  expect(defaulted.engine.coherentShiftAdoptAgreeing, isTrue,
+      reason: 'the README caption also names coherentShiftAdoptAgreeing '
+          'as an engine default since 2.4.0; adoption only widens '
+          'membership of a DECIDED shift, so the applied-isEmpty '
+          'assertion below is what proves it cannot move these frames — '
+          'if this default flips again, re-verify and reword the caption');
   // The mechanism first, because it is the reason the equality below holds
   // and it names the problem in one line when it breaks.
   expect(defaulted.applied, isEmpty,
