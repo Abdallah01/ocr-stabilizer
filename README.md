@@ -392,7 +392,7 @@ final leftBehind = t.dropped + t.retained; // cached identities nothing matched
 if (shift == null && leftBehind > 0 && t.admittedShare >= 0.5) {
   // Most fresh blocks are NEW identities, cached identities were left
   // unmatched, and nothing moved as a slab: the line boxes changed under
-  // the same content (a font swap, a width change). The engine reset
+  // the same content (a font swap, a width change that rewraps). The engine reset
   // identity on purpose (contract U1). Cached geometry for the old
   // identities is stale — rebuild it rather than translate it.
   overlay.rebuildFrom(result.stableBlocks);
@@ -718,11 +718,14 @@ Deliberate trade-offs, each with a tracking issue for discussion:
   (`doc/replay/validation/2026-08-tesseract-matrix/`). High-amplitude
   re-segmentation on other engines remains open: [#94](https://github.com/Abdallah01/ocr-stabilizer/issues/94).
 - **No scale or zoom model.** `coherentShift` models a shared translation
-  only; a zoomed or width-changed page presents as re-segmentation and
-  takes the rewrap path (identity reset, which `identityTurnover` names).
-  Detect zoom from your own source and rebuild; a transform ESTIMATE above
-  `coherentShift` is the tracked candidate, gated on a zoom corpus that
-  does not yet exist. Contract U9; [#135](https://github.com/Abdallah01/ocr-stabilizer/issues/135).
+  only. A zoom that keeps the line texts still matches (matching is
+  text-first) and is absorbed as per-block displacement — damped toward
+  the new boxes over several captures, no `coherentShift`, a clean
+  `identityTurnover`; a zoom or width change that REWRAPS the lines takes
+  the rewrap path (identity reset, which `identityTurnover` names).
+  Detect zoom from your own source and rescale or rebuild; a transform
+  ESTIMATE above `coherentShift` is the tracked candidate, gated on a zoom
+  corpus that does not yet exist. Contract U9; [#135](https://github.com/Abdallah01/ocr-stabilizer/issues/135).
 - **The dynamic-reflow evidence is single-seed.** Every step-response
   number rests on one synthetic seed and one repetition per stream; the
   `coherentShiftFloorPx` window is bounded by single measurements on both

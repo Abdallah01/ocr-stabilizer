@@ -95,8 +95,10 @@ its identity census as `StabilizationResult.identityTurnover`
 (`IdentityTurnover`: merged / admitted / retained / dropped). A capture
 where no plan was decided reports `coherentShift == null` — every control
 capture, and always under `damp` / `snap`. Per-block membership stays on
-`MergeResult.stepResponseApplied`. Both values are additive to the result
-(G9) and throw on an invalid census
+`MergeResult.stepResponseApplied`, and `MergeOutput.stepResponseApplied`
+(2.5.0) carries the same value to a direct `merge()` caller. Both result
+values are additive (G9), define value equality, and throw on an invalid
+census
 (`test/stabilization_engine_coherent_shift_event_test.dart`,
 `test/stabilization_engine_identity_turnover_test.dart`,
 `test/coherent_shift_event_test.dart`, `test/identity_turnover_test.dart`).
@@ -155,16 +157,23 @@ their own layer above the engine.
 **U9 — No scale or zoom model.** `StepResponse.coherentShift` models one
 layout event: a TRANSLATION shared by many tracked blocks. Nothing
 estimates a scale (browser zoom, a font-size change, a DPR change
-mid-session) or a similarity transform. The per-block agreement scale is a
-jitter allowance, not a zoom model; a zoomed or width-changed page
-presents as re-segmentation and takes the same path as a rewrap — an
-identity reset (U1; the dynamic-reflow entry's `rewrap` stream). Detect
-zoom from your own source (a browser's visual viewport, a camera's zoom
-factor) and construct a fresh engine at the boundary (U5), or accept the
-reset and re-sight; 2.5.0's `identityTurnover` names the reset when it
-happens (G10). A transform ESTIMATE (observed, never applied) is the
-tracked candidate, gated on a zoom corpus that does not yet exist.
-([#135])
+mid-session) or a similarity transform, and the per-block agreement scale
+is a jitter allowance, not a zoom model. What a zoom does to the engine
+depends on whether the line TEXTS survive it. A zoom that keeps them
+still matches every block (matching is text-first), and its scaled
+geometry is absorbed as ordinary per-block displacement — damped toward
+the new boxes over several captures, with no `coherentShift` (the
+displacements grow with distance from the zoom origin, so they never
+agree as one translation) and an `identityTurnover` that reads as a
+clean re-sighting (`test/stabilization_engine_identity_turnover_nested_test.dart`,
+the pure-zoom case). A zoom or width change that REWRAPS the lines takes
+the rewrap path — an identity reset (U1; the dynamic-reflow entry's
+`rewrap` stream), which `identityTurnover` names (G10). Detect zoom from
+your own source (a browser's visual viewport, a camera's zoom factor) and
+either construct a fresh engine at the boundary (U5) or rescale the
+geometry you hold outside the engine. A transform ESTIMATE (observed,
+never applied) is the tracked candidate, gated on a zoom corpus that does
+not yet exist. ([#135])
 
 ## 3. Consumer-configurable behaviors
 

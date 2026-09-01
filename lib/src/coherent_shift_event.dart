@@ -45,8 +45,13 @@ enum CoherentShiftSource {
 ///   overlay boxes for these identities) should move by the same vector.
 /// - No event on a capture where most fresh blocks were admitted as new
 ///   identities (`StabilizationResult.identityTurnover.admittedShare`
-///   high) = the line boxes changed, not their position — a rewrap, which
-///   the engine deliberately treats as an identity reset (contract U1).
+///   high) WHILE cached identities were left unmatched
+///   (`identityTurnover.dropped + retained > 0`) = the line boxes
+///   changed, not their position — a rewrap, which the engine
+///   deliberately treats as an identity reset (contract U1). The second
+///   condition matters: a session's first sighting admits every block
+///   with nothing cached and is not a rewrap (README, "Observing the
+///   engine's decisions").
 /// - `damp` and `snap` never produce an event: snap re-anchors per block
 ///   and reports only through `MergeResult.stepResponseApplied`.
 class CoherentShiftEvent {
@@ -108,6 +113,20 @@ class CoherentShiftEvent {
   /// [adoptedCount]. For a floor-decided plan this is the floor-qualified
   /// cluster; for a re-anchor plan, the re-anchored cluster.
   int get votedCount => memberCount - adoptedCount;
+
+  /// Value equality over all four fields.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CoherentShiftEvent &&
+          other.translation == translation &&
+          other.memberCount == memberCount &&
+          other.adoptedCount == adoptedCount &&
+          other.decidedBy == decidedBy;
+
+  @override
+  int get hashCode =>
+      Object.hash(translation, memberCount, adoptedCount, decidedBy);
 
   @override
   String toString() =>

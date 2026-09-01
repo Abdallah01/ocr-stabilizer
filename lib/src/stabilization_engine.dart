@@ -1003,8 +1003,13 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // 2.5.0 — the per-capture identity census and the coherent-shift
     // summary (`StabilizationResult.identityTurnover` / `.coherentShift`)
     // are counted HERE, at the merges that actually happen, never from
-    // the plan alone: a plan member whose real match differs from the dry
-    // pre-pass's is not applied and must not be reported as one.
+    // the plan alone. Membership (`memberDrift.containsKey(existing)`) is
+    // keyed on the CACHED block only; application is gated in
+    // `_mergeImpl` on step-response eligibility (band admission,
+    // viewport-relative, carousel child) that membership cannot see, and
+    // nothing stops a second fresh block from reaching the same cached
+    // member through such a path — so the count reads the merge's own
+    // `stepResponseApplied`, never `isCoherentMember` (PR #138 review).
     var mergedCount = 0;
     var admittedCount = 0;
     var coherentMembers = 0;
@@ -1030,11 +1035,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       // order-dependent.
       final isCoherentMember = coherentShiftPlan != null &&
           coherentShiftPlan.memberDrift.containsKey(existing);
-      if (isCoherentMember) {
-        coherentMembers++;
-        if (coherentShiftPlan.adopted.contains(existing)) coherentAdopted++;
-      }
-      final merged = _merge(
+      final output = _merge(
         fresh,
         existing,
         invalidatedTexts,
@@ -1045,7 +1046,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         frozenRegionDrift:
             isCoherentMember ? coherentShiftPlan.memberDrift[existing] : null,
       );
-      stableBlocks.add(merged);
+      stableBlocks.add(output.merged);
+      if (output.stepResponseApplied == StepResponse.coherentShift) {
+        coherentMembers++;
+        if (coherentShiftPlan != null &&
+            coherentShiftPlan.adopted.contains(existing)) {
+          coherentAdopted++;
+        }
+      }
     }
     for (final (fresh, host) in pendingNested) {
       if (contradictedHosts.contains(host)) {
@@ -1062,7 +1070,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         invalidatedTexts,
         wellObservedTexts,
         wasNestedFragment: true,
-      ));
+      ).merged);
     }
 
     // Missed-frame retention (#46): cached blocks that were not matched
@@ -2185,7 +2193,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// used to compute THIS member's displacement, threaded through so
   /// `_mergeImpl` reads the same snapshot instead of re-reading (and
   /// potentially getting a different answer from) the live tracker.
-  T _merge(
+  MergeOutput<T> _merge(
     T fresh,
     T existing,
     List<String> invalidatedTexts,
@@ -2212,7 +2220,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     if (output.isWellObserved) {
       wellObservedTexts.add(output.merged.originalText);
     }
-    return output.merged;
+    return output;
   }
 
   /// Core merge implementation shared by [merge] and [_merge].
@@ -2553,6 +2561,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       promotedFromText: textWasPromoted ? existing.originalText : null,
       contextInvalidated: contextInvalidated,
       isWellObserved: newObservationCount >= _kWellObservedThreshold,
+      stepResponseApplied: appliedStepResponse,
     );
   }
 

@@ -70,11 +70,18 @@ class IdentityTurnover {
         throw ArgumentError.value(value, name, 'must be >= 0');
       }
     }
+    // Canonical: an all-zero census IS [none], by identity as well as by
+    // value, so `identical(result.identityTurnover, IdentityTurnover.none)`
+    // holds for an empty capture over an empty engine (PR #138 review).
+    if (merged == 0 && admitted == 0 && retained == 0 && dropped == 0) {
+      return none;
+    }
     return IdentityTurnover._(merged, admitted, retained, dropped);
   }
 
   /// The all-zero census — the default on a `StabilizationResult` built
-  /// by hand, and what an empty capture over an empty engine reports.
+  /// by hand, and the very instance an empty capture over an empty engine
+  /// reports (the factory canonicalises all-zero to it).
   static const none = IdentityTurnover._(0, 0, 0, 0);
 
   /// Fresh blocks that produced an identity outcome: [merged] +
@@ -86,6 +93,19 @@ class IdentityTurnover {
   /// with no `coherentShift` means the line boxes changed under the same
   /// content.
   double get admittedShare => fresh == 0 ? 0.0 : admitted / fresh;
+
+  /// Value equality over the four counts.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is IdentityTurnover &&
+          other.merged == merged &&
+          other.admitted == admitted &&
+          other.retained == retained &&
+          other.dropped == dropped;
+
+  @override
+  int get hashCode => Object.hash(merged, admitted, retained, dropped);
 
   @override
   String toString() => 'IdentityTurnover(merged=$merged admitted=$admitted '

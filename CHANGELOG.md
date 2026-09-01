@@ -8,21 +8,33 @@
   Before this a consumer could observe a shift only per block, through
   `MergeResult.stepResponseApplied` in its own merger, and never the
   vector or the deciding path. Counted at the merges that actually
-  happened, not from the plan; `null` on every capture where no plan was
-  decided (every control capture; always under `damp` / `snap`).
-  Contract G10.
+  applied the translation — read from each merge's own step response, not
+  from plan membership, so a second fresh block reaching a plan member
+  through a step-response-ineligible path (a carousel child, a band
+  admission) is not counted; `null` on every capture where no plan was
+  decided (every control capture; always under `damp` / `snap`). Value
+  equality. Contract G10.
+- **`MergeOutput.stepResponseApplied`** — the step response a merge
+  applied (`null` for damp, the freeze path, a nested-fragment
+  confirmation, and a band admission), so a direct `engine.merge()`
+  caller sees the same value `stabilize()` counts.
 - **`StabilizationResult.identityTurnover` — the per-capture identity
   census** (`IdentityTurnover`: `merged` / `admitted` / `retained` /
-  `dropped`, plus `fresh` and `admittedShare`; `IdentityTurnover.none` is
-  the default on a hand-built result). A high `admittedShare` with no
+  `dropped`, plus `fresh` and `admittedShare`; value equality;
+  `IdentityTurnover.none` is the default on a hand-built result AND the
+  canonical instance every all-zero census resolves to). A high
+  `admittedShare` with cached identities left unmatched and no
   `coherentShift` is the rewrap shape the dynamic-reflow entry measured
   (23 of 30 admitted on the rewrap frame), now detectable without
   reverse-engineering `stableBlocks`. README: "Observing the engine's
   decisions" carries the recipe. Contract G10.
 - **Contract U9 — no scale or zoom model** (`doc/CONTRACT.md`, README
   "Design decisions and known limits"): stated explicitly instead of
-  left to silence. A transform estimate above `coherentShift` is tracked
-  as #135, gated on a zoom corpus that does not yet exist.
+  left to silence — a zoom that keeps the line texts is absorbed as
+  per-block displacement (no shift, clean census; pinned by the pure-zoom
+  test), a zoom that rewraps takes the identity-reset path. A transform
+  estimate above `coherentShift` is tracked as #135, gated on a zoom
+  corpus that does not yet exist.
 
 ### Internal
 - The engine's coherent-shift plan record now carries its deciding source

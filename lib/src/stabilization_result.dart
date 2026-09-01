@@ -2,6 +2,7 @@ import 'coherent_shift_event.dart';
 import 'identity_turnover.dart';
 import 'merge_result.dart';
 import 'observable_block.dart';
+import 'step_response.dart';
 
 /// How a consumer constructs an updated block from engine-computed merge data.
 ///
@@ -109,6 +110,19 @@ class MergeOutput<T> {
   /// Whether this block reached the well-observed threshold.
   final bool isWellObserved;
 
+  /// The step response this merge applied, if any (2.5.0): `null` for a
+  /// damped merge, a freeze-path or nested-fragment merge, and a
+  /// band-fallback admission; [StepResponse.snap] or
+  /// [StepResponse.coherentShift] otherwise — the same value the
+  /// [MergeResult] handed to the merger carried in
+  /// `MergeResult.stepResponseApplied`. Surfaced here so
+  /// `StabilizationEngine.stabilize` counts applied coherent-shift merges
+  /// at the APPLICATION site (this field), never from plan membership —
+  /// a second fresh block reaching a plan member through a
+  /// step-response-ineligible path (a carousel child, a band admission)
+  /// is a member by identity but not by application.
+  final StepResponse? stepResponseApplied;
+
   /// Creates a merge output.
   const MergeOutput({
     required this.merged,
@@ -116,6 +130,7 @@ class MergeOutput<T> {
     this.promotedFromText,
     this.contextInvalidated = false,
     this.isWellObserved = false,
+    this.stepResponseApplied,
   });
 }
 
