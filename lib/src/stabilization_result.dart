@@ -1,5 +1,8 @@
+import 'coherent_shift_event.dart';
+import 'identity_turnover.dart';
 import 'merge_result.dart';
 import 'observable_block.dart';
+import 'step_response.dart';
 
 /// How a consumer constructs an updated block from engine-computed merge data.
 ///
@@ -107,6 +110,19 @@ class MergeOutput<T> {
   /// Whether this block reached the well-observed threshold.
   final bool isWellObserved;
 
+  /// The step response this merge applied, if any (2.5.0): `null` for a
+  /// damped merge, a freeze-path or nested-fragment merge, and a
+  /// band-fallback admission; [StepResponse.snap] or
+  /// [StepResponse.coherentShift] otherwise — the same value the
+  /// [MergeResult] handed to the merger carried in
+  /// `MergeResult.stepResponseApplied`. Surfaced here so
+  /// `StabilizationEngine.stabilize` counts applied coherent-shift merges
+  /// at the APPLICATION site (this field), never from plan membership —
+  /// a second fresh block reaching a plan member through a
+  /// step-response-ineligible path (a carousel child, a band admission)
+  /// is a member by identity but not by application.
+  final StepResponse? stepResponseApplied;
+
   /// Creates a merge output.
   const MergeOutput({
     required this.merged,
@@ -114,6 +130,7 @@ class MergeOutput<T> {
     this.promotedFromText,
     this.contextInvalidated = false,
     this.isWellObserved = false,
+    this.stepResponseApplied,
   });
 }
 
@@ -136,11 +153,32 @@ class StabilizationResult<T> {
   /// (observationCount >= 3, translation can be cached long-term).
   final List<String> wellObservedTexts;
 
+  /// The coherent shift this capture applied, if one was decided and at
+  /// least one merge followed it (2.5.0) — the decided translation, how
+  /// many pairs followed it, how many of those were adopted, and which
+  /// path decided it. `null` on every capture where no plan was decided:
+  /// every control capture, and always under `StepResponse.damp` /
+  /// `StepResponse.snap` (snap re-anchors per block and reports only
+  /// through `MergeResult.stepResponseApplied`). See [CoherentShiftEvent]
+  /// for the reading rules.
+  final CoherentShiftEvent? coherentShift;
+
+  /// The per-capture identity census (2.5.0): fresh blocks merged into a
+  /// tracked identity vs admitted as new, and cached identities retained
+  /// vs dropped. [IdentityTurnover.none] on a hand-built result. A
+  /// capture with a high [IdentityTurnover.admittedShare] and no
+  /// [coherentShift] is the rewrap shape — same content, new line boxes —
+  /// which the engine deliberately treats as an identity reset (contract
+  /// U1).
+  final IdentityTurnover identityTurnover;
+
   /// Creates a stabilization result.
   const StabilizationResult({
     required this.stableBlocks,
     this.contradictions = const [],
     this.invalidatedTexts = const [],
     this.wellObservedTexts = const [],
+    this.coherentShift,
+    this.identityTurnover = IdentityTurnover.none,
   });
 }

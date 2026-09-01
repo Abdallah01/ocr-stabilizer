@@ -4,8 +4,10 @@ import 'types/geometry.dart' show Offset, Rect;
 import 'band_fallback_config.dart';
 import 'band_fallback_stats.dart';
 import 'block_key.dart';
+import 'coherent_shift_event.dart';
 import 'drift_tracker.dart';
 import 'hierarchy_weight.dart';
+import 'identity_turnover.dart';
 import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
 import 'observable_block.dart';
@@ -21,6 +23,22 @@ import 'tracked_block.dart';
 import 'types/absolute_rect.dart';
 import 'types/confidence_types.dart';
 import 'types/space_key.dart';
+
+/// A decided coherent-shift plan (#116/#119), private to the engine.
+///
+/// `memberDrift` is the single source of truth for membership AND each
+/// member's frozen drift snapshot (#116 finding C); `adopted` is the
+/// subset of members carried along by `coherentShiftAdoptAgreeing`
+/// (#119 item 2); `source` names the path that decided the plan. Both
+/// collections are identity-keyed — `T` is the consumer's type and may
+/// define value equality. `stabilize` summarises the plan's APPLIED
+/// members into `StabilizationResult.coherentShift` (2.5.0).
+typedef _ShiftPlan<T> = ({
+  Offset translation,
+  Map<T, Offset> memberDrift,
+  Set<T> adopted,
+  CoherentShiftSource source,
+});
 
 /// How the engine merges an existing block's position with a fresh
 /// drift-corrected observation, and how merged position confidence is
@@ -982,11 +1000,26 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // THIS loop — not a pre-capture snapshot — matching cross-capture
     // behavior exactly (see `_findMatch`'s band branch and
     // `DriftTracker.addObservation`).
+    // 2.5.0 — the per-capture identity census and the coherent-shift
+    // summary (`StabilizationResult.identityTurnover` / `.coherentShift`)
+    // are counted HERE, at the merges that actually happen, never from
+    // the plan alone. Membership (`memberDrift.containsKey(existing)`) is
+    // keyed on the CACHED block only; application is gated in
+    // `_mergeImpl` on step-response eligibility (band admission,
+    // viewport-relative, carousel child) that membership cannot see, and
+    // nothing stops a second fresh block from reaching the same cached
+    // member through such a path — so the count reads the merge's own
+    // `stepResponseApplied`, never `isCoherentMember` (PR #138 review).
+    var mergedCount = 0;
+    var admittedCount = 0;
+    var coherentMembers = 0;
+    var coherentAdopted = 0;
     for (final fresh in deduped) {
       final matchResult = _findMatch(fresh);
       final existing = matchResult.match;
       if (existing == null) {
         stableBlocks.add(fresh);
+        admittedCount++;
         continue;
       }
       if (matchResult.wasNestedFragment) {
@@ -994,6 +1027,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         continue;
       }
       matchedExisting.add(existing);
+      mergedCount++;
       // #116 finding C: `frozenRegionDrift` threads the SAME drift
       // snapshot `_detectCoherentShift`'s dry pre-pass used for this
       // member's displacement into its real merge — see that method's
@@ -1001,7 +1035,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       // order-dependent.
       final isCoherentMember = coherentShiftPlan != null &&
           coherentShiftPlan.memberDrift.containsKey(existing);
-      final merged = _merge(
+      final output = _merge(
         fresh,
         existing,
         invalidatedTexts,
@@ -1012,22 +1046,31 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         frozenRegionDrift:
             isCoherentMember ? coherentShiftPlan.memberDrift[existing] : null,
       );
-      stableBlocks.add(merged);
+      stableBlocks.add(output.merged);
+      if (output.stepResponseApplied == StepResponse.coherentShift) {
+        coherentMembers++;
+        if (coherentShiftPlan != null &&
+            coherentShiftPlan.adopted.contains(existing)) {
+          coherentAdopted++;
+        }
+      }
     }
     for (final (fresh, host) in pendingNested) {
       if (contradictedHosts.contains(host)) {
         stableBlocks.add(fresh);
+        admittedCount++;
         continue;
       }
       if (matchedExisting.contains(host)) continue;
       matchedExisting.add(host);
+      mergedCount++;
       stableBlocks.add(_merge(
         fresh,
         host,
         invalidatedTexts,
         wellObservedTexts,
         wasNestedFragment: true,
-      ));
+      ).merged);
     }
 
     // Missed-frame retention (#46): cached blocks that were not matched
@@ -1045,6 +1088,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // index externally. Rebuilding bounds the map to exactly the
     // currently-retained set (PR #61 review).
     final retained = <T>[];
+    var droppedCount = 0;
     if (missedFrameRetention > 0) {
       // Cross-frame supersession (2.1.0): a cached block that was NOT
       // matched this capture, but whose region a fresh block now covers
@@ -1070,11 +1114,16 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       final nextMissCounts = Map<T, int>.identity();
       for (final cached in _spatialIndex.allBlocks) {
         if (matchedExisting.contains(cached)) continue;
-        if (superseded.contains(cached)) continue;
+        if (superseded.contains(cached)) {
+          droppedCount++;
+          continue;
+        }
         final misses = (_missCounts[cached] ?? 0) + 1;
         if (misses <= missedFrameRetention) {
           nextMissCounts[cached] = misses;
           retained.add(cached);
+        } else {
+          droppedCount++;
         }
       }
       _missCounts
@@ -1082,16 +1131,40 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         ..addAll(nextMissCounts);
     } else {
       _missCounts.clear();
+      // Retention 0: every cached identity nothing matched leaves the
+      // index at the rebuild below.
+      for (final cached in _spatialIndex.allBlocks) {
+        if (!matchedExisting.contains(cached)) droppedCount++;
+      }
     }
 
     // Rebuild the spatial index so callers cannot get it wrong (#13).
     _spatialIndex.rebuild([...stableBlocks, ...retained]);
+
+    // 2.5.0: a plan that reached nobody (every member's real match
+    // diverged from the dry pre-pass) is not an event — the consumer's
+    // cached geometry did not move.
+    final coherentShift = coherentShiftPlan != null && coherentMembers > 0
+        ? CoherentShiftEvent(
+            translation: coherentShiftPlan.translation,
+            memberCount: coherentMembers,
+            adoptedCount: coherentAdopted,
+            decidedBy: coherentShiftPlan.source,
+          )
+        : null;
 
     return StabilizationResult<T>(
       stableBlocks: stableBlocks,
       contradictions: contradictions,
       invalidatedTexts: invalidatedTexts,
       wellObservedTexts: wellObservedTexts,
+      coherentShift: coherentShift,
+      identityTurnover: IdentityTurnover(
+        merged: mergedCount,
+        admitted: admittedCount,
+        retained: retained.length,
+        dropped: droppedCount,
+      ),
     );
   }
 
@@ -1188,7 +1261,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// spec's pairwise "smaller block height" tolerance for a
   /// group-vs-candidate comparison; see the #116 PR description for the
   /// alternative (per-pair, not per-group) reading.
-  ({Offset translation, Map<T, Offset> memberDrift})? _detectCoherentShift(
+  _ShiftPlan<T>? _detectCoherentShift(
     List<
             ({
               T fresh,
@@ -1342,7 +1415,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // [coherentShiftFloorPx]'s doc for why the discriminating axis has to
     // be absolute pixels rather than another multiple of the block's own
     // height.
-    ({Offset translation, Map<T, Offset> memberDrift})? floorFallback() {
+    _ShiftPlan<T>? floorFallback() {
       final floor = coherentShiftFloorPx;
       if (floor == null) return null;
 
@@ -1406,7 +1479,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       for (final j in group) {
         memberDrift[movedExisting[j]] = movedRegionDrift[j];
       }
-      return (translation: Offset(tx, ty), memberDrift: memberDrift);
+      return (
+        translation: Offset(tx, ty),
+        memberDrift: memberDrift,
+        adopted: Set<T>.identity(),
+        source: CoherentShiftSource.floor,
+      );
     }
 
     // ┌─── #119 candidate 2: the batch-level re-anchor ────────────────
@@ -1418,7 +1496,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // which is precisely what distinguishes it from
     // [coherentShiftFloorPx]. Tried after the floor, so a consumer that
     // sets both gets the magnitude-gated answer first.
-    ({Offset translation, Map<T, Offset> memberDrift})? reanchorFallback() {
+    _ShiftPlan<T>? reanchorFallback() {
       final minN = coherentShiftReanchorMinBlocks;
       if (minN == null) return null;
       final group = searchWindow(minN);
@@ -1433,7 +1511,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       for (final j in group) {
         memberDrift[movedExisting[j]] = movedRegionDrift[j];
       }
-      return (translation: Offset(tx, ty), memberDrift: memberDrift);
+      return (
+        translation: Offset(tx, ty),
+        memberDrift: memberDrift,
+        adopted: Set<T>.identity(),
+        source: CoherentShiftSource.reanchor,
+      );
     }
 
     // ┌─── #119 item 2: adopt the agreeing under-gate pairs ─────────────
@@ -1446,9 +1529,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     // on damp and is never pushed past its own observation. The adopted
     // pair's frozen drift snapshot is the one its displacement was computed
     // with (#116 finding C), like every voting member's.
-    ({Offset translation, Map<T, Offset> memberDrift})? adoptAgreeing(
-      ({Offset translation, Map<T, Offset> memberDrift})? plan,
-    ) {
+    _ShiftPlan<T>? adoptAgreeing(_ShiftPlan<T>? plan) {
       if (plan == null || !coherentShiftAdoptAgreeing) return plan;
       if (agreeingExisting.isEmpty) return plan;
       final groupHeight = RobustStats.median(
@@ -1462,6 +1543,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         final diff = (agreeingDisplacement[i] - t).distance;
         if (diff > tol) continue;
         plan.memberDrift[agreeingExisting[i]] = agreeingRegionDrift[i];
+        plan.adopted.add(agreeingExisting[i]);
       }
       return plan;
     }
@@ -1517,8 +1599,12 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     for (final j in bestGroup) {
       memberDrift[movedExisting[j]] = movedRegionDrift[j];
     }
-    return adoptAgreeing(
-        (translation: Offset(tx, ty), memberDrift: memberDrift));
+    return adoptAgreeing((
+      translation: Offset(tx, ty),
+      memberDrift: memberDrift,
+      adopted: Set<T>.identity(),
+      source: CoherentShiftSource.quorum,
+    ));
   }
 
   // ── Drift propagation ────────────────────────────────────────────────
@@ -2107,7 +2193,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// used to compute THIS member's displacement, threaded through so
   /// `_mergeImpl` reads the same snapshot instead of re-reading (and
   /// potentially getting a different answer from) the live tracker.
-  T _merge(
+  MergeOutput<T> _merge(
     T fresh,
     T existing,
     List<String> invalidatedTexts,
@@ -2134,7 +2220,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     if (output.isWellObserved) {
       wellObservedTexts.add(output.merged.originalText);
     }
-    return output.merged;
+    return output;
   }
 
   /// Core merge implementation shared by [merge] and [_merge].
@@ -2475,6 +2561,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       promotedFromText: textWasPromoted ? existing.originalText : null,
       contextInvalidated: contextInvalidated,
       isWellObserved: newObservationCount >= _kWellObservedThreshold,
+      stepResponseApplied: appliedStepResponse,
     );
   }
 

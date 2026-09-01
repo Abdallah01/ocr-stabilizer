@@ -37,6 +37,11 @@ void main() {
   ];
   final result2 = engine.stabilize(batch2);
   print('Capture 2: ${result2.stableBlocks.length} stable blocks');
+  // 2.5.0 — what the engine decided this capture, without reading blocks:
+  // the identity census, and the coherent shift if one was decided
+  // (`null` here — the two captures agree, nothing moved as a slab).
+  print('  ${result2.identityTurnover}');
+  print('  coherent shift: ${result2.coherentShift ?? 'none'}');
 
   for (final block in result2.stableBlocks) {
     print(

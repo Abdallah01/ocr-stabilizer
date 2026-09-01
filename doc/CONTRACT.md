@@ -86,6 +86,23 @@ Behavioral-default changes ride minor versions with a CHANGELOG entry and a
 G5 escape — the repo's own convention (CONTRIBUTING.md). Compile-breaking
 changes wait for 3.0.
 
+**G10 — Engine decisions are observable (2.5.0).** Every decided coherent
+shift is reported on the result as `StabilizationResult.coherentShift`
+(`CoherentShiftEvent`: the translation, the members that applied it, the
+adopted subset, and which path — quorum / floor / re-anchor — decided
+it), counted at the merges that actually happened; every capture reports
+its identity census as `StabilizationResult.identityTurnover`
+(`IdentityTurnover`: merged / admitted / retained / dropped). A capture
+where no plan was decided reports `coherentShift == null` — every control
+capture, and always under `damp` / `snap`. Per-block membership stays on
+`MergeResult.stepResponseApplied`, and `MergeOutput.stepResponseApplied`
+(2.5.0) carries the same value to a direct `merge()` caller. Both result
+values are additive (G9), define value equality, and throw on an invalid
+census
+(`test/stabilization_engine_coherent_shift_event_test.dart`,
+`test/stabilization_engine_identity_turnover_test.dart`,
+`test/coherent_shift_event_test.dart`, `test/identity_turnover_test.dart`).
+
 ## 2. Intentionally unsupported in 2.x
 
 Relying on any of these is out of contract; each has a tracking issue where
@@ -137,6 +154,27 @@ timer. A stream that stops producing captures stops changing. Consumers
 needing time-based eviction implement it via the injected index (U6) or
 their own layer above the engine.
 
+**U9 — No scale or zoom model.** `StepResponse.coherentShift` models one
+layout event: a TRANSLATION shared by many tracked blocks. Nothing
+estimates a scale (browser zoom, a font-size change, a DPR change
+mid-session) or a similarity transform, and the per-block agreement scale
+is a jitter allowance, not a zoom model. What a zoom does to the engine
+depends on whether the line TEXTS survive it. A zoom that keeps them
+still matches every block (matching is text-first), and its scaled
+geometry is absorbed as ordinary per-block displacement — damped toward
+the new boxes over several captures, with no `coherentShift` (the
+displacements grow with distance from the zoom origin, so they never
+agree as one translation) and an `identityTurnover` that reads as a
+clean re-sighting (`test/stabilization_engine_identity_turnover_nested_test.dart`,
+the pure-zoom case). A zoom or width change that REWRAPS the lines takes
+the rewrap path — an identity reset (U1; the dynamic-reflow entry's
+`rewrap` stream), which `identityTurnover` names (G10). Detect zoom from
+your own source (a browser's visual viewport, a camera's zoom factor) and
+either construct a fresh engine at the boundary (U5) or rescale the
+geometry you hold outside the engine. A transform ESTIMATE (observed,
+never applied) is the tracked candidate, gated on a zoom corpus that does
+not yet exist. ([#135])
+
 ## 3. Consumer-configurable behaviors
 
 The stable recipe is the constructor defaults. Knobs, grouped by decision:
@@ -169,7 +207,8 @@ units, run `ParagraphGrouper` downstream and size it yourself
 prose, not a recommendation for other scripts.
 
 **Diagnostics** — `debugLogger` (opt-in), `ParagraphGrouper.onMergeDecision`,
-`engine.bandStats`.
+`engine.bandStats`; on every result, `coherentShift` and
+`identityTurnover` (G10, always on — no knob).
 
 [#91]: https://github.com/Abdallah01/ocr-stabilizer/issues/91
 [#94]: https://github.com/Abdallah01/ocr-stabilizer/issues/94
@@ -179,3 +218,4 @@ prose, not a recommendation for other scripts.
 [#100]: https://github.com/Abdallah01/ocr-stabilizer/issues/100
 [#101]: https://github.com/Abdallah01/ocr-stabilizer/issues/101
 [#119]: https://github.com/Abdallah01/ocr-stabilizer/issues/119
+[#135]: https://github.com/Abdallah01/ocr-stabilizer/issues/135

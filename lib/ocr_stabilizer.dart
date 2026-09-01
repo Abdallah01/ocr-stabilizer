@@ -45,6 +45,8 @@ export 'src/ocr_block.dart';
 export 'src/otsu_threshold.dart';
 export 'src/paragraph_grouper.dart';
 export 'src/classification_input.dart';
+export 'src/coherent_shift_event.dart';
+export 'src/identity_turnover.dart';
 export 'src/contextual_invalidation.dart';
 export 'src/css_submap_membership.dart';
 export 'src/drift_tracker.dart';
