@@ -20,6 +20,24 @@ jobs:
         with:
           sdk: ${{ matrix.sdk }}
       - run: dart pub get
+      # Fast-fail formatter gate, scoped to lib/ — pana's EFFECTIVE scope,
+      # established empirically, not from its source: pana 0.23.12's
+      # command line formats its whole package copy, but its runs here
+      # stay green while 31 test/+tool/ files are nonconforming under the
+      # SAME stable SDK (3.13.3), and its one red report named only a
+      # lib/ file — so whatever its copy/penalty mechanics, only lib/
+      # moves the score, and a `.`-scoped step fails on files the score
+      # ignores (proven: run 33503606228 went red on exactly those 31).
+      # Stable leg only: formatter output changes across Dart releases —
+      # the 3.3 floor leg's formatter disagrees with stable's, and a
+      # local stable older than CI's can disagree too. This step is the
+      # fast SIGNAL; the ENFORCEMENT half is the required-status-checks
+      # branch protection on main (test x2 + pana, set 2026-09-01) — the
+      # 2026-08/09 drift was red on pana PRE-merge on every PR and was
+      # merged over, so an advisory red X alone would not have prevented
+      # it.
+      - if: matrix.sdk == 'stable'
+        run: dart format --output=none --set-exit-if-changed lib/
       - run: dart analyze --fatal-infos
       - run: dart test
       # Coverage visibility (#60): lcov uploaded as a build artifact from

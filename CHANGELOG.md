@@ -1,3 +1,29 @@
+## 2.4.1 - 2026-09-01
+
+### Internal
+- **CI is fully green again — formatter compliance restored.** The `pana`
+  CI job scores formatter compliance (10 of its 160 points) and gates on
+  a perfect score; `lib/src/stabilization_engine.dart` had drifted from
+  `dart format` output at the 2026-08-30 #119 item 2 merge, so the pana
+  job had been red since then (both `test` legs stayed green throughout).
+  The file is re-wrapped to the stable formatter's output — whitespace
+  and line-wrapping only, except one two-line `if` that gained braces to
+  satisfy `curly_braces_in_flow_control_structures`. No behavior change;
+  the full 822-test suite is byte-for-byte the same set, all green.
+- **CI: formatter gate on the fast leg + real enforcement.** To be exact
+  about the failure mode (this entry's first draft got it wrong; caught
+  in review): the red pana check was already visible PRE-merge — the
+  workflow runs on every pull request — and both offending merges went
+  in over a red X, because no check was required. Two changes: the
+  `test` job's stable leg now runs `dart format --output=none
+  --set-exit-if-changed lib/` — pana's effective scope, established
+  empirically in this release's own CI runs: only `lib/` files move the
+  pana score here, and a wider `.` scope fails on `test/`/`tool/` files
+  the score ignores (stable leg only, since the 3.3 floor leg's older
+  formatter disagrees). And `main` now carries required-status-checks
+  branch protection (`test` both legs + `pana`), which is the part that
+  actually prevents a merge-over-red recurrence.
+
 ## 2.4.0 - 2026-09-01
 
 ### Changed
