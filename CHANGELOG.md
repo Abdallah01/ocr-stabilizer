@@ -10,12 +10,18 @@
   and line-wrapping only, except one two-line `if` that gained braces to
   satisfy `curly_braces_in_flow_control_structures`. No behavior change;
   the full 822-test suite is byte-for-byte the same set, all green.
-- **CI: fast-fail formatter gate.** The `test` job's stable leg now runs
-  `dart format --output=none --set-exit-if-changed lib/`, so a formatting
-  drift fails every PR loudly instead of surfacing only as a post-merge
-  pana score drop (which is how this one slipped through twice). Scoped
-  to `lib/` (exactly what pana scores) and to the stable leg (the 3.3
-  floor leg's older formatter disagrees with stable's output).
+- **CI: formatter gate on the fast leg + real enforcement.** To be exact
+  about the failure mode (this entry's first draft got it wrong; caught
+  in review): the red pana check was already visible PRE-merge — the
+  workflow runs on every pull request — and both offending merges went
+  in over a red X, because no check was required. Two changes: the
+  `test` job's stable leg now runs `dart format --output=none
+  --set-exit-if-changed .` (the same command and scope as pana's own
+  check — pana formats the package root, not just `lib/`; stable leg
+  only, since the 3.3 floor leg's older formatter disagrees), and `main`
+  now carries required-status-checks branch protection (`test` both legs
+  + `pana`), which is the part that actually prevents a merge-over-red
+  recurrence.
 
 ## 2.4.0 - 2026-09-01
 
