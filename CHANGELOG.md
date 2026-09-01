@@ -16,12 +16,13 @@
   workflow runs on every pull request — and both offending merges went
   in over a red X, because no check was required. Two changes: the
   `test` job's stable leg now runs `dart format --output=none
-  --set-exit-if-changed .` (the same command and scope as pana's own
-  check — pana formats the package root, not just `lib/`; stable leg
-  only, since the 3.3 floor leg's older formatter disagrees), and `main`
-  now carries required-status-checks branch protection (`test` both legs
-  + `pana`), which is the part that actually prevents a merge-over-red
-  recurrence.
+  --set-exit-if-changed lib/` — pana's effective scope, established
+  empirically in this release's own CI runs: only `lib/` files move the
+  pana score here, and a wider `.` scope fails on `test/`/`tool/` files
+  the score ignores (stable leg only, since the 3.3 floor leg's older
+  formatter disagrees). And `main` now carries required-status-checks
+  branch protection (`test` both legs + `pana`), which is the part that
+  actually prevents a merge-over-red recurrence.
 
 ## 2.4.0 - 2026-09-01
 
