@@ -1,3 +1,22 @@
+## 2.4.1 - 2026-09-01
+
+### Internal
+- **CI is fully green again — formatter compliance restored.** The `pana`
+  CI job scores formatter compliance (10 of its 160 points) and gates on
+  a perfect score; `lib/src/stabilization_engine.dart` had drifted from
+  `dart format` output at the 2026-08-30 #119 item 2 merge, so the pana
+  job had been red since then (both `test` legs stayed green throughout).
+  The file is re-wrapped to the stable formatter's output — whitespace
+  and line-wrapping only, except one two-line `if` that gained braces to
+  satisfy `curly_braces_in_flow_control_structures`. No behavior change;
+  the full 822-test suite is byte-for-byte the same set, all green.
+- **CI: fast-fail formatter gate.** The `test` job's stable leg now runs
+  `dart format --output=none --set-exit-if-changed lib/`, so a formatting
+  drift fails every PR loudly instead of surfacing only as a post-merge
+  pana score drop (which is how this one slipped through twice). Scoped
+  to `lib/` (exactly what pana scores) and to the stable leg (the 3.3
+  floor leg's older formatter disagrees with stable's output).
+
 ## 2.4.0 - 2026-09-01
 
 ### Changed

@@ -1189,7 +1189,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// group-vs-candidate comparison; see the #116 PR description for the
   /// alternative (per-pair, not per-group) reading.
   ({Offset translation, Map<T, Offset> memberDrift})? _detectCoherentShift(
-    List<({T fresh, ({T? match, bool wasBandFallback, bool wasNestedFragment}) result})>
+    List<
+            ({
+              T fresh,
+              ({T? match, bool wasBandFallback, bool wasNestedFragment}) result
+            })>
         matchResults,
   ) {
     if (positionMergeModel != PositionMergeModel.agreementWeighted) {
@@ -1383,8 +1387,10 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       // other qualified mover stays on damp. A size-1 window always
       // validates (its member IS its median), so for a non-empty set the
       // search cannot come back empty — the null check is belt and braces.
-      final group = searchWindow(1,
-          among: [for (final j in order) if (qualified.contains(j)) j]);
+      final group = searchWindow(1, among: [
+        for (final j in order)
+          if (qualified.contains(j)) j
+      ]);
       if (group == null) return null;
 
       // Non-null by construction: `group` is non-empty, and
@@ -1451,7 +1457,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       if (groupHeight == null) return plan;
       final t = plan.translation;
       for (var i = 0; i < agreeingExisting.length; i++) {
-        final tol = coherentShiftTolerance * min(agreeingHeight[i], groupHeight);
+        final tol =
+            coherentShiftTolerance * min(agreeingHeight[i], groupHeight);
         final diff = (agreeingDisplacement[i] - t).distance;
         if (diff > tol) continue;
         plan.memberDrift[agreeingExisting[i]] = agreeingRegionDrift[i];
@@ -1472,7 +1479,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
 
     final bestGroup = searchWindow(coherentShiftMinBlocks);
 
-    if (bestGroup == null) return adoptAgreeing(floorFallback() ?? reanchorFallback());
+    if (bestGroup == null) {
+      return adoptAgreeing(floorFallback() ?? reanchorFallback());
+    }
     if (bestGroup.length / movedExisting.length < coherentShiftMinShare) {
       return adoptAgreeing(floorFallback() ?? reanchorFallback());
     }
@@ -2297,8 +2306,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         !existing.isHorizontalScrollChild;
 
     if (stepResponseEligible && stepResponse == StepResponse.snap) {
-      final residual =
-          (correctedRect.topLeft - baselineRect.topLeft).distance;
+      final residual = (correctedRect.topLeft - baselineRect.topLeft).distance;
       final scale = _agreementScale(existing);
       if (residual > snapThresholdMultiplier * scale) {
         w = 1.0;

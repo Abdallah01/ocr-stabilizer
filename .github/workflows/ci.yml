@@ -20,6 +20,16 @@ jobs:
         with:
           sdk: ${{ matrix.sdk }}
       - run: dart pub get
+      # Fast-fail formatter gate, scoped twice on purpose: (1) to lib/,
+      # because that is exactly what pana scores — its 10-point formatter
+      # penalty used to be the ONLY signal, discovered failed-after-merge
+      # twice (2026-08-30 / 09-01); the wider tree (test/, tool/) is
+      # deliberately ungated. (2) to the stable leg, because formatter
+      # output changed across Dart releases (the 3.3 floor leg's formatter
+      # disagrees with stable's tall style) and pana runs on stable — the
+      # stable formatter is the one whose verdict counts.
+      - if: matrix.sdk == 'stable'
+        run: dart format --output=none --set-exit-if-changed lib/
       - run: dart analyze --fatal-infos
       - run: dart test
       # Coverage visibility (#60): lcov uploaded as a build artifact from
