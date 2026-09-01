@@ -89,8 +89,20 @@ counts are evidence depth, never a readiness ladder:
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^2.4.0
+  ocr_stabilizer: ^2.5.0
 ```
+
+> **What's new in 2.5.0** — the engine's decisions are observable on
+> every result ([`doc/CONTRACT.md`](doc/CONTRACT.md) G10):
+> `result.coherentShift` (a `CoherentShiftEvent` — the decided
+> translation, how many merges applied it, how many of those were
+> adopted, and whether the quorum, the floor or the re-anchor decided it;
+> `null` when no shift was decided) and `result.identityTurnover` (an
+> `IdentityTurnover` — merged / admitted / retained / dropped, with
+> `admittedShare` as the rewrap detector's input). See
+> [Observing the engine's decisions](#observing-the-engines-decisions).
+> The contract now also states U9: the engine has no scale or zoom model
+> ([#135](https://github.com/Abdallah01/ocr-stabilizer/issues/135)). Additive only — no numerics changed.
 
 > **What's new in 2.4.0** — `coherentShiftAdoptAgreeing` is now the
 > default ([#119](https://github.com/Abdallah01/ocr-stabilizer/issues/119) item 2): once a coherent shift IS decided, the matched
@@ -357,6 +369,58 @@ slab's mover travels at only 2.64x, so NO multiplier admits one without
 the other. Full derivation and the sensitivity table:
 `doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md`.
 
+### Observing the engine's decisions
+
+Since 2.5.0 every `StabilizationResult` carries two read-only summaries
+of what the engine decided this capture, so a layout layer above the
+engine can react without reverse-engineering `stableBlocks`:
+
+```dart
+final result = engine.stabilize(blocks);
+
+final shift = result.coherentShift; // CoherentShiftEvent?
+if (shift != null) {
+  // The tracked content moved as a slab. Move any geometry you cache
+  // OUTSIDE the engine for these identities by the same vector.
+  overlay.translateAll(shift.translation);
+  log('shift ${shift.decidedBy.name} ${shift.translation} '
+      'members=${shift.memberCount} adopted=${shift.adoptedCount}');
+}
+
+final t = result.identityTurnover; // IdentityTurnover
+final leftBehind = t.dropped + t.retained; // cached identities nothing matched
+if (shift == null && leftBehind > 0 && t.admittedShare >= 0.5) {
+  // Most fresh blocks are NEW identities, cached identities were left
+  // unmatched, and nothing moved as a slab: the line boxes changed under
+  // the same content (a font swap, a width change). The engine reset
+  // identity on purpose (contract U1). Cached geometry for the old
+  // identities is stale — rebuild it rather than translate it.
+  overlay.rebuildFrom(result.stableBlocks);
+}
+```
+
+Reading rules:
+
+- `coherentShift` is the coherent PLAN, counted at the merges that
+  actually applied it: `memberCount` equals the number of
+  `MergeResult.stepResponseApplied == coherentShift` your merger saw
+  this capture. It is `null` on every capture where no plan was decided —
+  every control capture, and always under `StepResponse.damp` / `snap`
+  (snap re-anchors per block and reports only through `MergeResult`).
+- `decidedBy` names the path: `quorum` (the majority vote), `floor`
+  (`coherentShiftFloorPx`), `reanchor` (`coherentShiftReanchorMinBlocks`).
+  `floor` events during ordinary scrolling mean the floor sits inside
+  your scroll range — recalibrate it (recipe above).
+- `identityTurnover.fresh` can be smaller than the batch you passed:
+  intra-batch NMS removes duplicates first, and a nested fragment whose
+  host already merged this capture is folded into that merge.
+- The `leftBehind > 0` guard keeps a session's FIRST sighting (every
+  block new, nothing cached) from reading as a rewrap. The 0.5 share is a
+  starting point, not a calibrated constant: on the dynamic-reflow
+  validation corpus the rewrap frame admits 23 of 30 lines (0.77) and the
+  next frame merges 29 of 30, while a stationary re-sighting sits near
+  0.0. Calibrate on your own captures.
+
 ## Core Components
 
 ### TrackedBlock\<T\>
@@ -581,6 +645,8 @@ A block's identity is a six-dimensional signature:
 | `MergeResult` | Exhaustive engine-computed delta passed to `BlockMerger` |
 | `ClassificationResult` | Output of `BlockClassifierService` |
 | `MergeDecisionDiagnostic` | One grouper boundary decision — verdict, reason set, gap/threshold context (2.0.0+) |
+| `CoherentShiftEvent` | The coherent shift a capture applied — translation, member count, adopted count, deciding path (2.5.0+) |
+| `IdentityTurnover` | Per-capture identity census — merged / admitted / retained / dropped, `admittedShare` (2.5.0+) |
 
 ### Value Types
 
@@ -590,6 +656,7 @@ A block's identity is a six-dimensional signature:
 | `StickyFallback` | Fallback coordinate context for demoted sticky elements |
 | `TextVote` | Accumulated confidence evidence for one text variant |
 | `MergeRejectReason` | 9-value enum naming every grouper rejection guard (2.0.0+) |
+| `CoherentShiftSource` | 3-value enum naming the path that decided a coherent shift — quorum / floor / reanchor (2.5.0+) |
 
 ### Extension Types
 
@@ -650,6 +717,16 @@ Deliberate trade-offs, each with a tracking issue for discussion:
   retuning in the photometric-jitter regime
   (`doc/replay/validation/2026-08-tesseract-matrix/`). High-amplitude
   re-segmentation on other engines remains open: [#94](https://github.com/Abdallah01/ocr-stabilizer/issues/94).
+- **No scale or zoom model.** `coherentShift` models a shared translation
+  only; a zoomed or width-changed page presents as re-segmentation and
+  takes the rewrap path (identity reset, which `identityTurnover` names).
+  Detect zoom from your own source and rebuild; a transform ESTIMATE above
+  `coherentShift` is the tracked candidate, gated on a zoom corpus that
+  does not yet exist. Contract U9; [#135](https://github.com/Abdallah01/ocr-stabilizer/issues/135).
+- **The dynamic-reflow evidence is single-seed.** Every step-response
+  number rests on one synthetic seed and one repetition per stream; the
+  `coherentShiftFloorPx` window is bounded by single measurements on both
+  sides. A second seed with repetitions is tracked as [#136](https://github.com/Abdallah01/ocr-stabilizer/issues/136).
 - **Paragraph grouping assumes a single text region.** The Otsu gap threshold
   is derived batch-globally; multi-column pages are handled by per-merge
   guards, not per-region statistics. [#91](https://github.com/Abdallah01/ocr-stabilizer/issues/91).

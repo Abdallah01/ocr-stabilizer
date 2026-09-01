@@ -1,3 +1,5 @@
+import 'coherent_shift_event.dart';
+import 'identity_turnover.dart';
 import 'merge_result.dart';
 import 'observable_block.dart';
 
@@ -136,11 +138,32 @@ class StabilizationResult<T> {
   /// (observationCount >= 3, translation can be cached long-term).
   final List<String> wellObservedTexts;
 
+  /// The coherent shift this capture applied, if one was decided and at
+  /// least one merge followed it (2.5.0) — the decided translation, how
+  /// many pairs followed it, how many of those were adopted, and which
+  /// path decided it. `null` on every capture where no plan was decided:
+  /// every control capture, and always under `StepResponse.damp` /
+  /// `StepResponse.snap` (snap re-anchors per block and reports only
+  /// through `MergeResult.stepResponseApplied`). See [CoherentShiftEvent]
+  /// for the reading rules.
+  final CoherentShiftEvent? coherentShift;
+
+  /// The per-capture identity census (2.5.0): fresh blocks merged into a
+  /// tracked identity vs admitted as new, and cached identities retained
+  /// vs dropped. [IdentityTurnover.none] on a hand-built result. A
+  /// capture with a high [IdentityTurnover.admittedShare] and no
+  /// [coherentShift] is the rewrap shape — same content, new line boxes —
+  /// which the engine deliberately treats as an identity reset (contract
+  /// U1).
+  final IdentityTurnover identityTurnover;
+
   /// Creates a stabilization result.
   const StabilizationResult({
     required this.stableBlocks,
     this.contradictions = const [],
     this.invalidatedTexts = const [],
     this.wellObservedTexts = const [],
+    this.coherentShift,
+    this.identityTurnover = IdentityTurnover.none,
   });
 }
