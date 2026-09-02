@@ -103,6 +103,24 @@ census
 `test/stabilization_engine_identity_turnover_test.dart`,
 `test/coherent_shift_event_test.dart`, `test/identity_turnover_test.dart`).
 
+**G11 — The transform estimate is reported, never applied (2.6.0).**
+Every capture with at least `transformEstimateMinPairs` (3) eligible
+matched pairs reports `StabilizationResult.transformEstimate`
+(`TransformEstimate`: the least-squares isotropic scale + translation
+over those pairs after one 3x-median trim, with its residual, span,
+pair count and the pairs the trim set aside); a capture with fewer
+reports `null`. The merge stays per block — no scale enters any block's
+geometry, so U9 stands: the engine test's pure-zoom case checks the
+blocks are damped, not rescaled, while the estimate reads the zoom. The
+value is additive (G9), defines value equality and validates its fields
+(`test/stabilization_engine_transform_estimate_test.dart`,
+`test/transform_estimate_test.dart`). The zoom corpus entry
+(`doc/replay/validation/2026-09-zoom/EXPERIMENT.md`) is the evidence:
+a 1.25x and a 0.8x pure zoom read 0.249 / 0.200 deviation with
+residuals under 4 px at the event capture, and no capture of any
+non-zoom stream in the repository exceeds 0.010 under the entry's
+reading bounds (`test/replay/experiment_doc_zoom_tables_test.dart`).
+
 ## 2. Intentionally unsupported in 2.x
 
 Relying on any of these is out of contract; each has a tracking issue where
@@ -154,11 +172,13 @@ timer. A stream that stops producing captures stops changing. Consumers
 needing time-based eviction implement it via the injected index (U6) or
 their own layer above the engine.
 
-**U9 — No scale or zoom model.** `StepResponse.coherentShift` models one
-layout event: a TRANSLATION shared by many tracked blocks. Nothing
-estimates a scale (browser zoom, a font-size change, a DPR change
-mid-session) or a similarity transform, and the per-block agreement scale
-is a jitter allowance, not a zoom model. What a zoom does to the engine
+**U9 — No scale or zoom model in the merge.** `StepResponse.coherentShift`
+models one layout event: a TRANSLATION shared by many tracked blocks. No
+scale (browser zoom, a font-size change, a DPR change mid-session) enters
+the merge: the per-block agreement scale is a jitter allowance, not a
+zoom model, and the similarity transform the engine fits since 2.6.0
+(`transformEstimate`, G11) is reported, never applied. What a zoom does
+to the engine
 depends on whether the line TEXTS survive it. A zoom that keeps them
 still matches every block (matching is text-first), and its scaled
 geometry is absorbed as ordinary per-block displacement — damped toward
@@ -169,11 +189,12 @@ clean re-sighting (`test/stabilization_engine_identity_turnover_nested_test.dart
 the pure-zoom case). A zoom or width change that REWRAPS the lines takes
 the rewrap path — an identity reset (U1; the dynamic-reflow entry's
 `rewrap` stream), which `identityTurnover` names (G10). Detect zoom from
-your own source (a browser's visual viewport, a camera's zoom factor) and
-either construct a fresh engine at the boundary (U5) or rescale the
-geometry you hold outside the engine. A transform ESTIMATE (observed,
-never applied) is the tracked candidate, gated on a zoom corpus that does
-not yet exist. ([#135])
+your own source (a browser's visual viewport, a camera's zoom factor) or
+from `transformEstimate` under the reading rule the zoom corpus entry
+states (`doc/replay/validation/2026-09-zoom/EXPERIMENT.md`: a pure zoom
+reads at its event capture, a rewrapping one reads as the identity reset
+above), and either construct a fresh engine at the boundary (U5) or
+rescale the geometry you hold outside the engine. ([#135])
 
 ## 3. Consumer-configurable behaviors
 
@@ -207,8 +228,9 @@ units, run `ParagraphGrouper` downstream and size it yourself
 prose, not a recommendation for other scripts.
 
 **Diagnostics** — `debugLogger` (opt-in), `ParagraphGrouper.onMergeDecision`,
-`engine.bandStats`; on every result, `coherentShift` and
-`identityTurnover` (G10, always on — no knob).
+`engine.bandStats`; on every result, `coherentShift`, `identityTurnover`
+(G10) and `transformEstimate` (G11) — always on; the one knob is
+`transformEstimateMinPairs` (3), the fewest pairs a fit may use.
 
 [#91]: https://github.com/Abdallah01/ocr-stabilizer/issues/91
 [#94]: https://github.com/Abdallah01/ocr-stabilizer/issues/94

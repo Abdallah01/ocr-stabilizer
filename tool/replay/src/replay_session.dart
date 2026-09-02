@@ -47,8 +47,7 @@ const int kMedianWarmUpBlocks = 4;
 /// consumer's `heights[n ~/ 2]`), doubled, clamped to the consumer's
 /// 80–220 px range.
 Buckets? medianHeightBuckets(Iterable<TrackedBlock> tracked) {
-  final heights = [for (final b in tracked) b.absoluteRect.raw.height]
-    ..sort();
+  final heights = [for (final b in tracked) b.absoluteRect.raw.height]..sort();
   if (heights.length < kMedianWarmUpBlocks) return null;
   final size = (heights[heights.length ~/ 2] * 2).clamp(80.0, 220.0);
   return (width: size, height: size);
@@ -185,6 +184,8 @@ class ReplayResult {
     required this.stats,
     this.bucketPolicy = 'viewportFormula',
     this.bucketsApplied = const [],
+    this.transformEstimates = const [],
+    this.identityTurnovers = const [],
   });
 
   final int batches;
@@ -203,6 +204,19 @@ class ReplayResult {
   /// order. Empty when the viewport formula was all that ran.
   final List<Buckets> bucketsApplied;
 
+  /// One entry per batch, in stream order: that capture's
+  /// `StabilizationResult.transformEstimate` (2.6.0, #135), null where
+  /// the engine reported none. Read by `transform_report.dart`; no
+  /// `ab-report` field reads it (the committed `.ab.json` stay as they
+  /// are).
+  final List<TransformEstimate?> transformEstimates;
+
+  /// One entry per batch, in stream order: that capture's
+  /// `StabilizationResult.identityTurnover` (2.5.0). Read by
+  /// `transform_report.dart` next to the estimate, so a zoom entry can
+  /// say how many lines the fit had to work with.
+  final List<IdentityTurnover> identityTurnovers;
+
   Iterable<MergeSample> get freezes => merges.where((m) => m.wasFrozen);
   Iterable<MergeSample> get admissions => merges.where((m) => m.wasAdmission);
 }
@@ -211,7 +225,8 @@ class ReplayResult {
 Map<String, Object?> bucketsJson(ReplayResult r) => {
       'policy': r.bucketPolicy,
       'sizes': [
-        for (final b in r.bucketsApplied) {'width': b.width, 'height': b.height},
+        for (final b in r.bucketsApplied)
+          {'width': b.width, 'height': b.height},
       ],
     };
 
@@ -377,10 +392,14 @@ ReplayResult replay(
   // this loop and dump_frames.dart, so the dump's geometry is the replay's.
   final buckets = BucketPolicyApplier(engine, bucketPolicy);
 
+  final transformEstimates = <TransformEstimate?>[];
+  final identityTurnovers = <IdentityTurnover>[];
   for (final batch in stream.batches) {
     currentCapture = batch.captureId;
     buckets.beforeBatch(batch);
-    engine.stabilize(batch.blocks);
+    final result = engine.stabilize(batch.blocks);
+    transformEstimates.add(result.transformEstimate);
+    identityTurnovers.add(result.identityTurnover);
   }
 
   return ReplayResult(
@@ -391,5 +410,7 @@ ReplayResult replay(
     stats: engine.bandStats,
     bucketPolicy: buckets.policyUsed,
     bucketsApplied: buckets.applied,
+    transformEstimates: transformEstimates,
+    identityTurnovers: identityTurnovers,
   );
 }

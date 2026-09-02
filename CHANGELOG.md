@@ -1,6 +1,28 @@
-## 2.5.1 - 2026-09-02
+## 2.6.0 - 2026-09-02
 
 ### Added
+- **A similarity-transform estimate on every result (#135).** New
+  `StabilizationResult.transformEstimate` (`TransformEstimate`): the
+  least-squares isotropic scale + translation over the capture's
+  eligible matched pairs (the coherent-shift detector's eligibility,
+  collected in the real match loop so it exists under every
+  `StepResponse`), after one 3x-median trim, reporting `scale`,
+  `translation`, `fixedPoint`, `pairCount`, `rejectedPairs`,
+  `residualPx` and `spanPx`; `null` under `transformEstimateMinPairs`
+  (new engine knob, default 3) pairs. Observed, never applied — the
+  merge keeps its no-zoom model (contract U9, now guaranteed as G11).
+  Evidence: a new zoom corpus (`doc/replay/validation/2026-09-zoom/`,
+  from the dynamic-reflow generator's new `--zoom K`): a 1.25x and a
+  0.8x pure zoom read 1.249 / 0.800 at the event capture with residuals
+  under 4 px over 8 pairs (the trim is what makes the zoom-out
+  readable: untrimmed it read 1.04 with a 179 px residual through two
+  look-alike mismatches), the rewrapping zooms read as the identity
+  reset, and over all 94 non-zoom streams in the repository no capture
+  with six or more pairs and a residual under 10 px exceeds
+  |scale − 1| = 0.010. The entry states the reading rule and its
+  margins, pinned by `test/replay/experiment_doc_zoom_tables_test.dart`;
+  `dart tool/replay/replay.dart transform-report <stream>.jsonl` prints
+  a stream's per-capture estimates.
 - **Seed-variance corpus for the dynamic-reflow evidence (#136).** Seven
   new configurations — three further seeds, each with a fresh-noise
   repetition, plus a fresh-noise repetition of the published seed — of

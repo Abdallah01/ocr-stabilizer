@@ -11,6 +11,7 @@ import 'coherent_shift_event.dart';
 import 'drift_tracker.dart';
 import 'hierarchy_weight.dart';
 import 'identity_turnover.dart';
+import 'transform_estimate.dart';
 import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
 import 'observable_block.dart';
@@ -256,6 +257,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     this.coherentShiftFloorPx,
     this.coherentShiftReanchorMinBlocks,
     this.coherentShiftAdoptAgreeing = true,
+    this.transformEstimateMinPairs = 3,
   })  : _merger = merger,
         driftTracker =
             driftTracker ?? DriftTracker(submapMembership: submapMembership),
@@ -277,7 +279,24 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       coherentShiftFloorPx: coherentShiftFloorPx,
       coherentShiftReanchorMinBlocks: coherentShiftReanchorMinBlocks,
     );
+    // #135: an integer COUNT, same class as `coherentShiftMinBlocks` —
+    // below 2 the least-squares scale has no second anchor and
+    // `TransformEstimate.fit` would refuse every capture.
+    if (transformEstimateMinPairs < 2) {
+      throw ArgumentError.value(
+        transformEstimateMinPairs,
+        'transformEstimateMinPairs',
+        'must be >= 2 — a scale needs two anchors',
+      );
+    }
   }
+
+  /// The fewest eligible matched pairs a capture needs before
+  /// `StabilizationResult.transformEstimate` is reported (2.6.0, #135).
+  /// Default 3. Eligibility is the coherent-shift detector's: ordinary
+  /// primary matches only. Below the floor the result carries `null`
+  /// rather than a fit over too few anchors. Must be >= 2.
+  final int transformEstimateMinPairs;
 
   /// How many consecutive [stabilize] calls a tracked block survives in
   /// [spatialIndex] without being re-observed (#46).
@@ -1017,6 +1036,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     var admittedCount = 0;
     var coherentMembers = 0;
     var coherentAdopted = 0;
+    // 2.6.0 (#135): the cached -> fresh centre pairs the transform
+    // estimate is fitted over. Collected HERE — the real loop, every
+    // StepResponse — under the coherent-shift detector's eligibility
+    // (no band admission, nested fragment, provisional cached block,
+    // viewport-relative fresh block or carousel child), from RAW rects:
+    // no drift correction, so the fit never depends on the tracker's
+    // same-capture mutations (finding C's hazard does not arise).
+    final transformPairs = <(Offset, Offset)>[];
     for (final fresh in deduped) {
       final matchResult = _findMatch(fresh);
       final existing = matchResult.match;
@@ -1031,6 +1058,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       }
       matchedExisting.add(existing);
       mergedCount++;
+      if (!matchResult.wasBandFallback &&
+          !existing.isProvisional &&
+          !fresh.isViewportRelative &&
+          !fresh.isHorizontalScrollChild &&
+          !existing.isHorizontalScrollChild) {
+        transformPairs.add(
+            (existing.absoluteRect.raw.center, fresh.absoluteRect.raw.center));
+      }
       // #116 finding C: `frozenRegionDrift` threads the SAME drift
       // snapshot `_detectCoherentShift`'s dry pre-pass used for this
       // member's displacement into its real merge — see that method's
@@ -1168,6 +1203,9 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         retained: retained.length,
         dropped: droppedCount,
       ),
+      // 2.6.0 (#135): observed, never applied — nothing above read it.
+      transformEstimate: TransformEstimate.fit(transformPairs,
+          minPairs: transformEstimateMinPairs),
     );
   }
 
