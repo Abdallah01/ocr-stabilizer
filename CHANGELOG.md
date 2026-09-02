@@ -7,14 +7,16 @@
   the eleven Tesseract streams, committed under
   `doc/replay/validation/2026-08-dynamic-reflow/variants/<config>/`
   (`--perturb-seed` on both generators, `variants/gen_seed_suite.py`,
-  `variants/variance_report.py`), and a "Variance across seeds and
+  `variants/variance_report.py`; each stream's meta note stamps exactly
+  the generator flags that regenerate it), and a "Variance across seeds and
   repetitions" entry in that corpus's EXPERIMENT.md, pinned cell by
   cell by `test/replay/experiment_doc_variance_tables_test.dart` (the
   doc-table helpers moved to `test/replay/experiment_doc_support.dart`).
   Findings: the controls report 0 step events under every lever on all
   8 configurations and `coherentShift` passes the same 4 of 7 steps on
   every one; the `coherentShiftFloorPx` window (377, 406] is the
-  published page's — on the other three synthetic pages the 390 px
+  published streams' (a seed-94 scroll ceiling, a seed-93 slab bound) —
+  on the other three synthetic pages the 390 px
   example is a safe no-op, and no single floor separates the slab from
   the controls on every page; the adopt lever's 150 px result is one
   configuration in eight (no plan forms on the other seven, where the

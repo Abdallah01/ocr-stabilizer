@@ -356,15 +356,17 @@ geometry, not a universal constant**, which is why it ships `null`
    cadence (replay your own captures, or read the largest per-frame move
    on a scroll-only session). The floor must sit ABOVE it, or scroll
    fires step events. On the validation corpus this bound is 377 px on
-   the published page (a control's largest scroll step); across the
-   eight seed / noise configurations of the #136 entry it spans
-   220–377 px.
+   the published streams (the tesseract-matrix scroll control's largest
+   step); across the eight seed / noise configurations of the #136 entry
+   it spans 220–377 px on the seven that measure it (one sits below the
+   200 px search floor).
 2. **Upper bound:** the smallest single-frame slab you need tracked. The
    floor must sit BELOW the displacement such a slab leaves on its
    surviving mover — 406 px on the published page's 600 px slab,
-   340–406 px where a mover survives at all, and on two of the four
-   synthetic pages NO mover survives above the controls: the window
-   is empty.
+   240–406 px where a mover survives at all — and on two of the four
+   synthetic pages the window is empty: on one no mover survives at any
+   floor from 200 up, on the other the survivor (240 px) sits below that
+   page's own scroll ceiling (359–364 px).
 3. Pick inside the window and re-run your controls: the corpus ships at
    390 px with 0 step events on all 10 control streams (and on all 32
    control replays of the #136 entry) and the published page's 600 px

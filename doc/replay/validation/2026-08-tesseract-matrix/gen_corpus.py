@@ -86,10 +86,13 @@ paras = [paragraph() for _ in range(44)]
 prng = rng if args.perturb_seed is None else random.Random(args.perturb_seed)
 # Seed provenance is appended to each stream's meta note ONLY for a
 # non-default configuration, so the committed default streams keep
-# regenerating byte for byte.
+# regenerating byte for byte. The stamp names exactly the flags that
+# regenerate the stream: `seed S` alone means the noise continued the
+# page RNG (no --perturb-seed was passed).
 PROVENANCE = ('' if args.seed == 94 and args.perturb_seed is None else
-              f'; seed {args.seed} perturb-seed '
-              f'{args.seed if args.perturb_seed is None else args.perturb_seed}')
+              f'; seed {args.seed}'
+              + ('' if args.perturb_seed is None
+                 else f' perturb-seed {args.perturb_seed}'))
 lines = []  # (y, text)
 y = MARGIN
 for p in paras:

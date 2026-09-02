@@ -13,10 +13,15 @@
 # [FLOOR_LO, FLOOR_HI] for the largest floor at which the floor arm still
 # fires — the stream's largest floor-qualified displacement at 1 px
 # resolution (a mover qualifies at floor F iff its displacement >= F, so
-# "fires at F and not at F+1" brackets the displacement). The search
-# relies on monotonicity: lowering the floor only ADDS qualified movers,
-# and extra movers outside the winning cluster stay on damp, so a stream
-# that fires at F fires at every floor below F.
+# "fires at F and not at F+1" brackets the displacement). The bisection
+# ASSUMES monotonicity — a stream that fires at F fires at every floor
+# below F. The engine does not guarantee it: lowering the floor only adds
+# qualified movers, but the floor path direction-checks the whole
+# qualified set before clustering, so an added mover travelling against
+# the slab vetoes the plan. What the report states, and the pin test
+# checks, is the bracket (fires at F and at FLOOR_LO, not at F+1) — and
+# for "< FLOOR_LO", silence at five floors across the range; on this
+# corpus those probes found no reversal.
 import json
 import statistics
 import subprocess
@@ -37,12 +42,13 @@ SLAB = 'pushdown-600'
 SHIPPED_FLOOR = 390
 FLOOR_LO, FLOOR_HI = 200, 700
 
-# (label, seed, perturb-seed). s93-r1 is the published corpus itself.
+# (label, seed, perturb-seed); None = no --perturb-seed, the noise continued
+# the page RNG. s93-r1 is the published corpus itself.
 CONFIGS = [
-    ('s93-r1', 93, 93), ('s93-r2', 93, 1093),
-    ('s07-r1', 7, 7), ('s07-r2', 7, 1007),
-    ('s21-r1', 21, 21), ('s21-r2', 21, 1021),
-    ('s42-r1', 42, 42), ('s42-r2', 42, 1042),
+    ('s93-r1', 93, None), ('s93-r2', 93, 1093),
+    ('s07-r1', 7, None), ('s07-r2', 7, 1007),
+    ('s21-r1', 21, None), ('s21-r2', 21, 1021),
+    ('s42-r1', 42, None), ('s42-r2', 42, 1042),
 ]
 
 # The published corpus, by the names the tables use.
@@ -219,7 +225,7 @@ def main():
         rep = full(slab)
         move = MOVE_CAP.get(SLAB, 7)
         window_rows.append([
-            label, floor_cell(L), 'none' if u is None else u, window,
+            label, floor_cell(L), 'none' if u is None else floor_cell(u), window,
             'yes' if inside else 'no',
             f"{fmt(lag(rep['agreementCoherent'], move))} → "
             f"{fmt(lag(rep['agreementCoherentFloor'], move))}"])

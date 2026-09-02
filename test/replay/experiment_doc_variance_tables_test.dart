@@ -11,6 +11,7 @@
 // so a bound copied from a stale run, or a stream regenerated under the
 // table, goes red. The summary table is pinned against the per-row
 // tables it aggregates, so the two cannot disagree silently.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:test/test.dart';
@@ -88,14 +89,26 @@ bool passesStepRule(Arm a, Arm damp, int move) {
   return true;
 }
 
+/// The floors a `< 200` / `none` cell is checked at: the bisection range's
+/// low end (its most permissive floor) and four more across the range. The
+/// engine does not guarantee that silence at 200 means silence above it —
+/// the floor path's direction check is a veto over the WHOLE qualified
+/// set, so a lower floor can admit a mover that nulls a plan a higher
+/// floor would have decided — so one probe at 200 is not a proof of
+/// "never fires in range".
+const _silenceProbes = [_floorLo, 325, 450, 575, _floorHi];
+
 /// A "largest firing floor" / "control ceiling" / "slab bound" cell:
 /// an integer floor, `< 200` (never fires in range), `>= 700` (still
 /// fires at the top of the range) or `none`. Returns the integer, or
 /// null for the two "outside the range" forms after asserting them.
 int? checkFloorBound(String base, String cell, String where) {
   if (cell == '< $_floorLo' || cell == 'none') {
-    expect(fires(base, _floorLo), isFalse,
-        reason: '$where: doc says the floor arm never fires from $_floorLo up');
+    for (final f in _silenceProbes) {
+      expect(fires(base, f), isFalse,
+          reason: '$where: doc says the floor arm never fires in '
+              '[$_floorLo, $_floorHi], but it fires at $f');
+    }
     return null;
   }
   if (cell == '>= $_floorHi') {
@@ -109,6 +122,12 @@ int? checkFloorBound(String base, String cell, String where) {
   expect(fires(base, f + 1), isFalse,
       reason: '$where: must NOT fire at ${f + 1} — the bound is the '
           'largest firing floor');
+  // The bracket the bisection reports assumes the arm fires at every
+  // floor below the bound; the range's low end is the one point of that
+  // claim this test can afford to check.
+  expect(fires(base, _floorLo), isTrue,
+      reason: '$where: a bound of $f claims the arm fires at every floor '
+          'below it, but it does not fire at $_floorLo');
   return f;
 }
 
@@ -146,14 +165,46 @@ void main() {
           .toSet();
       expect(found, expected, reason: '$c: streams on disk');
     }
+    // Only `sNN-rN` directories are configurations: a `__pycache__` the
+    // Python helpers in this folder leave behind must not fail the test.
     final onDisk = Directory(_variants)
         .listSync()
         .whereType<Directory>()
         .map((d) => d.uri.pathSegments.where((s) => s.isNotEmpty).last)
+        .where((n) => n.startsWith('s') && n.contains('-r'))
         .toSet();
     expect(onDisk, configs.skip(1).toSet(),
         reason: 'a variant directory no table cites, or a cited '
             'configuration with no directory');
+  });
+
+  test('configurations: the seed and perturb-seed cells are the stamp every '
+      'stream of the configuration carries in its meta note — none on the '
+      'published corpus, which predates the stamp', () {
+    final table = rows(_configsHeader);
+    expect(table, hasLength(configs.length));
+    // `; seed S` = the noise continued the page RNG (no --perturb-seed);
+    // `; seed S perturb-seed P` = a fresh generator seeded P.
+    final stamp = RegExp(r'; seed (\d+)(?: perturb-seed (\d+))?$');
+    for (final r in table) {
+      final c = r[0];
+      for (final s in [..._steps, ..._controls]) {
+        final where = '$c/$s provenance';
+        final meta = File('${baseOf(c, s)}.jsonl').readAsLinesSync().first;
+        final note = (jsonDecode(meta) as Map)['note'] as String;
+        final m = stamp.firstMatch(note);
+        if (c == _published) {
+          expect(m, isNull,
+              reason: '$where: the published streams carry no stamp');
+          expect(r[1], '93', reason: '$where: seed');
+          expect(r[2], '—', reason: '$where: perturb-seed');
+          continue;
+        }
+        if (m == null) fail('$where: no provenance stamp in "$note"');
+        expect(r[1], m.group(1), reason: '$where: seed');
+        expect(r[2], m.group(2) ?? '—', reason: '$where: perturb-seed');
+      }
+    }
   });
 
   test('controls: stepEvents per arm and the largest firing floor, per '
@@ -226,7 +277,14 @@ void main() {
           .map((x) => int.tryParse(x[5]) ?? (x[5] == '>= $_floorHi' ? _floorHi : null))
           .whereType<int>()
           .toList();
-      final ceilingCell = bounds.isEmpty ? '< $_floorLo' : '${bounds.reduce((a, b) => a > b ? a : b)}';
+      final maxBound =
+          bounds.isEmpty ? null : bounds.reduce((a, b) => a > b ? a : b);
+      // The same three spellings variance_report.py's floor_cell() uses.
+      final ceilingCell = maxBound == null
+          ? '< $_floorLo'
+          : maxBound == _floorHi
+              ? '>= $_floorHi'
+              : '$maxBound';
       expect(r[1], ceilingCell, reason: '$where: control ceiling');
       final ceiling = int.tryParse(ceilingCell);
       final slab = baseOf(c, _slab);
