@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 
 // Rig tests over the committed fixture stream. The fixture is the
 // cross-repo contract artifact: its field names mirror what the consumer's

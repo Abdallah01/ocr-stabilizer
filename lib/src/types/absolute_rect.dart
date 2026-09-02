@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 import 'geometry.dart' show Offset, Rect, Size;
 
 /// Bounding box in absolute coordinates (world-space).

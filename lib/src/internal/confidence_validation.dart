@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 
 /// Throw [ArgumentError] if [raw] is not a finite double in `[0.0, 1.0]`.
 ///

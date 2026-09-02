@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 //
 // Pins the dynamic-reflow validation entry (#93,
 // doc/replay/validation/2026-08-dynamic-reflow/): the corpus construction

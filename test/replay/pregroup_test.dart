@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 
 // Unit tests for the pre-group transform (tool/replay/src/pregroup.dart):
 // what a grouped unit carries, what passes through untouched, and what the

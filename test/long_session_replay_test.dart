@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 import 'dart:io';
 
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';

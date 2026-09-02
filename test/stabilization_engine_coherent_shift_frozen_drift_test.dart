@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 //
 // #116 finding C: the applied translation and the residual/confidence
 // driving a coherent-shift merge used to come from TWO different drift

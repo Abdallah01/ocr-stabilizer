@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 import 'dart:math' show max, min;
 import 'types/geometry.dart' show Offset, Rect;
 

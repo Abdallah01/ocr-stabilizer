@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 import 'block_meta.dart';
 import 'classification_input.dart';
 import 'classification_result.dart';

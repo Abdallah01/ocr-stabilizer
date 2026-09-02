@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 /// Named constants for hierarchy weight tiers.
 ///
 /// Used by [HierarchyWeightX] and [DriftTracker] to classify blocks

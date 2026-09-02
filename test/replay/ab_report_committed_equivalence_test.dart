@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 //
 // #116 finding A, equivalence guard: every committed `*.ab.json`'s
 // `agreementWeighted` arm (StepResponse.damp, band off in both replay

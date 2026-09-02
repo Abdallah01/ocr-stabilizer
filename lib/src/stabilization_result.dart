@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 import 'coherent_shift_event.dart';
 import 'identity_turnover.dart';
 import 'merge_result.dart';

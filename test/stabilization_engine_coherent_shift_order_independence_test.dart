@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 //
 // #116 finding B: `_detectCoherentShift`'s original clustering sorted
 // moved pairs by displacement.dy ONLY, then ran a single greedy pass with

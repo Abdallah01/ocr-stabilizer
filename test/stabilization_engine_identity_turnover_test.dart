@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 //
 // 2.5.0 — `StabilizationResult.identityTurnover`: the per-capture identity
 // census. `merged` = fresh blocks that merged into a tracked identity
