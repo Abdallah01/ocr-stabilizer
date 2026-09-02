@@ -60,7 +60,8 @@ import 'types/geometry.dart';
 /// loop, so the estimate exists under every `StepResponse`.
 class TransformEstimate {
   /// The fitted isotropic scale. `1.0` for a pure translation. Always
-  /// finite and > 0 (a fit that would not be is reported as no estimate).
+  /// finite and > 0: a fit whose scale would be zero, negative or
+  /// non-finite is reported as no estimate (`null`) instead.
   final double scale;
 
   /// The fitted translation, in the tracked blocks' own coordinate space
