@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 //
 // #137 — `LICENSE` and the per-file SPDX headers must name the SAME license.
-// Until 2.5.1 the root LICENSE was MIT (what pub.dev and GitHub display)
+// Until the #137 fix (shipped in 2.6.0) the root LICENSE was MIT (what pub.dev and GitHub display)
 // while every source header said BSD-3-Clause (what a license scanner
 // reads) — two licenses declared, only one true. This test derives the
 // expected identifier from LICENSE's first line and checks every Dart

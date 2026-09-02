@@ -45,6 +45,9 @@ void main() {
   // (`null` here — the two captures agree, nothing moved as a slab).
   print('  ${result2.identityTurnover}');
   print('  coherent shift: ${result2.coherentShift ?? 'none'}');
+  // 2.6.0 — the similarity transform the matched pairs describe; `null`
+  // here because two pairs are under the three-pair floor.
+  print('  transform: ${result2.transformEstimate ?? 'none'}');
 
   for (final block in result2.stableBlocks) {
     print(

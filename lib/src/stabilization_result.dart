@@ -3,6 +3,7 @@
 
 import 'coherent_shift_event.dart';
 import 'identity_turnover.dart';
+import 'transform_estimate.dart';
 import 'merge_result.dart';
 import 'observable_block.dart';
 import 'step_response.dart';
@@ -175,6 +176,18 @@ class StabilizationResult<T> {
   /// U1).
   final IdentityTurnover identityTurnover;
 
+  /// The similarity transform (isotropic scale + translation) fitted
+  /// over this capture's eligible matched pairs (2.6.0, #135) —
+  /// OBSERVED, never applied: the merge stays per block (contract U9).
+  /// `null` when fewer than `StabilizationEngine.transformEstimateMinPairs`
+  /// eligible pairs matched (a session's first sighting, a rewrap that
+  /// reset most identities) or the pairs give no lever arm for a scale.
+  /// See [TransformEstimate] for the reading rules — in particular,
+  /// read [TransformEstimate.residualPx] before believing
+  /// [TransformEstimate.scale]: a partial step fits as a scale with a
+  /// large residual, a zoom as a scale with a small one.
+  final TransformEstimate? transformEstimate;
+
   /// Creates a stabilization result.
   const StabilizationResult({
     required this.stableBlocks,
@@ -183,5 +196,6 @@ class StabilizationResult<T> {
     this.wellObservedTexts = const [],
     this.coherentShift,
     this.identityTurnover = IdentityTurnover.none,
+    this.transformEstimate,
   });
 }

@@ -34,6 +34,13 @@
 # before, so the committed streams still regenerate byte for byte (the
 # files are written with LF line endings; git checks them out with CRLF
 # on Windows, so compare after normalising, not with a raw byte diff).
+# --zoom K (#135) switches the run to the ZOOM scenarios instead of
+# pushdown / rewrap: the same page re-rendered at scale K about the page
+# origin from --reflow-at on — `zoom-KKK` keeps the line texts (a pure
+# zoom: every line's box scales, no line re-wraps) and `zoom-KKK-rewrap`
+# re-wraps them at the characters per line DIVIDED by K (a font-size change on a
+# fixed-width column). Both use a 20-character column so the zoomed
+# lines still fit the 1080 px viewport; KKK = 100 x K, zero-padded.
 import argparse
 import io
 import json
@@ -65,6 +72,10 @@ def parse_args():
     p.add_argument('--seed', type=int, default=93,
                     help='RNG seed for corpus text and perturbation. '
                          'Default: 93.')
+    p.add_argument('--zoom', type=float, default=None,
+                    help='scale factor for the ZOOM scenarios (#135); '
+                         'writes zoom-KKK.jsonl and zoom-KKK-rewrap.jsonl '
+                         'instead of pushdown / rewrap. Default: none.')
     p.add_argument('--perturb-seed', type=int, default=None,
                     help='separate RNG seed for the per-frame capture '
                          'noise (shift / JPEG / brightness). Default: '
@@ -134,22 +145,36 @@ PROVENANCE = ('' if args.seed == 93 and args.perturb_seed is None else
 FONT = ImageFont.truetype(r'C:\Windows\Fonts\msyh.ttc', FONT_PX)
 
 
-def render(wrap_chars, gap_after_para=None, gap_px=0):
-    """Render the page. Returns (image, lines[(y, text)], gap_top or None)."""
-    lines, y, gap_top = [], MARGIN, None
+def render(wrap_chars, gap_after_para=None, gap_px=0, scale=1.0):
+    """Render the page. Returns (image, lines[(y, text)], gap_top or None).
+
+    scale (#135): the whole page geometry — font, line height, margins,
+    paragraph gap — times `scale`, about the page origin; the image stays
+    W wide (the viewport), so a zoomed line wider than W is clipped. 1.0
+    is the committed geometry, computed in integers exactly as before.
+    """
+    if scale == 1.0:
+        font, margin, line_h, para_gap = FONT, MARGIN, LINE_H, PARA_GAP
+    else:
+        font = ImageFont.truetype(r'C:\Windows\Fonts\msyh.ttc',
+                                  round(FONT_PX * scale))
+        margin, line_h, para_gap = (round(MARGIN * scale),
+                                    round(LINE_H * scale),
+                                    round(PARA_GAP * scale))
+    lines, y, gap_top = [], margin, None
     for i, p in enumerate(PARAS):
         for ln in wrap(p, wrap_chars):
             lines.append((y, ln))
-            y += LINE_H
-        y += PARA_GAP
+            y += line_h
+        y += para_gap
         if gap_after_para is not None and i == gap_after_para:
             gap_top = y
             y += gap_px
-    page_h = y + MARGIN
+    page_h = y + margin
     page = Image.new('L', (W, page_h), 255)
     draw = ImageDraw.Draw(page)
     for ly, ln in lines:
-        draw.text((MARGIN, ly), ln, font=FONT, fill=0)
+        draw.text((margin, ly), ln, font=font, fill=0)
     if gap_top is not None and gap_px > 0:
         # A flat mid-grey slab with a border: what a loaded image ad looks
         # like to an OCR engine — no glyphs, so it yields no blocks. Only
@@ -245,6 +270,30 @@ def scenario(name, before, after, note):
 
 
 t0 = time.time()
+if args.zoom is not None:
+    # #135 zoom corpus: a 20-character column (so 1.25x still fits the
+    # viewport), re-rendered at `zoom` about the page origin from the
+    # reflow capture on. Pure = same texts, scaled boxes; rewrap = the
+    # same paragraphs at the characters per line divided by zoom (a bigger
+    # font on a fixed-width column holds fewer characters: 20 -> 16 at 1.25).
+    WRAP_ZOOM = 20
+    k = args.zoom
+    tag = f'zoom-{round(k * 100):03d}'
+    zoom_base = render(WRAP_ZOOM)
+    zoomed = render(WRAP_ZOOM, scale=k)
+    wrap_after = max(4, round(WRAP_ZOOM / k))
+    zoomed_rewrap = render(wrap_after, scale=k)
+    print(f'page: base {zoom_base[0].height}px, zoomed {zoomed[0].height}px, '
+          f'zoomed+rewrap {zoomed_rewrap[0].height}px; lines '
+          f'{len(zoom_base[1])}/{len(zoomed[1])}/{len(zoomed_rewrap[1])}')
+    scenario(tag, zoom_base, zoomed,
+             f'pure zoom x{k} about the page origin: every box scales, '
+             f'line texts unchanged ({WRAP_ZOOM} chars/line)')
+    scenario(f'{tag}-rewrap', zoom_base, zoomed_rewrap,
+             f'zoom x{k} with rewrap {WRAP_ZOOM}->{wrap_after} chars/line: '
+             f'same paragraphs, new line boxes and line texts')
+    print(f'done in {time.time() - t0:.1f}s')
+    raise SystemExit(0)
 base = render(WRAP_BEFORE)
 pushed = render(WRAP_BEFORE, gap_after_para=GAP_AFTER_PARA, gap_px=GAP_PX)
 rewrapped = render(WRAP_AFTER)

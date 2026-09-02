@@ -6,6 +6,7 @@
 //   dart tool/replay/replay.dart freeze-report <capture.jsonl> [--floor=N]
 //   dart tool/replay/replay.dart ab-report     <capture.jsonl>
 //   dart tool/replay/replay.dart live-report   <capture.jsonl>
+//   dart tool/replay/replay.dart transform-report <capture.jsonl>   (#135)
 //
 // Options: --viewport=WxH (2.1.0) overrides the stream's `meta.vp`;
 // --buckets=auto|formula|median (2.2.0, #113) picks the bucket policy —
@@ -33,12 +34,13 @@ import 'src/freeze_report.dart';
 import 'src/lever_args.dart';
 import 'src/live_report.dart';
 import 'src/replay_session.dart' show BucketPolicy, bucketPolicyFromArg;
+import 'src/transform_report.dart';
 
 Future<void> main(List<String> args) async {
   if (args.length < 2) {
-    stderr.writeln(
-        'usage: dart tool/replay/replay.dart '
-        '<freeze-report|ab-report|live-report> <capture.jsonl> [--floor=N]');
+    stderr.writeln('usage: dart tool/replay/replay.dart '
+        '<freeze-report|ab-report|live-report|transform-report> '
+        '<capture.jsonl> [--floor=N]');
     exitCode = 64;
     return;
   }
@@ -127,6 +129,11 @@ Future<void> main(List<String> args) async {
           coherentShiftFloorPx: coherentFloorPx,
           coherentShiftReanchorMinBlocks: coherentReanchorMinBlocks,
           coherentShiftAdoptAgreeing: coherentAdoptAgreeing);
+    case 'transform-report':
+      // #135: the shipping configuration's per-capture transform
+      // estimate — its own mode, so ab-report's committed bytes stay.
+      report = transformReport(stream,
+          viewport: viewport, bucketPolicy: bucketPolicy);
     case 'live-report':
       report = liveReport(stream);
     default:

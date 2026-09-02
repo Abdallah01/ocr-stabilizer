@@ -89,8 +89,30 @@ counts are evidence depth, never a readiness ladder:
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^2.5.0
+  ocr_stabilizer: ^2.6.0
 ```
+
+> **What's new in 2.6.0** — every result reports a similarity-transform
+> estimate over the capture's matched pairs, `result.transformEstimate`
+> (a `TransformEstimate`: isotropic `scale`, `translation`, `fixedPoint`,
+> `pairCount`, `rejectedPairs`, `residualPx`, `spanPx`,
+> `largestGapShare`; `null` under three eligible pairs) — observed and
+> never applied: the merge keeps
+> its no-zoom model ([`doc/CONTRACT.md`](doc/CONTRACT.md) G11, U9). A
+> layout layer that holds geometry the engine never sees can read a
+> browser zoom or a DPR change from one value and rescale, instead of
+> inspecting every block. The zoom corpus entry
+> ([`doc/replay/validation/2026-09-zoom/`](doc/replay/validation/2026-09-zoom/EXPERIMENT.md))
+> states the reading rule — `|scale − 1| ≥ 0.10`, `residualPx ≤ 10`,
+> `largestGapShare ≤ 0.5`, `pairCount ≥ 6` — and its margins: a 1.25x
+> and a 0.8x zoom read at 0.249 / 0.200 deviation with residuals under
+> 4 px, and no control capture in the repository exceeds 0.010 under
+> those bounds. Its limit is stated with it: matched lines that form
+> two clusters fit a step and a zoom equally well, which the gap-share
+> bound refuses. See
+> [Observing the engine's decisions](#observing-the-engines-decisions).
+> One new knob, `transformEstimateMinPairs` (default 3). Additive only —
+> no numerics changed ([#135](https://github.com/Abdallah01/ocr-stabilizer/issues/135)).
 
 > **What's new in 2.5.0** — the engine's decisions are observable on
 > every result ([`doc/CONTRACT.md`](doc/CONTRACT.md) G10):
@@ -113,7 +135,7 @@ dependencies:
 > construction — and the one affected stream strictly better
 > (`pushdown-150` lag at the move 68.3 -> 6.0 px, identity
 > 0.821 -> 0.929, 15 extra merges retained) — on that seed's noise
-> draw: the 2.5.1 variance entry finds the 150 px step forms no plan
+> draw: the #136 variance entry finds the 150 px step forms no plan
 > at all on 7 of 8 seed / noise configurations, where the lever is
 > byte-identical to plain `coherentShift` (never worse, better on one
 > in eight). Pass
@@ -436,6 +458,41 @@ Reading rules:
   next frame merges 29 of 30, while a stationary re-sighting sits near
   0.0. Calibrate on your own captures.
 
+Since 2.6.0 a third summary reads the capture's matched pairs as ONE
+similarity transform — for the zoom `coherentShift` cannot model:
+
+```dart
+final z = result.transformEstimate; // TransformEstimate? (null under 3 pairs)
+if (z != null &&
+    (z.scale - 1).abs() >= 0.10 &&
+    z.residualPx <= 10 &&
+    z.largestGapShare <= 0.5 &&
+    z.pairCount >= 6) {
+  // The matched lines moved as one scale about one point — a zoom. The
+  // engine did not rescale anything (contract U9): rescale the geometry
+  // you hold outside it about the zoom origin, then let it converge.
+  overlay.scaleAll(z.scale, about: z.fixedPoint ?? Offset.zero);
+}
+```
+
+- Read `residualPx` before `scale`: a partial step over a ladder of
+  lines also fits as a scale (0.18–0.22 on the corpus's 300 px slabs)
+  but with a 58–87 px residual, a zoom with a residual of a few px.
+  `spanPx` is the lever arm the scale was estimated over
+  (`residualPx / spanPx` is its uncertainty).
+- Read `largestGapShare` before trusting a small residual: when the
+  matched lines form TWO CLUSTERS (two paragraphs, nothing matched
+  between them — or a step whose boundary pairs the trim set aside), a
+  translation of one cluster and a zoom about a point fit the same
+  pairs equally well, and the residual is only the spread inside each
+  cluster. Near 1 the estimate cannot tell them apart; the bound above
+  refuses it. The four bounds are the zoom corpus entry's, with its
+  margins table as their justification.
+- The captures AFTER a zoom event read 0.92–1.08 with large residuals:
+  the merged blocks are being damped toward the new geometry while the
+  newly admitted ones already sit at it. The residual bound refuses
+  them; rescale once, at the event capture.
+
 ## Core Components
 
 ### TrackedBlock\<T\>
@@ -662,6 +719,7 @@ A block's identity is a six-dimensional signature:
 | `MergeDecisionDiagnostic` | One grouper boundary decision — verdict, reason set, gap/threshold context (2.0.0+) |
 | `CoherentShiftEvent` | The coherent shift a capture applied — translation, member count, adopted count, deciding path (2.5.0+) |
 | `IdentityTurnover` | Per-capture identity census — merged / admitted / retained / dropped, `admittedShare` (2.5.0+) |
+| `TransformEstimate` | Per-capture similarity-transform fit over the matched pairs — `scale`, `translation`, `fixedPoint`, `residualPx`, `spanPx`, `pairCount`, `rejectedPairs`; observed, never applied (2.6.0+) |
 
 ### Value Types
 
@@ -732,15 +790,22 @@ Deliberate trade-offs, each with a tracking issue for discussion:
   retuning in the photometric-jitter regime
   (`doc/replay/validation/2026-08-tesseract-matrix/`). High-amplitude
   re-segmentation on other engines remains open: [#94](https://github.com/Abdallah01/ocr-stabilizer/issues/94).
-- **No scale or zoom model.** `coherentShift` models a shared translation
-  only. A zoom that keeps the line texts still matches (matching is
+- **No scale or zoom model in the merge — a transform estimate is
+  reported instead.** `coherentShift` models a shared translation only.
+  A zoom that keeps the line texts still matches (matching is
   text-first) and is absorbed as per-block displacement — damped toward
-  the new boxes over several captures, no `coherentShift`, a clean
-  `identityTurnover`; a zoom or width change that REWRAPS the lines takes
-  the rewrap path (identity reset, which `identityTurnover` names).
-  Detect zoom from your own source and rescale or rebuild; a transform
-  ESTIMATE above `coherentShift` is the tracked candidate, gated on a zoom
-  corpus that does not yet exist. Contract U9; [#135](https://github.com/Abdallah01/ocr-stabilizer/issues/135).
+  the new boxes over several captures, no `coherentShift`; a zoom or
+  width change that REWRAPS the lines takes the rewrap path (identity
+  reset, which `identityTurnover` names). Since 2.6.0 every result
+  carries `transformEstimate`, the similarity transform the matched
+  pairs describe, for a consumer to read under the zoom entry's rule
+  and apply to its own geometry; the engine never applies it. Its
+  blind spot is named with it: matched lines that form two clusters
+  (a slab between two paragraphs, or a step whose boundary pairs the
+  trim set aside) fit a step and a zoom equally well — read
+  `largestGapShare` before `scale`. One layout, one seed and two
+  scale factors of evidence. Contract U9 / G11;
+  [#135](https://github.com/Abdallah01/ocr-stabilizer/issues/135).
 - **The dynamic-reflow evidence is one layout: four pages, two noise
   draws each.** The #136 entry of
   [`EXPERIMENT.md`](doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md)

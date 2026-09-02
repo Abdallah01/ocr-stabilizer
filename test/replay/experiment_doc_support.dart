@@ -37,10 +37,13 @@ const streamAlias = {
   'pushdown-300-early': '$reflowDir/variants/pushdown-300-early',
   'pushdown-300-late': '$reflowDir/variants/pushdown-300-late',
   'tess-stable-dwell': '$validationRoot/2026-08-tesseract-matrix/stable-dwell',
-  'tess-jitter-dwell': '$validationRoot/2026-08-tesseract-matrix/ocr-jitter-dwell',
+  'tess-jitter-dwell':
+      '$validationRoot/2026-08-tesseract-matrix/ocr-jitter-dwell',
   'tess-scroll': '$validationRoot/2026-08-tesseract-matrix/scroll',
-  'paddle-stable-dwell': '$validationRoot/2026-08-paddleocr-matrix/stable-dwell',
-  'paddle-jitter-dwell': '$validationRoot/2026-08-paddleocr-matrix/ocr-jitter-dwell',
+  'paddle-stable-dwell':
+      '$validationRoot/2026-08-paddleocr-matrix/stable-dwell',
+  'paddle-jitter-dwell':
+      '$validationRoot/2026-08-paddleocr-matrix/ocr-jitter-dwell',
   'paddle-scroll': '$validationRoot/2026-08-paddleocr-matrix/scroll',
   'mlkit-dwell': '$validationRoot/2026-08-mlkit-on-device/dwell',
   'mlkit-dwell-bk': '$validationRoot/2026-08-mlkit-on-device/dwell-bk',
@@ -125,26 +128,26 @@ List<List<String>> _rawRows(String doc, String header, {String? after}) {
   if (start < 0) fail('$doc: table header not found:\n  $header');
   final rows = <List<String>>[];
   for (var i = start + 2; i < lines.length && lines[i].startsWith('|'); i++) {
-    final cells = lines[i]
-        .split('|')
-        .map((c) => c.replaceAll('**', '').trim())
-        .toList();
+    final cells =
+        lines[i].split('|').map((c) => c.replaceAll('**', '').trim()).toList();
     rows.add(cells.sublist(1, cells.length - 1));
   }
   return rows;
 }
 
 /// The data rows of the table under [header]: [_rawRows] minus the `tally`
-/// row (an aggregate — see [tallyRow]), with unique row keys (the first two
-/// cells: stream, or stream + arm for the matrix tables). A duplicated row
-/// standing in for a dropped one would keep a row COUNT green while the
-/// dropped stream's claims left coverage — so it fails here instead.
-List<List<String>> tableRows(String doc, String header, {String? after}) {
+/// row (an aggregate — see [tallyRow]), with unique row keys (the first
+/// [keyCells] cells — two by default: stream, or stream + arm for the
+/// matrix tables; three for a table keyed by three bounds). A duplicated
+/// row standing in for a dropped one would keep a row COUNT green while
+/// the dropped stream's claims left coverage — so it fails here instead.
+List<List<String>> tableRows(String doc, String header,
+    {String? after, int keyCells = 2}) {
   final rows = _rawRows(doc, header, after: after)
       .where((r) => r.first != 'tally')
       .toList();
   if (rows.isEmpty) fail('$doc: no data rows under:\n  $header');
-  final keys = rows.map((r) => r.take(2).join(' | ')).toList();
+  final keys = rows.map((r) => r.take(keyCells).join(' | ')).toList();
   if (keys.toSet().length != keys.length) {
     fail('$doc: duplicate row keys under:\n  $header\n  $keys');
   }
@@ -199,7 +202,8 @@ void expectLagTriple(Arm a, int moveCap, String cell, String where) {
 /// A step-arm cell: either "identical — 0 events" (the arm fell through to
 /// damp on every merge — zero events AND damp's own lag values) or a lag
 /// triple followed by "(N)" step events.
-void expectStepArmCell(Arm a, Arm damp, int moveCap, String cell, String where) {
+void expectStepArmCell(
+    Arm a, Arm damp, int moveCap, String cell, String where) {
   if (cell.startsWith('identical')) {
     expect(stepEvents(a), 0, reason: '$where: "identical" claims 0 events');
     for (final offset in const [0, 3, 5]) {
@@ -211,8 +215,7 @@ void expectStepArmCell(Arm a, Arm damp, int moveCap, String cell, String where) 
   final m = RegExp(r'^(.*) \((\d+)\)$').firstMatch(cell);
   if (m == null) fail('$where: "$cell" is neither identical nor "triple (N)"');
   expectLagTriple(a, moveCap, m.group(1)!, where);
-  expect(stepEvents(a), int.parse(m.group(2)!),
-      reason: '$where: step events');
+  expect(stepEvents(a), int.parse(m.group(2)!), reason: '$where: step events');
 }
 
 int moveCapOf(String cell, String where) {
