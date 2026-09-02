@@ -8,16 +8,19 @@
 #
 # Table 1 — the four zoom streams, per capture around the event (captures
 # 5-9; the zoom renders from capture 7): scale, translation, pairs,
-# residual, span.
+# rejected, residual, span, gap share, identity census.
 # Table 2 — every NON-zoom stream in the repository (the 17 published
-# streams and the 77 #136 variants): the peak |scale - 1| over its
-# captures, and the residual, pairs and scale at that capture. These are
-# the controls for a zoom reading: whatever rule names the zoom streams
-# must name none of them.
-# Table 3 — the reading rule's margins: the largest control deviation
-# with a residual under R, for a few R, against the zoom streams' own
-# (deviation, residual) at the event.
+# streams and the #136 variants found on disk): the peak |scale - 1| over
+# its captures, and the residual, pairs and gap share at that capture.
+# These are the controls for a zoom reading: whatever rule names the zoom
+# streams must name none of them.
+# Table 3 — the reading rule's margins: for each residual cap, pair floor
+# and gap-share cap, the largest control deviation over every capture
+# under all three, which capture set it, and how many captures qualified.
+# "deviation" is |scale - 1| throughout (the column names avoid the bars,
+# which a Markdown table would read as cell separators).
 import json
+import re
 import subprocess
 import sys
 from decimal import ROUND_HALF_UP, Decimal
@@ -47,14 +50,20 @@ PUBLISHED = {
     'mlkit-dwell-bk': f'{V}/2026-08-mlkit-on-device/dwell-bk',
     'mlkit-scroll': f'{V}/2026-08-mlkit-on-device/scroll',
 }
-VARIANT_CONFIGS = ['s93-r2', 's07-r1', 's07-r2', 's21-r1', 's21-r2',
-                   's42-r1', 's42-r2']
+# The #136 configurations: every `sNN-rN` directory under variants/ (the
+# pin test enumerates the same directories, so a new configuration lands
+# in the peak table or fails the test).
+VARIANT_CONFIGS = sorted(
+    p.name for p in (ROOT / REFLOW / 'variants').iterdir()
+    if p.is_dir() and re.fullmatch(r's\d+-r\d+', p.name))
 VARIANT_STREAMS = ['pushdown-050', 'pushdown-150', 'pushdown-300',
                    'pushdown-600', 'pushup-300', 'pushdown-300-early',
                    'pushdown-300-late', 'rewrap', 'tess-stable-dwell',
                    'tess-jitter-dwell', 'tess-scroll']
-RESIDUAL_CAPS = [5, 10, 20, 40]
+# The margins table's axes. None = no bound on that axis ('any').
+RESIDUAL_CAPS = [5, 10, 20, 40, None]
 PAIR_FLOORS = [3, 6]
+GAP_CAPS = [0.5, None]
 
 
 def report(base):
@@ -79,6 +88,14 @@ def table(header, rows):
     return '\n'.join(out)
 
 
+def res_cell(cap):
+    return 'any' if cap is None else f'< {cap} px'
+
+
+def gap_cell(cap):
+    return 'any' if cap is None else f'<= {cap}'
+
+
 def main():
     # Table 1.
     rows1 = []
@@ -89,17 +106,18 @@ def main():
             t = d['identityByCapture'][str(cap)]
             census = f"{t['merged']} / {t['admitted']}"
             if v is None:
-                rows1.append([name, cap, '—', '—', '—', '—', '—', '—', census])
+                rows1.append([name, cap] + ['—'] * 7 + [census])
             else:
                 rows1.append([name, cap, fmt(v['scale'], 3),
                               f"{fmt(v['dx'])} / {fmt(v['dy'])}", v['pairs'],
                               v['rejected'], fmt(v['residualPx']),
-                              fmt(v['spanPx']), census])
+                              fmt(v['spanPx']), fmt(v['gapShare'], 2), census])
         print(f'{name} done', file=sys.stderr, flush=True)
 
-    # Table 2 — every non-zoom stream's peak |scale - 1| capture; and the
-    # per-capture (deviation, residual) points Table 3 needs.
-    points = []  # (label, cap, dev, residual, pairs)
+    # Table 2 — every non-zoom stream's peak-deviation capture; and the
+    # per-capture (deviation, residual, pairs, gap share) points Table 3
+    # needs.
+    points = []  # (label, cap, dev, residual, pairs, gap)
     rows2 = []
 
     def add(label, base):
@@ -108,13 +126,14 @@ def main():
         for cap, v in d['transformByCapture'].items():
             if v is not None:
                 points.append((label, int(cap), abs(v['scale'] - 1),
-                               v['residualPx'], v['pairs']))
+                               v['residualPx'], v['pairs'], v['gapShare']))
         if s['peakScaleDeviation'] is None:
-            rows2.append([label, '—', '—', '—', '—', '—'])
+            rows2.append([label] + ['—'] * 6)
             return
         rows2.append([label, fmt(s['peakScale'], 3),
                       fmt(s['peakScaleDeviation'], 3),
                       fmt(s['residualAtPeakPx']), s['pairsAtPeak'],
+                      fmt(s['gapShareAtPeak'], 2),
                       s['peakScaleDeviationCapture']])
 
     for label, base in PUBLISHED.items():
@@ -125,31 +144,37 @@ def main():
             add(f'{cfg} / {name}', f'{REFLOW}/variants/{cfg}/{name}')
         print(f'{cfg} done', file=sys.stderr, flush=True)
 
-    # Table 3: for each residual cap R and pair floor P, the largest
-    # control |scale - 1| over every CAPTURE whose residual is under R and
-    # whose fit used at least P pairs (not only the peak capture) — the
-    # floor a zoom reading must clear — and which capture set it.
+    # Table 3: for each residual cap R, pair floor P and gap-share cap G,
+    # the largest control deviation over every CAPTURE whose residual is
+    # under R, whose fit used at least P pairs and whose gap share is at
+    # most G (not only the peak capture) — the floor a zoom reading must
+    # clear — which capture set it, and the population.
     rows3 = []
     for R in RESIDUAL_CAPS:
         for P in PAIR_FLOORS:
-            under = [p for p in points if p[3] < R and p[4] >= P]
-            if not under:
-                rows3.append([f'< {R} px', f'>= {P}', '—', '—', 0])
-                continue
-            worst = max(under, key=lambda p: p[2])
-            rows3.append([f'< {R} px', f'>= {P}', fmt(worst[2], 3),
-                          f'{worst[0]} (cap {worst[1]}, {worst[4]} pairs)',
-                          len(under)])
+            for G in GAP_CAPS:
+                under = [p for p in points
+                         if (R is None or p[3] < R) and p[4] >= P
+                         and (G is None or p[5] <= G)]
+                if not under:
+                    rows3.append([res_cell(R), f'>= {P}', gap_cell(G), '—', '—', 0])
+                    continue
+                worst = max(under, key=lambda p: p[2])
+                rows3.append([res_cell(R), f'>= {P}', gap_cell(G),
+                              fmt(worst[2], 3),
+                              f'{worst[0]} (cap {worst[1]}, {worst[4]} pairs)',
+                              len(under)])
 
     print(table('| stream | capture | scale | translation dx / dy | pairs | '
-                'rejected | residual (px) | span (px) | merged / admitted |',
-                rows1))
+                'rejected | residual (px) | span (px) | gap share | '
+                'merged / admitted |', rows1))
     print()
-    print(table('| stream | peak scale | peak |scale - 1| | residual at peak (px) '
-                '| pairs at peak | capture |', rows2))
+    print(table('| stream | peak scale | peak deviation | residual at peak (px) '
+                '| pairs at peak | gap share at peak | capture |', rows2))
     print()
-    print(table('| residual under | pairs at least | largest control |scale - 1| '
-                '| set by | control captures under both |', rows3))
+    print(table('| residual under | pairs at least | gap share at most | '
+                'largest control deviation | set by | '
+                'control captures under all three |', rows3))
 
 
 if __name__ == '__main__':

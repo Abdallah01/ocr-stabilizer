@@ -38,7 +38,7 @@
 # pushdown / rewrap: the same page re-rendered at scale K about the page
 # origin from --reflow-at on — `zoom-KKK` keeps the line texts (a pure
 # zoom: every line's box scales, no line re-wraps) and `zoom-KKK-rewrap`
-# re-wraps them at K x the characters per line (a font-size change on a
+# re-wraps them at the characters per line DIVIDED by K (a font-size change on a
 # fixed-width column). Both use a 20-character column so the zoomed
 # lines still fit the 1080 px viewport; KKK = 100 x K, zero-padded.
 import argparse
@@ -274,7 +274,8 @@ if args.zoom is not None:
     # #135 zoom corpus: a 20-character column (so 1.25x still fits the
     # viewport), re-rendered at `zoom` about the page origin from the
     # reflow capture on. Pure = same texts, scaled boxes; rewrap = the
-    # same paragraphs at zoom x the characters per line.
+    # same paragraphs at the characters per line divided by zoom (a bigger
+    # font on a fixed-width column holds fewer characters: 20 -> 16 at 1.25).
     WRAP_ZOOM = 20
     k = args.zoom
     tag = f'zoom-{round(k * 100):03d}'

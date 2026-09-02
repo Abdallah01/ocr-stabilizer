@@ -280,13 +280,14 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       coherentShiftReanchorMinBlocks: coherentShiftReanchorMinBlocks,
     );
     // #135: an integer COUNT, same class as `coherentShiftMinBlocks` —
-    // below 2 the least-squares scale has no second anchor and
-    // `TransformEstimate.fit` would refuse every capture.
-    if (transformEstimateMinPairs < 2) {
+    // below 3 `TransformEstimate.fit` refuses the floor: two pairs fit
+    // any similarity exactly (residual 0, an arbitrary scale), so a
+    // residual gate would have nothing to read.
+    if (transformEstimateMinPairs < 3) {
       throw ArgumentError.value(
         transformEstimateMinPairs,
         'transformEstimateMinPairs',
-        'must be >= 2 — a scale needs two anchors',
+        'must be >= 3 — two pairs fit any similarity exactly',
       );
     }
   }
@@ -295,7 +296,8 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// `StabilizationResult.transformEstimate` is reported (2.6.0, #135).
   /// Default 3. Eligibility is the coherent-shift detector's: ordinary
   /// primary matches only. Below the floor the result carries `null`
-  /// rather than a fit over too few anchors. Must be >= 2.
+  /// rather than a fit over too few anchors. Must be >= 3 (two pairs fit
+  /// any similarity exactly; the third is what a residual reads).
   final int transformEstimateMinPairs;
 
   /// How many consecutive [stabilize] calls a tracked block survives in

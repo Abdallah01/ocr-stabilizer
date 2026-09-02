@@ -19,11 +19,12 @@ import 'replay_session.dart';
 /// value none of their tables read.
 ///
 /// Per capture: `scale`, `dx` / `dy` (the translation), `pairs`,
-/// `residualPx`, `spanPx`, or `null` when the engine reported no estimate
-/// (a session's first sighting, a rewrap that starved the fit). The
-/// `summary` block carries the two numbers the zoom entry's tables read:
-/// the largest `|scale - 1|` over the stream's captures and the residual
-/// at that capture.
+/// `rejected`, `residualPx`, `spanPx`, `gapShare`
+/// (`TransformEstimate.largestGapShare`), or `null` when the engine
+/// reported no estimate (a session's first sighting, a rewrap that
+/// starved the fit). The `summary` block carries the peak-deviation
+/// capture's numbers the zoom entry's peak table reads: the capture,
+/// its scale and `|scale - 1|`, residual, pairs and gap share.
 Map<String, Object?> transformReport(
   CaptureStream stream, {
   Viewport? viewport,
@@ -56,6 +57,7 @@ Map<String, Object?> transformReport(
             'rejected': e.rejectedPairs,
             'residualPx': e.residualPx,
             'spanPx': e.spanPx,
+            'gapShare': e.largestGapShare,
           };
     if (e != null && (e.scale - 1).abs() > peakDev) {
       peakDev = (e.scale - 1).abs();
@@ -90,6 +92,7 @@ Map<String, Object?> transformReport(
       'peakScale': peak?['scale'],
       'residualAtPeakPx': peak?['residualPx'],
       'pairsAtPeak': peak?['pairs'],
+      'gapShareAtPeak': peak?['gapShare'],
     },
   };
 }

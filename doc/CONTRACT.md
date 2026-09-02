@@ -104,15 +104,18 @@ census
 `test/coherent_shift_event_test.dart`, `test/identity_turnover_test.dart`).
 
 **G11 — The transform estimate is reported, never applied (2.6.0).**
-Every capture with at least `transformEstimateMinPairs` (3) eligible
-matched pairs reports `StabilizationResult.transformEstimate`
-(`TransformEstimate`: the least-squares isotropic scale + translation
-over those pairs after one 3x-median trim, with its residual, span,
-pair count and the pairs the trim set aside); a capture with fewer
-reports `null`. The merge stays per block — no scale enters any block's
-geometry, so U9 stands: the engine test's pure-zoom case checks the
-blocks are damped, not rescaled, while the estimate reads the zoom. The
-value is additive (G9), defines value equality and validates its fields
+Every capture whose eligible matched pairs number at least
+`transformEstimateMinPairs` (3, the knob's floor) AND admit a fit
+reports `StabilizationResult.transformEstimate` (`TransformEstimate`:
+the least-squares isotropic scale + translation over those pairs after
+one 3x-median trim, with its residual, span, largest gap share, pair
+count and the pairs the trim set aside); a capture with fewer pairs,
+with coincident cached centres (no lever arm) or with a mirrored fit
+(scale <= 0) reports `null`. The merge stays per block — no scale
+enters any block's geometry, so U9 stands: the engine test's pure-zoom
+case checks the blocks are damped, not rescaled, while the estimate
+reads the zoom. The value is additive (G9), defines value equality and
+validates its fields
 (`test/stabilization_engine_transform_estimate_test.dart`,
 `test/transform_estimate_test.dart`). The zoom corpus entry
 (`doc/replay/validation/2026-09-zoom/EXPERIMENT.md`) is the evidence:
@@ -120,6 +123,10 @@ a 1.25x and a 0.8x pure zoom read 0.249 / 0.200 deviation with
 residuals under 4 px at the event capture, and no capture of any
 non-zoom stream in the repository exceeds 0.010 under the entry's
 reading bounds (`test/replay/experiment_doc_zoom_tables_test.dart`).
+What the estimate cannot do is stated with it: when the matched pairs
+form two clusters, a translation of one cluster and a zoom about a
+point fit them equally well — `largestGapShare` names that shape and
+the entry's rule bounds it.
 
 ## 2. Intentionally unsupported in 2.x
 
