@@ -6,8 +6,10 @@
 // while every source header said BSD-3-Clause (what a license scanner
 // reads) — two licenses declared, only one true. This test derives the
 // expected identifier from LICENSE's first line and checks every Dart
-// file that ships or supports the package against it, so the two cannot
-// drift apart again.
+// file in the repository against it — a walk from the root that skips
+// only tool caches and build output, not an allowlist of source roots,
+// so a Dart file under a root added later (`bin/`, say) is checked the
+// day it appears rather than silently exempt (PR #139 review).
 import 'dart:io';
 
 import 'package:test/test.dart';
@@ -18,7 +20,30 @@ const _spdxByLicenseTitle = {
   'BSD 3-Clause License': 'BSD-3-Clause',
 };
 
-const _roots = ['lib', 'test', 'tool', 'example', 'benchmark'];
+/// Directories the walk never enters: tool caches, build output and
+/// editor / agent state (the .gitignore + .pubignore set). Everything
+/// else is walked, so a new source root needs no registration here.
+const _skipDirs = {
+  '.dart_tool',
+  '.git',
+  '.idea',
+  '.vscode',
+  '.claude',
+  '.ultra',
+  'build',
+  'tmp',
+};
+
+Iterable<File> _dartFiles(Directory dir) sync* {
+  for (final e in dir.listSync()) {
+    final name = e.uri.pathSegments.lastWhere((s) => s.isNotEmpty);
+    if (e is Directory) {
+      if (!_skipDirs.contains(name)) yield* _dartFiles(e);
+    } else if (e is File && name.endsWith('.dart')) {
+      yield e;
+    }
+  }
+}
 
 void main() {
   final title = File('LICENSE').readAsLinesSync().first.trim();
@@ -35,18 +60,18 @@ void main() {
       'LICENSE\'s ($expected)', () {
     final offenders = <String>[];
     final missing = <String>[];
-    for (final root in _roots) {
-      final dir = Directory(root);
-      if (!dir.existsSync()) continue;
-      for (final f in dir.listSync(recursive: true).whereType<File>()) {
-        if (!f.path.endsWith('.dart')) continue;
-        final head = f.readAsLinesSync().take(5).join('\n');
-        final m = RegExp(r'SPDX-License-Identifier:\s*(\S+)').firstMatch(head);
-        if (m == null) {
-          missing.add(f.path);
-        } else if (m.group(1) != expected) {
-          offenders.add('${f.path}: ${m.group(1)}');
-        }
+    final files = _dartFiles(Directory.current).toList();
+    // The walk found the package itself — an empty walk would pass
+    // vacuously (wrong working directory, a broken skip set).
+    expect(files.map((f) => f.path.replaceAll('\\', '/')),
+        contains(endsWith('/lib/ocr_stabilizer.dart')));
+    for (final f in files) {
+      final head = f.readAsLinesSync().take(5).join('\n');
+      final m = RegExp(r'SPDX-License-Identifier:\s*(\S+)').firstMatch(head);
+      if (m == null) {
+        missing.add(f.path);
+      } else if (m.group(1) != expected) {
+        offenders.add('${f.path}: ${m.group(1)}');
       }
     }
     expect(offenders, isEmpty,
