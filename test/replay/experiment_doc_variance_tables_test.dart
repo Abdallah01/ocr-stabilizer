@@ -295,9 +295,10 @@ void main() {
       final xs = expected[r[0]]!;
       expect(int.parse(r[4]), xs.length, reason: '${r[0]}: n');
       if (xs.isEmpty) continue;
-      expectAtDisplay(xs.reduce((a, b) => a < b ? a : b), r[1], '${r[0]} min');
-      expectAtDisplay(median(xs), r[2], '${r[0]} median');
-      expectAtDisplay(xs.reduce((a, b) => a > b ? a : b), r[3], '${r[0]} max');
+      final sorted = xs.map((x) => x.toDouble()).toList()..sort();
+      expectAtDisplay(sorted.first, r[1], '${r[0]} min');
+      expectAtDisplay(median(sorted), r[2], '${r[0]} median');
+      expectAtDisplay(sorted.last, r[3], '${r[0]} max');
     }
   });
 }
