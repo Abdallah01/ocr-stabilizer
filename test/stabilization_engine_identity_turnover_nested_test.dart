@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 //
 // PR #138 review: the identity census's nested-fragment arms were
 // declared (the class doc lists "a nested-fragment confirmation" under

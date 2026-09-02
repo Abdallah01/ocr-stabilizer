@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 //
 // Test backfill for #34 — covers gaps the v0.4.0 fan-out review identified:
 //

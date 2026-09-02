@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 
 import 'package:meta/meta.dart' show immutable;
 

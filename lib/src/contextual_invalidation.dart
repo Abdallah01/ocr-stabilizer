@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 import 'tracked_block.dart';
 
 /// Callback that determines if a block's contextual neighborhood has changed

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 import 'container_id.dart';
 
 /// Typed key identifying a drift observation coordinate space.

@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 //
 // 2.5.0 — the capture-level coherent-shift event. Before this, a consumer
 // could learn that a shift was applied only per block (`MergeResult

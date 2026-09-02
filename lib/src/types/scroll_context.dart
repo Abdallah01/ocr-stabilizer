@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 /// Scroll offsets and carousel identity captured at recognition time.
 ///
 /// Groups logically-related fields that together describe where in the

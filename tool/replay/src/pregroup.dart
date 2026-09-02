@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 
 // Pre-group a line-level capture stream into paragraph units — a consumer's
 // "group BEFORE tracking" order — so the same captures can be replayed under

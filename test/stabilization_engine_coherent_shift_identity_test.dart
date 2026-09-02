@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 //
 // #116: `_detectCoherentShift` builds `memberDrift` -- a map from each
 // coherent-shift member's EXISTING block to that member's own frozen

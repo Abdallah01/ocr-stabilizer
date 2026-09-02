@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 /// Fallback coordinate context for sticky elements demoted from viewport-relative.
 ///
 /// When a `position:sticky` element loses its VR status (e.g. scroll passes

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 /// Pure-Dart replacement for `package:flutter/foundation.dart`'s
 /// `kDebugMode`.
 ///

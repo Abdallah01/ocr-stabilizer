@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 // The #119 lever flags of `replay.dart`, parsed strictly.
 //
 // PR #129 review CONF2: the CLI used to match `--coherent-floor=<number>`

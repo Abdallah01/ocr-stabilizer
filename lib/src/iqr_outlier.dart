@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 // TUKEY IQR OUTLIER DETECTION
 // ============================================================================
 // Implements Tukey's fence (1977) for data-driven outlier detection.

@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 //
 // #119 item 2: on the measured 150 px pushdown capture the coherent-shift
 // quorum DOES form (three short movers clear their own-height "moved"

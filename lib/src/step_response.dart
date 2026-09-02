@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 
 /// How `StabilizationEngine` reacts to a residual that is far outside a
 /// tracked block's normal jitter allowance (#116).

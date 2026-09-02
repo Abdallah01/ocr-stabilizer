@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 //
 // PR #138 review (P1): `CoherentShiftEvent.memberCount` must be counted
 // at the APPLICATION site, never from plan membership. Membership

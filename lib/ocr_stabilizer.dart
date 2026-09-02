@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 /// Real-time OCR overlay stabilization engine — drift correction, spatial
 /// indexing, and block tracking for translation-overlay pipelines.
 ///

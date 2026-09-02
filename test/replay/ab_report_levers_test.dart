@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 // PR #129 review C2: the replay tool's lever plumbing had no test — both
 // #119 arms could have been computed with the levers OFF and every test
 // stayed green. This pins that `abReport` hands each lever to its own

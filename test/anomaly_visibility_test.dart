@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 // =============================================================================
 // #78 — ANOMALY-CLASS DIAGNOSTICS VISIBLE IN ALL BUILD MODES
 // =============================================================================

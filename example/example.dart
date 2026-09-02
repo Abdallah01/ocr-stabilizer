@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 // ignore_for_file: avoid_print
 
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';

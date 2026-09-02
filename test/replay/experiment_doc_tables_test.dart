@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 //
 // #128 — the result tables of the validation EXPERIMENT.md documents are
 // derived from the committed `.ab.json` reports, and two of their cells

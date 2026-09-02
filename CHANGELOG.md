@@ -1,3 +1,15 @@
+## 2.5.1 - 2026-09-02
+
+### Fixed
+- **One license, declared once (#137).** The root `LICENSE` is MIT — what
+  pub.dev and GitHub display — while every source header carried
+  `SPDX-License-Identifier: BSD-3-Clause`, so a license scanner and a
+  human reader saw different licenses. All 48 Dart headers now say `MIT`, the 81 Dart files that had no header at all gained the same one,
+  and `test/license_header_test.dart` derives the expected identifier from
+  `LICENSE`'s first line and checks every Dart file under `lib/`, `test/`,
+  `tool/`, `example/` and `benchmark/` against it, so the two cannot drift
+  apart again. No code change.
+
 ## 2.5.0 - 2026-09-01
 
 ### Added

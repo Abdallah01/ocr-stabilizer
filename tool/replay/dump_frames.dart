@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: MIT
 
 // Dumps per-capture raw vs stabilized geometry for visualization (the
 // README demo GIF). Replays a capture stream through the packaged engine

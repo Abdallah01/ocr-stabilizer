@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 // PR #129 review CONF2: `replay.dart` matched its two #119 lever flags
 // with value regexes, so a malformed value (`--coherent-floor=abc`, a
 // missing `=`) simply never matched — the run went ahead with the lever

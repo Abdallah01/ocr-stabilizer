@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 /// Accumulated evidence for a single text variant observed at a block position.
 ///
 /// Used by the text quality accumulation system to track how much confidence

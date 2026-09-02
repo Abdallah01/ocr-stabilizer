@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
 // Batch-size benchmarks for the two hot entry points (#97):
 //
 //   StabilizationEngine.stabilize()      — steady-state re-observation cost
