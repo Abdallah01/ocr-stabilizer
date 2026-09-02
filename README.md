@@ -112,7 +112,11 @@ dependencies:
 > included; a capture where no shift is decided is untouched by
 > construction — and the one affected stream strictly better
 > (`pushdown-150` lag at the move 68.3 -> 6.0 px, identity
-> 0.821 -> 0.929, 15 extra merges retained). Pass
+> 0.821 -> 0.929, 15 extra merges retained) — on that seed's noise
+> draw: the 2.5.1 variance entry finds the 150 px step forms no plan
+> at all on 7 of 8 seed / noise configurations, where the lever is
+> byte-identical to plain `coherentShift` (never worse, better on one
+> in eight). Pass
 > `coherentShiftAdoptAgreeing: false` for 2.3.x numerics bit-for-bit.
 > Also new (both opt-in; `null` = the option stays off): the
 > `coherentShiftFloorPx` absolute-pixel floor closing the large-slab
@@ -351,14 +355,25 @@ geometry, not a universal constant**, which is why it ships `null`
    produces between two consecutive captures on your device and capture
    cadence (replay your own captures, or read the largest per-frame move
    on a scroll-only session). The floor must sit ABOVE it, or scroll
-   fires step events. On the validation corpus this bound is 377 px (a
-   control's largest scroll step).
+   fires step events. On the validation corpus this bound is 377 px on
+   the published streams (the tesseract-matrix scroll control's largest
+   step); across the eight seed / noise configurations of the #136 entry
+   it spans 220–377 px on the seven that measure it (one sits below the
+   200 px search floor).
 2. **Upper bound:** the smallest single-frame slab you need tracked. The
    floor must sit BELOW the displacement such a slab leaves on its
-   surviving mover — 406 px on the corpus's 600 px slab.
+   surviving mover — 406 px on the published page's 600 px slab,
+   240–406 px where a mover survives at all — and on two of the four
+   synthetic pages the window is empty: on one no mover survives at any
+   floor from 200 up, on the other the survivor (240 px) sits below that
+   page's own scroll ceiling (359–364 px).
 3. Pick inside the window and re-run your controls: the corpus ships at
-   390 px with 0 step events on all 10 control streams and the 600 px
-   slab's lag cut 30.7 -> 1.4 px. A consumer capturing less often, or
+   390 px with 0 step events on all 10 control streams (and on all 32
+   control replays of the #136 entry) and the published page's 600 px
+   slab's lag cut 30.7 -> 1.4 px; on the other three synthetic pages
+   390 is a safe no-op — never inside their window, never firing. No
+   single floor is inside every page's window, which is why this is a
+   recipe and not a default. A consumer capturing less often, or
    scrolling faster, needs a HIGHER floor (ordinary between-capture moves
    are bigger); if your window is empty — your scrolling moves farther
    per capture than your smallest slab — leave it `null`.
@@ -726,10 +741,16 @@ Deliberate trade-offs, each with a tracking issue for discussion:
   Detect zoom from your own source and rescale or rebuild; a transform
   ESTIMATE above `coherentShift` is the tracked candidate, gated on a zoom
   corpus that does not yet exist. Contract U9; [#135](https://github.com/Abdallah01/ocr-stabilizer/issues/135).
-- **The dynamic-reflow evidence is single-seed.** Every step-response
-  number rests on one synthetic seed and one repetition per stream; the
-  `coherentShiftFloorPx` window is bounded by single measurements on both
-  sides. A second seed with repetitions is tracked as [#136](https://github.com/Abdallah01/ocr-stabilizer/issues/136).
+- **The dynamic-reflow evidence is one layout: four pages, two noise
+  draws each.** The #136 entry of
+  [`EXPERIMENT.md`](doc/replay/validation/2026-08-dynamic-reflow/EXPERIMENT.md)
+  ("Variance across seeds and repetitions") re-derives every
+  step-response table on eight seed / noise configurations of the same
+  synthetic layout: `coherentShift`'s 4/7 and the controls' zero hold on
+  all eight; the `coherentShiftFloorPx` window and the adopt lever's
+  150 px result are page- and noise-specific (see the calibration
+  recipe). Other fonts, line heights and capture cadences remain
+  unmeasured.
 - **Paragraph grouping assumes a single text region.** The Otsu gap threshold
   is derived batch-globally; multi-column pages are handled by per-merge
   guards, not per-region statistics. [#91](https://github.com/Abdallah01/ocr-stabilizer/issues/91).

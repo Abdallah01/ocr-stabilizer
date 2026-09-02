@@ -1,5 +1,31 @@
 ## 2.5.1 - 2026-09-02
 
+### Added
+- **Seed-variance corpus for the dynamic-reflow evidence (#136).** Seven
+  new configurations — three further seeds, each with a fresh-noise
+  repetition, plus a fresh-noise repetition of the published seed — of
+  the eleven Tesseract streams, committed under
+  `doc/replay/validation/2026-08-dynamic-reflow/variants/<config>/`
+  (`--perturb-seed` on both generators, `variants/gen_seed_suite.py`,
+  `variants/variance_report.py`; each stream's meta note stamps exactly
+  the generator flags that regenerate it), and a "Variance across seeds and
+  repetitions" entry in that corpus's EXPERIMENT.md, pinned cell by
+  cell by `test/replay/experiment_doc_variance_tables_test.dart` (the
+  doc-table helpers moved to `test/replay/experiment_doc_support.dart`).
+  Findings: the controls report 0 step events under every lever on all
+  8 configurations and `coherentShift` passes the same 4 of 7 steps on
+  every one; the `coherentShiftFloorPx` window (377, 406] is the
+  published streams' (a seed-94 scroll ceiling, a seed-93 slab bound) —
+  on the other three synthetic pages the 390 px
+  example is a safe no-op, and no single floor separates the slab from
+  the controls on every page; the adopt lever's 150 px result is one
+  configuration in eight (no plan forms on the other seven, where the
+  lever is byte-identical to plain `coherentShift`). The README
+  calibration recipe and the 2.4.0 What's-new are qualified
+  accordingly. Also corrected: the #116 entry's "this environment does
+  not reproduce the committed streams" note was a line-ending artefact
+  — the streams regenerate byte for byte. No code change.
+
 ### Fixed
 - **One license, declared once (#137).** The root `LICENSE` is MIT — what
   pub.dev and GitHub display — while every source header carried

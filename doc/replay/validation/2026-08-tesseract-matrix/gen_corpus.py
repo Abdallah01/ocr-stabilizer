@@ -15,22 +15,46 @@
 # the frame's true scrollY, so the residual box jitter is exactly the
 # engine-shaped noise under test.
 #
-# Usage:  python gen_corpus.py <tesseract.exe> <out-dir>
+# Usage:  python gen_corpus.py <tesseract.exe> <out-dir> [--seed S] [--perturb-seed P]
+#
+# --seed defaults to the value that produced the committed streams (94);
+# running with no options regenerates them byte for byte (LF line
+# endings — git checks them out with CRLF on Windows, so compare after
+# normalising). --perturb-seed (#136) seeds the per-frame capture noise
+# separately from the page text: the same page under fresh noise, one
+# REPETITION of a configuration.
+import argparse
 import io
 import json
 import random
 import subprocess
-import sys
 import time
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
-TESS, OUT = sys.argv[1], sys.argv[2]
+
+def parse_args():
+    p = argparse.ArgumentParser(
+        description='Tesseract capture-corpus generator (issue #94).')
+    p.add_argument('tesseract_exe')
+    p.add_argument('out_dir')
+    p.add_argument('--seed', type=int, default=94,
+                    help='RNG seed for page text and perturbation. '
+                         'Default: 94 (the committed streams).')
+    p.add_argument('--perturb-seed', type=int, default=None,
+                    help='separate RNG seed for the per-frame capture '
+                         'noise. Default: none — the noise draws from '
+                         'the --seed RNG, as for the committed streams.')
+    return p.parse_args()
+
+
+args = parse_args()
+TESS, OUT = args.tesseract_exe, args.out_dir
 
 W, MARGIN, FONT_PX, LINE_H, PARA_GAP, WRAP = 1080, 60, 36, 56, 40, 26
 VIEW_H = 2200
 
-rng = random.Random(94)  # deterministic corpus
+rng = random.Random(args.seed)  # deterministic corpus
 
 # ── Synthetic prose: common-hanzi vocabulary composed into sentences ──
 NOUNS = '山水风云天地花树鸟石桥船灯窗门书剑马城河月星火'
@@ -56,6 +80,19 @@ def wrap(text, width):
 
 # ── Render the long page ──
 paras = [paragraph() for _ in range(44)]
+# The perturbation RNG: the page RNG itself by default (its state after
+# the 44 paragraphs is where the committed streams' noise began), or an
+# independent stream under --perturb-seed (#136).
+prng = rng if args.perturb_seed is None else random.Random(args.perturb_seed)
+# Seed provenance is appended to each stream's meta note ONLY for a
+# non-default configuration, so the committed default streams keep
+# regenerating byte for byte. The stamp names exactly the flags that
+# regenerate the stream: `seed S` alone means the noise continued the
+# page RNG (no --perturb-seed was passed).
+PROVENANCE = ('' if args.seed == 94 and args.perturb_seed is None else
+              f'; seed {args.seed}'
+              + ('' if args.perturb_seed is None
+                 else f' perturb-seed {args.perturb_seed}'))
 lines = []  # (y, text)
 y = MARGIN
 for p in paras:
@@ -73,12 +110,12 @@ for ly, ln in lines:
 
 
 def perturb(img, shift_max, jpeg_q, bright_max):
-    dx = rng.uniform(-shift_max, shift_max)
-    dy = rng.uniform(-shift_max, shift_max)
+    dx = prng.uniform(-shift_max, shift_max)
+    dy = prng.uniform(-shift_max, shift_max)
     img = img.transform(img.size, Image.AFFINE, (1, 0, dx, 0, 1, dy),
                         resample=Image.BILINEAR, fillcolor=255)
     img = ImageEnhance.Brightness(img).enhance(
-        1 + rng.uniform(-bright_max, bright_max))
+        1 + prng.uniform(-bright_max, bright_max))
     buf = io.BytesIO()
     img.convert('RGB').save(buf, 'JPEG', quality=jpeg_q)
     return Image.open(buf).convert('L'), dx, dy
@@ -135,9 +172,13 @@ def scenario(name, frames, shift_max, jpeg_q, bright_max):
     ts = 1756000000000
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps({
-            't': 'meta', 'v': 1, 'ts': ts, 'vp': [W, VIEW_H],
+            # Key order matches the committed streams' meta line byte for
+            # byte (vp before ts) — the only field the regeneration check
+            # ever found differing.
+            't': 'meta', 'v': 1, 'vp': [W, VIEW_H], 'ts': ts,
             'note': f'synthetic tesseract corpus (#94): {name}; '
                     f'shift<={shift_max}px jpeg={jpeg_q} bright±{bright_max}'
+                    + PROVENANCE,
         }) + '\n')
         for cap, sy in enumerate(frames, 1):
             crop = page.crop((0, sy, W, min(sy + VIEW_H, PAGE_H)))

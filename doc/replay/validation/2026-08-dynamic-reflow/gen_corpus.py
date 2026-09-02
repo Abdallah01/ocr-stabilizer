@@ -28,6 +28,12 @@
 # time; this script does not do that check itself). --gap-px accepts a
 # NEGATIVE value: content moves UP instead of down (an ad slot collapsing
 # once its content finishes loading, rather than a slab being inserted).
+# --perturb-seed (#136) seeds the per-frame capture noise SEPARATELY from
+# the corpus text: the same page under fresh noise, one REPETITION of a
+# configuration. Absent, the noise draws from the corpus RNG exactly as
+# before, so the committed streams still regenerate byte for byte (the
+# files are written with LF line endings; git checks them out with CRLF
+# on Windows, so compare after normalising, not with a raw byte diff).
 import argparse
 import io
 import json
@@ -59,6 +65,11 @@ def parse_args():
     p.add_argument('--seed', type=int, default=93,
                     help='RNG seed for corpus text and perturbation. '
                          'Default: 93.')
+    p.add_argument('--perturb-seed', type=int, default=None,
+                    help='separate RNG seed for the per-frame capture '
+                         'noise (shift / JPEG / brightness). Default: '
+                         'none — the noise draws from the --seed RNG, '
+                         'which is what produced the committed streams.')
     return p.parse_args()
 
 
@@ -107,6 +118,19 @@ def wrap(text, width):
 
 
 PARAS = [paragraph() for _ in range(44)]
+# The perturbation RNG: the corpus RNG itself by default (its state after
+# the 44 paragraphs is exactly where the committed streams' noise began),
+# or an independent stream under --perturb-seed (#136).
+prng = rng if args.perturb_seed is None else random.Random(args.perturb_seed)
+# Seed provenance is appended to each stream's meta note ONLY for a
+# non-default configuration: the committed default streams predate the
+# field and must keep regenerating byte for byte. The stamp names exactly
+# the flags that regenerate the stream: `seed S` alone means the noise
+# continued the page RNG (no --perturb-seed was passed).
+PROVENANCE = ('' if args.seed == 93 and args.perturb_seed is None else
+              f'; seed {args.seed}'
+              + ('' if args.perturb_seed is None
+                 else f' perturb-seed {args.perturb_seed}'))
 FONT = ImageFont.truetype(r'C:\Windows\Fonts\msyh.ttc', FONT_PX)
 
 
@@ -139,12 +163,12 @@ def render(wrap_chars, gap_after_para=None, gap_px=0):
 
 
 def perturb(img, shift_max, jpeg_q, bright_max):
-    dx = rng.uniform(-shift_max, shift_max)
-    dy = rng.uniform(-shift_max, shift_max)
+    dx = prng.uniform(-shift_max, shift_max)
+    dy = prng.uniform(-shift_max, shift_max)
     img = img.transform(img.size, Image.AFFINE, (1, 0, dx, 0, 1, dy),
                         resample=Image.BILINEAR, fillcolor=255)
     img = ImageEnhance.Brightness(img).enhance(
-        1 + rng.uniform(-bright_max, bright_max))
+        1 + prng.uniform(-bright_max, bright_max))
     buf = io.BytesIO()
     img.convert('RGB').save(buf, 'JPEG', quality=jpeg_q)
     return Image.open(buf).convert('L')
@@ -194,7 +218,8 @@ def scenario(name, before, after, note):
             't': 'meta', 'v': 1, 'ts': ts, 'vp': [W, VIEW_H],
             'note': f'synthetic dynamic-reflow corpus (#93): {name}; {note}; '
                     f'reflow rendered from cap {REFLOW_AT}; dwell scrollY '
-                    f'{SCROLL_Y}; shift<=0.3px jpeg=90 bright±0.02',
+                    f'{SCROLL_Y}; shift<=0.3px jpeg=90 bright±0.02'
+                    + PROVENANCE,
         }) + '\n')
         for cap in range(1, FRAMES + 1):
             page = (before if cap < REFLOW_AT else after)[0]
