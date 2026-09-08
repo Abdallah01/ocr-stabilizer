@@ -583,5 +583,68 @@ void main() {
       final hits = index.candidates(fresh).where((b) => identical(b, cached));
       expect(hits, hasLength(1));
     });
+
+    // ┌─────────────────────────────────────────────────────────────────
+    // #142 — identity semantics hold for EVERY query, including
+    // blocksInRegion. A value-equality block type (Equatable is the common
+    // Flutter case) must not collapse two distinct instances in one query
+    // while the other two queries keep them apart.
+    // ┌─────────────────────────────────────────────────────────────────
+
+    group('#142 identity semantics with a value-equality block type', () {
+      test(
+          'two distinct equal-valued instances survive allBlocks, '
+          'candidates AND blocksInRegion', () {
+        final index = SpatialBlockIndex<_ValueBlock>();
+        index.updateBucketSizes(viewportWidth: 1000, viewportHeight: 1000);
+
+        final a = _ValueBlock(left: 100, top: 100);
+        final b = _ValueBlock(left: 100, top: 100);
+        expect(a == b, isTrue, reason: 'fixture must have value equality');
+        expect(identical(a, b), isFalse);
+        index.add(a);
+        index.add(b);
+
+        expect(index.allBlocks, hasLength(2));
+        expect(index.candidates(a), hasLength(2));
+        expect(
+          index.blocksInRegion(a.absoluteRect.raw),
+          hasLength(2),
+          reason: 'blocksInRegion must dedup by identity like the other two '
+              'queries (interface doc: "identity-based dedup")',
+        );
+      });
+
+      test('the same instance indexed under two cells is still reported once',
+          () {
+        final index = SpatialBlockIndex<_ValueBlock>();
+        index.updateBucketSizes(viewportWidth: 1000, viewportHeight: 1000);
+        // A wide block spans several cells; every query must report it once.
+        final wide = _ValueBlock(left: 0, top: 100, width: 900);
+        index.add(wide);
+
+        expect(index.allBlocks, hasLength(1));
+        expect(index.candidates(wide), hasLength(1));
+        expect(index.blocksInRegion(wide.absoluteRect.raw), hasLength(1));
+      });
+    });
   });
+}
+
+/// A [_TestBlock] with VALUE equality on its rect — the shape an Equatable
+/// consumer block has. Distinct instances compare equal.
+class _ValueBlock extends _TestBlock {
+  _ValueBlock({
+    required double left,
+    required double top,
+    double width = 200,
+    double height = 20,
+  }) : super(absoluteRect: AbsoluteRect.fromLTWH(left, top, width, height));
+
+  @override
+  bool operator ==(Object other) =>
+      other is _ValueBlock && other.absoluteRect == absoluteRect;
+
+  @override
+  int get hashCode => absoluteRect.hashCode;
 }
