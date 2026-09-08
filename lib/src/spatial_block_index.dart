@@ -263,7 +263,8 @@ class SpatialBlockIndex<T extends TrackedBlock> implements SpatialIndexView<T> {
   /// Yield all non-VR blocks whose page-absolute grid cells overlap [region].
   ///
   /// Enumerates every cell the region spans plus a 1-cell margin, collecting
-  /// unique blocks.  Used by the overlay cache layer's region-invalidation
+  /// unique blocks — unique by object identity, like [allBlocks] and
+  /// [candidates] (#142). Used by the overlay cache layer's region-invalidation
   /// logic to find stale blocks that should be evicted when in-place DOM
   /// content changes.
   ///
@@ -281,7 +282,9 @@ class SpatialBlockIndex<T extends TrackedBlock> implements SpatialIndexView<T> {
     final cxMax = (region.right / _bucketWidth).ceil() + 1;
     final cyMin = (region.top / _bucketHeight).floor() - 1;
     final cyMax = (region.bottom / _bucketHeight).ceil() + 1;
-    final seen = <T>{};
+    // #142 — identity, like [allBlocks] and [candidates]: a value-equality
+    // block type must not collapse two distinct instances in this query only.
+    final seen = Set<T>.identity();
     for (int cx = cxMin; cx <= cxMax; cx++) {
       for (int cy = cyMin; cy <= cyMax; cy++) {
         final cell = _cells['$cx:$cy'];

@@ -1,3 +1,14 @@
+## Unreleased
+
+### Fixed
+- **`SpatialBlockIndex.blocksInRegion` now dedups by object identity (#142).**
+  `allBlocks` and `candidates` always did; `blocksInRegion` used value
+  equality, so a block type with value equality (an Equatable, the common
+  Flutter case) had two distinct equal-valued instances collapsed to one
+  by this query alone. A consumer counting rivals in a region saw one
+  where there were two. Pinned by a two-equal-instances test across all
+  three queries.
+
 ## 2.6.0 - 2026-09-02
 
 ### Added
