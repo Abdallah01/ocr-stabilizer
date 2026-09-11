@@ -7,7 +7,7 @@
 // corpus now and comparing hash by hash pins that a refactor of the
 // engine changed NOTHING it returns or holds — not a rect, not a text
 // winner, not a vote, not an event — on any capture of any stream under
-// any of the nine arms.
+// any of the ten arms.
 //
 // A red line names the stream, the arm and the FIRST capture that
 // diverged (later captures usually diverge as a consequence). To see

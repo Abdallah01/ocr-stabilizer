@@ -558,6 +558,67 @@
         }
       ],
       "digest": "977983566833a775"
+    },
+    "retention2": {
+      "captures": [
+        {
+          "capture": 1,
+          "hash": "0616efc7a55e0e34"
+        },
+        {
+          "capture": 2,
+          "hash": "91e43e37646f1108"
+        },
+        {
+          "capture": 3,
+          "hash": "e7bbaf4f61b5b2a1"
+        },
+        {
+          "capture": 4,
+          "hash": "c8ce86f36ec8dfb5"
+        },
+        {
+          "capture": 5,
+          "hash": "e3056decbf822180"
+        },
+        {
+          "capture": 6,
+          "hash": "4eed1f0d4f5a978e"
+        },
+        {
+          "capture": 7,
+          "hash": "af8438db33d5c638"
+        },
+        {
+          "capture": 8,
+          "hash": "905683b6cb8cfc54"
+        },
+        {
+          "capture": 9,
+          "hash": "d9ce50847ba82cca"
+        },
+        {
+          "capture": 10,
+          "hash": "16182f8137b5eabc"
+        },
+        {
+          "capture": 11,
+          "hash": "2797087c373ecc27"
+        },
+        {
+          "capture": 12,
+          "hash": "6ab7f559244a8bf9"
+        },
+        {
+          "capture": 13,
+          "hash": "9d89920277eadcd8"
+        },
+        {
+          "capture": 14,
+          "hash": "436e7514cf2cbb57"
+        }
+      ],
+      "digest": "0d3441a5a566b7be"
     }
   }
 }

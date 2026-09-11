@@ -36,6 +36,7 @@ class DifferentialArm {
     this.reanchorMinBlocks,
     this.adoptAgreeing = false,
     this.band = const BandFallbackConfig(),
+    this.retention = const RetentionConfig(),
   });
 
   final String name;
@@ -45,6 +46,7 @@ class DifferentialArm {
   final int? reanchorMinBlocks;
   final bool adoptAgreeing;
   final BandFallbackConfig band;
+  final RetentionConfig retention;
 }
 
 /// The arm table. The first four are `abReport()`'s default arms, named
@@ -63,6 +65,12 @@ class DifferentialArm {
 ///   live modes on top of the shipping configuration; every committed
 ///   A/B stream runs with the band OFF, so without these arms a
 ///   `Matcher` extraction could change the band branch unseen.
+/// - `retention2` — the shipping configuration with unmatched cached
+///   blocks kept for two captures (`RetentionConfig(missedFrames: 2)`).
+///   The engine's default is zero, under which the retention and
+///   cross-frame supersession pass is skipped entirely; a mutant that
+///   broke that pass survived every other arm (this file's PR), so a
+///   `RetentionManager` extraction needs this arm to be seen at all.
 const List<DifferentialArm> kDifferentialArms = [
   DifferentialArm('legacy',
       model: PositionMergeModel.legacy, stepResponse: StepResponse.damp),
@@ -97,6 +105,11 @@ const List<DifferentialArm> kDifferentialArms = [
       stepResponse: StepResponse.coherentShift,
       adoptAgreeing: true,
       band: BandFallbackConfig(mode: BandFallbackMode.admit)),
+  DifferentialArm('retention2',
+      model: PositionMergeModel.agreementWeighted,
+      stepResponse: StepResponse.coherentShift,
+      adoptAgreeing: true,
+      retention: RetentionConfig(missedFrames: 2)),
 ];
 
 /// Replay [stream] under [arm], invoking [onCapture] after every
@@ -117,6 +130,7 @@ ReplayResult replayArm(
         coherentShiftFloorPx: arm.floorPx,
         coherentShiftReanchorMinBlocks: arm.reanchorMinBlocks,
         coherentShiftAdoptAgreeing: arm.adoptAgreeing,
+        retention: arm.retention,
         viewport: viewport,
         useStreamViewport: false,
         bucketPolicy: bucketPolicy,

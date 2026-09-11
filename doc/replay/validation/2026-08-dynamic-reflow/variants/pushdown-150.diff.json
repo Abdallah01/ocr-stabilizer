@@ -486,6 +486,59 @@
         }
       ],
       "digest": "5490feee4b998d82"
+    },
+    "retention2": {
+      "captures": [
+        {
+          "capture": 1,
+          "hash": "cf01e616bcec9912"
+        },
+        {
+          "capture": 2,
+          "hash": "0994bed13c5b9097"
+        },
+        {
+          "capture": 3,
+          "hash": "ddad72bd8e22a045"
+        },
+        {
+          "capture": 4,
+          "hash": "8e53271d8a9e5f1a"
+        },
+        {
+          "capture": 5,
+          "hash": "93ce85c9f6ceea98"
+        },
+        {
+          "capture": 6,
+          "hash": "191ea0106ab30aa6"
+        },
+        {
+          "capture": 7,
+          "hash": "2200fd788ec22aa7"
+        },
+        {
+          "capture": 8,
+          "hash": "983f24b3a2772f8c"
+        },
+        {
+          "capture": 9,
+          "hash": "b4934536f6cfdced"
+        },
+        {
+          "capture": 10,
+          "hash": "264259b788f6bdc4"
+        },
+        {
+          "capture": 11,
+          "hash": "7516d19c431242ce"
+        },
+        {
+          "capture": 12,
+          "hash": "f36b00662dcb13e3"
+        }
+      ],
+      "digest": "8b6336c1e6989a4f"
     }
   }
 }
