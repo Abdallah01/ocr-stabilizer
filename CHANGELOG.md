@@ -1,4 +1,4 @@
-## Unreleased
+## 2.6.1 - 2026-09-11
 
 ### Changed
 - **README: quick start first (#144).** The README now opens with the
