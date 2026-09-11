@@ -32,3 +32,16 @@ const List<String> kCommittedStreams = [
   'doc/replay/validation/2026-08-tesseract-matrix/scroll',
   'doc/replay/validation/2026-08-tesseract-matrix/stable-dwell',
 ];
+
+/// The streams the #150 differential harness digests: every A/B stream
+/// plus the committed streams that have no `.ab.json` (the 2.6.0 zoom
+/// corpus, replayed live by `experiment_doc_zoom_tables_test.dart`). A
+/// dedup mutant survived the 17 A/B streams and died only on the zoom
+/// streams (PR #164), so the harness covers both sets.
+const List<String> kDifferentialStreams = [
+  ...kCommittedStreams,
+  'doc/replay/validation/2026-09-zoom/zoom-080',
+  'doc/replay/validation/2026-09-zoom/zoom-080-rewrap',
+  'doc/replay/validation/2026-09-zoom/zoom-125',
+  'doc/replay/validation/2026-09-zoom/zoom-125-rewrap',
+];

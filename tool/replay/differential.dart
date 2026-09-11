@@ -4,7 +4,7 @@
 // #150 differential harness CLI. Run from the package root.
 //
 //   dart tool/replay/differential.dart regenerate
-//       Rewrites every committed `<stream>.diff.json` (the corpus in
+//       Rewrites every committed `<stream>.diff.json` (kDifferentialStreams in
 //       tool/replay/src/corpus.dart) from the CURRENT engine. Run this
 //       ONLY when a behaviour change is intended and reviewed — the test
 //       test/replay/differential_committed_test.dart exists to make an
@@ -86,7 +86,7 @@ void main(List<String> args) {
 
   switch (positional) {
     case ['regenerate']:
-      for (final base in kCommittedStreams) {
+      for (final base in kDifferentialStreams) {
         final stream = _read('$base.jsonl');
         if (stream == null) return;
         final report = differentialReport(stream,
