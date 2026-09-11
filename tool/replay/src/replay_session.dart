@@ -329,12 +329,6 @@ ReplayResult replay(
 
   late final StabilizationEngine<ReplayBlock, Object> engine;
   engine = StabilizationEngine<ReplayBlock, Object>(
-    bandFallback: band,
-    positionMergeModel: model,
-    stepResponse: stepResponse,
-    coherentShiftFloorPx: coherentShiftFloorPx,
-    coherentShiftReanchorMinBlocks: coherentShiftReanchorMinBlocks,
-    coherentShiftAdoptAgreeing: coherentShiftAdoptAgreeing,
     merger: (existing, fresh, m) {
       final merged = existing.applyMerge(m);
       final e = existing.absoluteRect.raw.center;
@@ -376,6 +370,24 @@ ReplayResult replay(
       }
       return merged;
     },
+    config: StabilizerConfig(
+      matching: MatchingConfig(
+        bandFallback: band,
+      ),
+      merge: MergeConfig(
+        positionModel: model,
+      ),
+      stepResponse: StepResponseConfig(
+        mode: stepResponse,
+        coherentShift: CoherentShiftConfig(
+          adoptAgreeing: coherentShiftAdoptAgreeing,
+          experimental: ExperimentalCoherentShiftOptions(
+            floorPx: coherentShiftFloorPx,
+            reanchorMinBlocks: coherentShiftReanchorMinBlocks,
+          ),
+        ),
+      ),
+    ),
   );
 
   if (effectiveViewport != null) {

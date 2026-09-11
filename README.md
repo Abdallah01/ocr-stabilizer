@@ -35,6 +35,8 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
 final engine = StabilizationEngine<DefaultTrackedBlock<MyPayload>, MyPayload>(
   merger: (existing, fresh, merge) => existing.applyMerge(merge),
+  // Every lever has a documented default; group overrides by stage:
+  // config: StabilizerConfig(retention: RetentionConfig(missedFrames: 2)),
 );
 
 // Each capture (e.g. a screenshot on scroll-settle, 1–2 Hz):

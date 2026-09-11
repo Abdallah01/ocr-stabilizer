@@ -1,3 +1,34 @@
+## 3.0.0 - Unreleased
+
+The adoption release (#145): the same engine, a surface a stranger can
+pick up in an hour. Breaking; each entry carries its migration.
+
+### Changed
+- **`StabilizerConfig` replaces the engine's twelve lever parameters
+  (#149).** `StabilizationEngine(merger:, config: StabilizerConfig(...))`
+  groups the levers by stage — `matching` (band fallback), `merge`
+  (position model), `stepResponse` (mode, snap multiplier,
+  `CoherentShiftConfig`), `retention`, `diagnostics`. The two
+  calibration-dependent coherent-shift levers moved to
+  `CoherentShiftConfig.experimental`
+  (`ExperimentalCoherentShiftOptions(floorPx:, reanchorMinBlocks:)`).
+  `StabilizerConfig()` reproduces the 2.6.x defaults bit for bit (pinned
+  by `test/stabilizer_config_test.dart`); the engine's public getters
+  (`engine.coherentShiftMinBlocks` …) still report the effective values
+  and keep each lever's measured history. Every committed replay stream
+  is byte-identical. Migration:
+
+  | 2.6.x constructor parameter | 3.0 |
+  |---|---|
+  | `bandFallback:` | `config: StabilizerConfig(matching: MatchingConfig(bandFallback: …))` |
+  | `positionMergeModel:` | `merge: MergeConfig(positionModel: …)` |
+  | `stepResponse:` | `stepResponse: StepResponseConfig(mode: …)` |
+  | `snapThresholdMultiplier:` | `stepResponse: StepResponseConfig(snapThresholdMultiplier: …)` |
+  | `coherentShiftMinBlocks:` / `MinShare` / `Tolerance` / `AdoptAgreeing` | `stepResponse: StepResponseConfig(coherentShift: CoherentShiftConfig(minBlocks: …, minShare: …, tolerance: …, adoptAgreeing: …))` |
+  | `coherentShiftFloorPx:` / `coherentShiftReanchorMinBlocks:` | `… CoherentShiftConfig(experimental: ExperimentalCoherentShiftOptions(floorPx: …, reanchorMinBlocks: …))` |
+  | `missedFrameRetention:` | `retention: RetentionConfig(missedFrames: …)` |
+  | `transformEstimateMinPairs:` | `diagnostics: DiagnosticsConfig(transformEstimateMinPairs: …)` |
+
 ## 2.6.1 - 2026-09-11
 
 ### Changed

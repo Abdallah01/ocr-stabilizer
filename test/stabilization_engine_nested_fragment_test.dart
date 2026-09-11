@@ -29,7 +29,11 @@ StabilizationEngine<DefaultTrackedBlock<void>, void> _engine({
 }) {
   return StabilizationEngine<DefaultTrackedBlock<void>, void>(
     merger: (existing, fresh, merge) => existing.applyMerge(merge),
-    missedFrameRetention: retention,
+    config: StabilizerConfig(
+      retention: RetentionConfig(
+        missedFrames: retention,
+      ),
+    ),
   );
 }
 
@@ -55,8 +59,7 @@ class _MixedNamespaceIndex
       allBlocks;
 
   @override
-  Iterable<DefaultTrackedBlock<void>> blocksInRegion(Rect region) =>
-      allBlocks;
+  Iterable<DefaultTrackedBlock<void>> blocksInRegion(Rect region) => allBlocks;
 }
 
 /// An index that offers candidates largest-area first — pins that the
@@ -99,14 +102,14 @@ void main() {
       return engine;
     }
 
-    test('a line inside an established paragraph with fragment text merges '
+    test(
+        'a line inside an established paragraph with fragment text merges '
         'into it — count up, geometry and text unchanged', () {
       final engine = established();
       final r = engine.stabilize([_at(kLine, kLineText)]);
       final b = r.stableBlocks.single;
       expect(b.originalText, kParaText, reason: 'the fragment is absorbed');
-      expect(b.absoluteRect.raw, kPara,
-          reason: 'a fragment pulls no position');
+      expect(b.absoluteRect.raw, kPara, reason: 'a fragment pulls no position');
       expect(b.observationCount, 3, reason: 'it counts as a re-observation');
       expect(engine.spatialIndex.allBlocks, hasLength(1),
           reason: 'no second block for the same text');
@@ -135,7 +138,8 @@ void main() {
           reason: 'the substring condition is the guard');
     });
 
-    test('a paragraph seen only ONCE already absorbs its line (measured: '
+    test(
+        'a paragraph seen only ONCE already absorbs its line (measured: '
         'flip-every-frame streams never let a host reach two observations)',
         () {
       final engine = _engine();
@@ -163,7 +167,8 @@ void main() {
           reason: 'provisional blocks accrue no evidence (#57)');
     });
 
-    test('OCR noise inside the fragment still merges (windowed Levenshtein '
+    test(
+        'OCR noise inside the fragment still merges (windowed Levenshtein '
         '>= 0.70, the primary floor)', () {
       final engine = established();
       final r = engine.stabilize([_at(kLine, 'The quick brawn fox jumps')]);
@@ -191,7 +196,8 @@ void main() {
       expect(r.stableBlocks.single.observationCount, 1);
     });
 
-    test('a line hanging a few px below the paragraph box still nests '
+    test(
+        'a line hanging a few px below the paragraph box still nests '
         '(measured: 14 of 17 px inside on the on-device stream)', () {
       final engine = established();
       // Second line of the paragraph, 17 px tall, bottom 3 px past 806.
@@ -203,7 +209,8 @@ void main() {
       expect(r.stableBlocks.single.observationCount, 3);
     });
 
-    test('the reverse direction — a fresh paragraph over an established '
+    test(
+        'the reverse direction — a fresh paragraph over an established '
         'line — stays on the whole-string path (one-directional rule)', () {
       final engine = _engine();
       engine.stabilize([_at(kLine, kLineText)]);
@@ -214,7 +221,8 @@ void main() {
           reason: 'documented as a separate case; not merged by this rule');
     });
 
-    test('repeated flips never promote the fragment text and never move '
+    test(
+        'repeated flips never promote the fragment text and never move '
         'the box', () {
       // Under normal vote accumulation three line observations would
       // outscore the paragraph text; a fragment casts no vote.
@@ -228,8 +236,7 @@ void main() {
       expect(b.observationCount, 5);
     });
 
-    test('under retention the absorbed line leaves no ghost in the index',
-        () {
+    test('under retention the absorbed line leaves no ghost in the index', () {
       final engine = established(retention: 2);
       engine.stabilize([_at(kLine, kLineText)]);
       expect(engine.spatialIndex.allBlocks, hasLength(1));
@@ -245,7 +252,8 @@ void main() {
       expect(r.stableBlocks.single.observationCount, 1);
     });
 
-    test('...even through an index that mixes the two namespaces (the '
+    test(
+        '...even through an index that mixes the two namespaces (the '
         'engine-side guard, not only the index cell namespace)', () {
       // The default index files viewport-relative blocks under a separate
       // "vr:" namespace, so the previous test passes without the engine's
@@ -262,7 +270,8 @@ void main() {
       expect(r.stableBlocks.single.observationCount, 1);
     });
 
-    test('paragraph AND its line in the SAME frame: one merged block, never '
+    test(
+        'paragraph AND its line in the SAME frame: one merged block, never '
         'two copies (measured: three identical tracked boxes before the fix)',
         () {
       for (final lineFirst in [false, true]) {
@@ -293,7 +302,8 @@ void main() {
       expect(r.stableBlocks.single.observationCount, 3);
     });
 
-    test('the tightest host wins when a fragment sits inside two cached '
+    test(
+        'the tightest host wins when a fragment sits inside two cached '
         'blocks, even when the larger one is offered first', () {
       // A page-wide block whose text happens to contain the line's words,
       // and the paragraph itself: the smaller (paragraph) absorbs the line.
@@ -313,8 +323,12 @@ void main() {
           'The quick brown fox jumps. 0123456789 footer QWXYZ 9876543210.';
       final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
         merger: (existing, fresh, merge) => existing.applyMerge(merge),
-        missedFrameRetention: 3,
         spatialIndex: _LargestFirstIndex(),
+        config: StabilizerConfig(
+          retention: RetentionConfig(
+            missedFrames: 3,
+          ),
+        ),
       );
       engine.stabilize([_at(wide, wideText)]);
       engine.stabilize([_at(wide, wideText)]);
@@ -361,8 +375,8 @@ void main() {
         () {
       const para = '他站在窗前看着远处的山峰慢慢被云雾遮住了';
       expect(TextDedupUtils.bestWindowSimilarity('远处的山峰慢慢', para), 1.0);
-      expect(TextDedupUtils.bestWindowSimilarity('完全不同的句子', para),
-          lessThan(0.5));
+      expect(
+          TextDedupUtils.bestWindowSimilarity('完全不同的句子', para), lessThan(0.5));
     });
   });
 }

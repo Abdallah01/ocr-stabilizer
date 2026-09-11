@@ -6,6 +6,7 @@ import 'package:test/test.dart';
 import 'package:ocr_stabilizer/src/band_fallback_config.dart';
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/stabilization_engine.dart';
+import 'package:ocr_stabilizer/src/stabilizer_config.dart';
 import 'package:ocr_stabilizer/src/types/absolute_rect.dart';
 
 DefaultTrackedBlock<Object> _block(String text,
@@ -28,9 +29,14 @@ void main() {
     setUp(() {
       engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: const BandFallbackConfig(
-          mode: BandFallbackMode.admit,
-          candidateObservationFloor: 1, // accept observationCount: 5 candidate
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: const BandFallbackConfig(
+              mode: BandFallbackMode.admit,
+              candidateObservationFloor:
+                  1, // accept observationCount: 5 candidate
+            ),
+          ),
         ),
       );
     });

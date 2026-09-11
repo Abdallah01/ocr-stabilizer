@@ -16,6 +16,7 @@ import 'package:test/test.dart';
 import 'package:ocr_stabilizer/src/band_fallback_config.dart';
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/stabilization_engine.dart';
+import 'package:ocr_stabilizer/src/stabilizer_config.dart';
 import 'package:ocr_stabilizer/src/types/absolute_rect.dart';
 
 DefaultTrackedBlock<Object> _block(
@@ -50,10 +51,14 @@ void main() {
       // the precedence test from the default drift-aware spatial gate.
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: BandFallbackConfig(
-          mode: BandFallbackMode.admit,
-          candidateObservationFloor: 1,
-          spatialConfirm: (fresh, candidate) => true,
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: BandFallbackConfig(
+              mode: BandFallbackMode.admit,
+              candidateObservationFloor: 1,
+              spatialConfirm: (fresh, candidate) => true,
+            ),
+          ),
         ),
       );
 
@@ -110,10 +115,14 @@ void main() {
         () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: const BandFallbackConfig(
-          mode: BandFallbackMode.admit,
-          candidateObservationFloor: 1,
-          provisionalCaptures: 3,
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: const BandFallbackConfig(
+              mode: BandFallbackMode.admit,
+              candidateObservationFloor: 1,
+              provisionalCaptures: 3,
+            ),
+          ),
         ),
       );
 
@@ -159,12 +168,16 @@ void main() {
         () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: BandFallbackConfig(
-          mode: BandFallbackMode.observeOnly,
-          candidateObservationFloor: 1,
-          bandLevenshteinFloor: 0.50,
-          bandJaccardFloor: 0.60,
-          spatialConfirm: (fresh, candidate) => true, // always pass spatial
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: BandFallbackConfig(
+              mode: BandFallbackMode.observeOnly,
+              candidateObservationFloor: 1,
+              bandLevenshteinFloor: 0.50,
+              bandJaccardFloor: 0.60,
+              spatialConfirm: (fresh, candidate) => true, // always pass spatial
+            ),
+          ),
         ),
       );
 
@@ -195,10 +208,14 @@ void main() {
       // exactly — the C1 doc claim depends on this regime.
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: BandFallbackConfig(
-          mode: BandFallbackMode.observeOnly,
-          candidateObservationFloor: 1,
-          spatialConfirm: (fresh, candidate) => true,
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: BandFallbackConfig(
+              mode: BandFallbackMode.observeOnly,
+              candidateObservationFloor: 1,
+              spatialConfirm: (fresh, candidate) => true,
+            ),
+          ),
         ),
       );
 

@@ -32,6 +32,7 @@ import 'package:test/test.dart';
 
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/stabilization_engine.dart';
+import 'package:ocr_stabilizer/src/stabilizer_config.dart';
 import 'package:ocr_stabilizer/src/step_response.dart';
 import 'package:ocr_stabilizer/src/types/absolute_rect.dart';
 import 'package:ocr_stabilizer/src/types/geometry.dart' show Offset;
@@ -72,8 +73,14 @@ const _deltaText = 'delta block text four';
       rects[fresh.originalText] = merged.absoluteRect;
       return merged;
     },
-    stepResponse: StepResponse.coherentShift,
-    missedFrameRetention: 3,
+    config: StabilizerConfig(
+      stepResponse: StepResponseConfig(
+        mode: StepResponse.coherentShift,
+      ),
+      retention: RetentionConfig(
+        missedFrames: 3,
+      ),
+    ),
   );
 
   // Seed 4 established blocks, well separated so text stays unambiguous.
@@ -107,7 +114,8 @@ const _deltaText = 'delta block text four';
 }
 
 void main() {
-  group('StabilizationEngine coherent-shift merges use ONE frozen drift '
+  group(
+      'StabilizationEngine coherent-shift merges use ONE frozen drift '
       'snapshot (#116, finding C)', () {
     // Same exhaustive 6-permutation sweep as finding B's test — the
     // point here is a DIFFERENT observable (residual/driftCorrection and
@@ -143,7 +151,8 @@ void main() {
       }
     });
 
-    test('every arrival order produces IDENTICAL merged rects for the '
+    test(
+        'every arrival order produces IDENTICAL merged rects for the '
         'clean group', () {
       final results = [for (final order in permutations) _runScenario(order)];
       final reference = results.first;

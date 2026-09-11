@@ -6,6 +6,7 @@ import 'package:test/test.dart';
 import 'package:ocr_stabilizer/src/band_fallback_config.dart';
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/stabilization_engine.dart';
+import 'package:ocr_stabilizer/src/stabilizer_config.dart';
 import 'package:ocr_stabilizer/src/types/absolute_rect.dart';
 
 DefaultTrackedBlock<Object> _block(String text,
@@ -24,9 +25,13 @@ void main() {
     test('runs the full loop, ticks band counters, never admits', () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: const BandFallbackConfig(
-          mode: BandFallbackMode.observeOnly,
-          candidateObservationFloor: 1, // accept any observation count
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: const BandFallbackConfig(
+              mode: BandFallbackMode.observeOnly,
+              candidateObservationFloor: 1, // accept any observation count
+            ),
+          ),
         ),
       );
 
@@ -59,9 +64,13 @@ void main() {
     test('observeOnly scans every candidate, not just the first match', () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: const BandFallbackConfig(
-          mode: BandFallbackMode.observeOnly,
-          candidateObservationFloor: 1,
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: const BandFallbackConfig(
+              mode: BandFallbackMode.observeOnly,
+              candidateObservationFloor: 1,
+            ),
+          ),
         ),
       );
       // Seed three candidates at different positions (so spatial index

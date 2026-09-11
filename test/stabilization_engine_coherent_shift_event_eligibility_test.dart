@@ -60,7 +60,11 @@ void main() {
         }
         return existing.applyMerge(m);
       },
-      missedFrameRetention: 3,
+      config: StabilizerConfig(
+        retention: RetentionConfig(
+          missedFrames: 3,
+        ),
+      ),
     );
     engine.stabilize([
       for (var i = 0; i < 3; i++) _block(_texts[i], top: 500 + 100.0 * i),
@@ -94,11 +98,15 @@ void main() {
       'direct merge() caller — the same value MergeResult reported', () {
     StepResponse? viaResult;
     final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
-      stepResponse: StepResponse.snap,
       merger: (existing, fresh, m) {
         viaResult = m.stepResponseApplied;
         return existing.applyMerge(m);
       },
+      config: StabilizerConfig(
+        stepResponse: StepResponseConfig(
+          mode: StepResponse.snap,
+        ),
+      ),
     );
     final cached = _block(_texts[0], top: 500);
     // A 400 px residual on a 20 px block clears snap's threshold.
