@@ -68,7 +68,18 @@ the #119 lever sweeps (floor / re-anchor / adopt-agreeing), whose arms
 are deliberately not committed
 (`test/replay/experiment_doc_tables_test.dart` — its header names which).
 The demo GIF's frames are pinned to engine output
-(`test/demo_gif_provenance_test.dart`).
+(`test/demo_gif_provenance_test.dart`). A third tier, added for the #150
+engine decomposition, pins the raw state rather than statistics: every
+capture of every committed stream, under ten engine configurations
+(the four A/B arms, the shipping default, the two experimental
+coherent-shift levers, the band fallback in both live modes, and
+missed-frame retention), is serialised to canonical JSON and hashed;
+the hashes are committed as `<stream>.diff.json` and compared one by
+one (`test/replay/differential_committed_test.dart`). A refactor that
+moves one block by one pixel on one capture goes red there even where
+a rounded mean would hide it. `dart tool/replay/differential.dart
+regenerate` is the only way to accept a change, and it goes in the same
+PR as the change.
 
 **G7 — Consumer callbacks are never swallowed.** A throwing band predicate
 surfaces as a typed `BandPredicateException` with the original stack; a

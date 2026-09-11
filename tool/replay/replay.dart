@@ -8,6 +8,9 @@
 //   dart tool/replay/replay.dart live-report   <capture.jsonl>
 //   dart tool/replay/replay.dart transform-report <capture.jsonl>   (#135)
 //
+// The #150 differential harness (per-capture engine-state digests over
+// the committed corpus) is its own tool: tool/replay/differential.dart.
+//
 // Options: --viewport=WxH (2.1.0) overrides the stream's `meta.vp`;
 // --buckets=auto|formula|median (2.2.0, #113) picks the bucket policy —
 // `auto` (default) applies the stream's `meta.bk` where present, `formula`

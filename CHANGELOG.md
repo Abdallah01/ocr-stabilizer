@@ -1,3 +1,18 @@
+## Unreleased
+
+### Added
+- **Differential replay harness (#150, tooling only — no engine
+  change).** `tool/replay/differential.dart` serialises every capture's
+  full engine state (result blocks, tracked set, contradictions, events,
+  transform estimate, band telemetry) to canonical JSON and hashes it,
+  under ten engine configurations, for each of the 17 committed streams;
+  the hashes are committed as `<stream>.diff.json` and
+  `test/replay/differential_committed_test.dart` compares them capture by
+  capture. This is the gate the #150 engine decomposition runs behind.
+  `replay()` gained `onCapture` (observation only) and `retention`
+  (default unchanged) to feed it; the corpus list moved to
+  `tool/replay/src/corpus.dart`, shared with the A/B equivalence test.
+
 ## 3.0.0 - 2026-09-11
 
 The adoption release (#145): the same engine, a surface a stranger can
