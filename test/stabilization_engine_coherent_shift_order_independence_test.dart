@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
 // SPDX-License-Identifier: MIT
 //
-// #116 finding B: `_detectCoherentShift`'s original clustering sorted
+// #116 finding B: `CoherentShiftDetector.detect`'s original clustering sorted
 // moved pairs by displacement.dy ONLY, then ran a single greedy pass with
 // an INCREMENTAL running median. Two moved pairs with equal (or
 // near-equal) dy have no secondary sort key, so their relative order in

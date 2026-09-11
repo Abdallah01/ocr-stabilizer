@@ -3,7 +3,7 @@
 //
 // #116 finding C: the applied translation and the residual/confidence
 // driving a coherent-shift merge used to come from TWO different drift
-// snapshots. `_detectCoherentShift`'s dry pre-pass votes the group's
+// snapshots. `CoherentShiftDetector.detect`'s dry pre-pass votes the group's
 // translation from `driftTracker.medianDriftForKey` read ONCE, before
 // this capture's own merges run. But `_mergeImpl`'s step 2 re-read that
 // same call LIVE, against a tracker any EARLIER same-capture merge in

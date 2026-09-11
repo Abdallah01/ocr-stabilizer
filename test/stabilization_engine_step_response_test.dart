@@ -547,7 +547,7 @@ void main() {
       expect(coherent.log.every((m) => m.stepResponseApplied == null), isTrue);
     });
 
-    // `_detectCoherentShift` gates on min-blocks TWICE: once on the total
+    // `CoherentShiftDetector.detect` gates on min-blocks TWICE: once on the total
     // moved count (the case above — 2 movers never even reach clustering)
     // and again on the WINNING cluster's own size (this case — 4 movers
     // split evenly into two clusters of 2, so the total clears
@@ -708,7 +708,7 @@ void main() {
 
     // #116 finding D: only the VR exclusion above was tested for
     // coherentShift; carousel children get the identical treatment in
-    // `_detectCoherentShift`'s eligible-pairs loop
+    // `CoherentShiftDetector.detect`'s eligible-pairs loop
     // (`fresh.isHorizontalScrollChild || existing.isHorizontalScrollChild`)
     // but had no test proving it.
     test(
@@ -766,7 +766,7 @@ void main() {
   group(
       '(k) snap never re-anchors a VR or carousel-child block, even via '
       'merge() called directly (#116 finding D)', () {
-    // _detectCoherentShift already excludes viewport-relative and
+    // CoherentShiftDetector.detect already excludes viewport-relative and
     // horizontal-scroll-child blocks from its eligible-pairs computation
     // (group (h) above). `_mergeImpl`'s SNAP branch had no equivalent
     // exclusion — `stepResponseEligible` only checked `wasBandFallback`
@@ -816,7 +816,7 @@ void main() {
       expect(rig.log.last.stepResponseApplied, isNull,
           reason: 'a horizontal-scroll-child (carousel) block must never '
               'be snapped — carousel motion is not page-scroll motion, '
-              "matching _detectCoherentShift's own exclusion");
+              "matching CoherentShiftDetector.detect's own exclusion");
       expect(output.merged.absoluteRect.raw.top, closeTo(250.0, 0.01),
           reason: 'without snap firing, the merge must fall back to '
               "damp's ordinary weighted-average lerp (w=0.5 for two "
@@ -854,7 +854,7 @@ void main() {
     });
   });
 
-  // #116 finding E: `_detectCoherentShift`'s two remaining force-unwraps
+  // #116 finding E: `CoherentShiftDetector.detect`'s two remaining force-unwraps
   // (the final tx/ty computation) are safe by construction — `bestGroup`
   // is checked non-null immediately above them and is never empty (every
   // window searched has size >= coherentShiftMinBlocks, and the
