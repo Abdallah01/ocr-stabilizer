@@ -5,6 +5,9 @@
 /// indexing, and block tracking for translation-overlay pipelines.
 ///
 /// **Headline types**
+/// - [OcrStabilizer] — the common path: a [StabilizationEngine] over
+///   [DefaultTrackedBlock]s with the merger pre-wired. One generic
+///   parameter (your payload), every option defaulted.
 /// - [StabilizationEngine] — the orchestration entry point. Holds the
 ///   spatial index, drift tracker, optional contextual-invalidation hook,
 ///   and band-fallback configuration. `stabilize(freshBlocks)` produces
@@ -65,6 +68,7 @@ export 'src/robust_stats.dart';
 export 'src/stabilization_result.dart';
 export 'src/spatial_block_index.dart';
 export 'src/stabilization_engine.dart';
+export 'src/ocr_stabilizer.dart';
 export 'src/stabilizer_config.dart';
 export 'src/step_response.dart';
 export 'src/submap_membership.dart';

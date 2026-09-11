@@ -163,8 +163,8 @@ class DefaultTrackedBlock<T> implements Track<T> {
 
   /// Apply a [MergeResult] from the stabilization engine.
   ///
-  /// Designed as the canonical `BlockMerger` body — wire it into the engine
-  /// like so:
+  /// Designed as the canonical `BlockMerger` body. `OcrStabilizer<P>` wires
+  /// it for you (#170); the spelled-out form is
   ///
   /// ```dart
   /// final engine = StabilizationEngine<DefaultTrackedBlock<P>, P>(
