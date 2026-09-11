@@ -486,7 +486,7 @@ void main() {
       // fixtures, and obsN=1 on every capture-1 block. Under
       // PositionMergeModel.agreementWeighted with a single prior
       // observation at equal fresh/existing confidence, the merge weight
-      // (_positionMergeWeight) is exactly freshConf / (existingConf x 1 +
+      // (PositionMerger.mergeWeight) is exactly freshConf / (existingConf x 1 +
       // freshConf) = 0.5 -- the arithmetic every expected value below
       // depends on.
       String block(double top, String text) =>

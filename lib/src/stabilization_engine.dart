@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
 // SPDX-License-Identifier: MIT
 
-import 'dart:math' show max, min;
-import 'types/geometry.dart' show Offset, Rect;
+import 'dart:math' show max;
+import 'types/geometry.dart' show Offset;
 
 import 'band_fallback_config.dart';
 import 'band_fallback_stats.dart';
@@ -14,6 +14,7 @@ import 'identity_turnover.dart';
 import 'transform_estimate.dart';
 import 'internal/block_geometry.dart';
 import 'internal/coherent_shift_detector.dart';
+import 'internal/position_merger.dart';
 import 'internal/block_matcher.dart';
 import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
@@ -182,6 +183,15 @@ class StabilizationEngine<T extends Track<P>, P> {
     regionCandidates: _supersessionCandidates,
   );
 
+  /// The position merger (weight, step response, lerp, confidence; its
+  /// own class since #150) over [positionMergeModel], [stepResponse] and
+  /// [snapThresholdMultiplier].
+  late final PositionMerger<T> _positionMerger = PositionMerger<T>(
+    model: positionMergeModel,
+    stepResponse: stepResponse,
+    snapThresholdMultiplier: snapThresholdMultiplier,
+  );
+
   /// Creates a stabilization engine. The [merger] callback constructs an
   /// updated block from engine-computed merge data.
   ///
@@ -306,7 +316,7 @@ class StabilizationEngine<T extends Track<P>, P> {
 
   /// [StepResponse.snap] fires when a merge's residual exceeds this
   /// multiple of the block's own agreement scale (3x its own height, the
-  /// same scale [_mergedPositionConfidence] uses). Default `1.5` — half
+  /// same scale [PositionMerger.mergedConfidence] uses). Default `1.5` — half
   /// again the scale that already reads as full disagreement (residual ==
   /// scale scores agreement 0), so snap only fires on a residual the
   /// agreement math already treats as pure noise rather than partial
@@ -460,83 +470,6 @@ class StabilizationEngine<T extends Track<P>, P> {
   /// forms is untouched by construction, which is why a control stream
   /// that never fires cannot change under it.
   final bool coherentShiftAdoptAgreeing;
-
-  /// Lerp weight toward the fresh (drift-corrected) observation.
-  double _positionMergeWeight(T fresh, T existing) {
-    final freshConf = fresh.positionConfidence.raw;
-    final existingConf = existing.positionConfidence.raw;
-    switch (positionMergeModel) {
-      case PositionMergeModel.legacy:
-        // 0.x behavior: confidence ratio only. Locks near
-        // fresh/(1+fresh) once existing confidence saturates, so even a
-        // 100-times-observed block moves ~33% toward every noisy rect.
-        final totalConf = existingConf + freshConf;
-        return totalConf > 0 ? freshConf / totalConf : 0.5;
-      case PositionMergeModel.agreementWeighted:
-        // Existing confidence is anchored by its observation count —
-        // a 1/n-style decay, so long-observed blocks become
-        // positionally sticky while a twice-seen block still adapts.
-        // The count is clamped to >= 1: a consumer block with a zero or
-        // negative count (invalid, but reachable via the public index
-        // seam) must not drive the weight past 1.0 and extrapolate the
-        // lerp (PR #65 review).
-        final anchored = existingConf * max(1, existing.observationCount);
-        final total = anchored + freshConf;
-        return total > 0 ? freshConf / total : 0.5;
-    }
-  }
-
-  /// Merged position confidence for the current [positionMergeModel].
-  ///
-  /// [baselineRect] is the position the residual is measured FROM —
-  /// defaults to `existing.absoluteRect.raw`. [StepResponse.coherentShift]
-  /// passes the existing rect already translated by the batch shift, so
-  /// the residual reflects how well this pair agreed with the GROUP's
-  /// shift rather than with the untranslated tracked position.
-  /// [residualOverride], when non-null, is used in place of the computed
-  /// residual outright — [StepResponse.snap] passes `0.0`: a full
-  /// re-anchor is agreement with the new position, not disagreement with
-  /// the old one.
-  double _mergedPositionConfidence(
-    T fresh,
-    T existing,
-    Rect correctedRect, {
-    Rect? baselineRect,
-    double? residualOverride,
-  }) {
-    switch (positionMergeModel) {
-      case PositionMergeModel.legacy:
-        // 0.x behavior: additive with clamp — saturates to 1.0 after two
-        // ~0.5-confidence observations regardless of agreement (#58).
-        final totalConf =
-            existing.positionConfidence.raw + fresh.positionConfidence.raw;
-        return min(totalConf, 1.0);
-      case PositionMergeModel.agreementWeighted:
-        // Confidence is a running mean of positional AGREEMENT: how
-        // close the corrected fresh observation landed to the tracked
-        // position, scaled by the block's OWN jitter allowance
-        // ([kAgreementJitterAllowance] x the existing block's height,
-        // #75): tolerance proportional to the block's own text size. A
-        // region-median scale gets polluted by small siblings (a caption's
-        // height says nothing about how much a paragraph may jitter — F2)
-        // and cold regions fell to the 16 px height default (F4); the
-        // existing (tracked) block's height is jitter-stable and needs no
-        // default. Disagreeing observations REDUCE confidence instead of
-        // saturating it.
-        final residual = residualOverride ??
-            (correctedRect.topLeft -
-                    (baselineRect ?? existing.absoluteRect.raw).topLeft)
-                .distance;
-        final scale = agreementScale(existing);
-        final agreement =
-            scale > 0 ? (1.0 - residual / scale).clamp(0.0, 1.0) : 0.0;
-        // Clamped for the same reason as the merge weight: n <= -1
-        // would zero or invert the running-mean denominator
-        // (PR #65 review).
-        final n = max(1, existing.observationCount);
-        return ((existing.positionConfidence.raw * n) + agreement) / (n + 1);
-    }
-  }
 
   /// Validate [BandFallbackConfig] invariants with release-safe [ArgumentError].
   ///
@@ -1624,51 +1557,20 @@ class StabilizationEngine<T extends Track<P>, P> {
     );
 
     // 3. Weighted average against corrected position (weight per
-    //    [positionMergeModel], #58).
-    //
-    // Step response (#116): resolve the effective merge baseline and
-    // weight before the lerp. Scoped to PositionMergeModel.agreementWeighted
-    // (legacy has no residual/scale concept to gate either option on — see
-    // StepResponse's doc) and to ordinary matches only: [wasBandFallback]
-    // excludes a band admission (the freeze and nested-fragment paths
-    // above already returned before this line for their own cases).
-    var baselineRect = existing.absoluteRect.raw;
-    var w = _positionMergeWeight(fresh, existing);
-    double? residualOverride;
-    StepResponse? appliedStepResponse;
-    // #116 finding D: the VR/carousel-child exclusion mirrors
-    // `CoherentShiftDetector.detect`'s own eligible-pairs filter exactly (see that
-    // method's doc). Gating the SHARED flag rather than only the
-    // coherentShift branch below also closes snap's exclusion — snap had
-    // none before this fix, while coherentShift was already effectively
-    // covered (a VR/carousel `existing` never enters
-    // `CoherentShiftDetector.detect`'s `memberDrift` map in the first place, so
-    // `coherentShiftTranslation` is already null for it regardless).
-    final stepResponseEligible = !wasBandFallback &&
-        positionMergeModel == PositionMergeModel.agreementWeighted &&
-        !fresh.isViewportRelative &&
-        !fresh.isHorizontalScrollChild &&
-        !existing.isHorizontalScrollChild;
-
-    if (stepResponseEligible && stepResponse == StepResponse.snap) {
-      final residual = (correctedRect.topLeft - baselineRect.topLeft).distance;
-      final scale = agreementScale(existing);
-      if (residual > snapThresholdMultiplier * scale) {
-        w = 1.0;
-        residualOverride = 0.0;
-        appliedStepResponse = StepResponse.snap;
-      }
-    } else if (stepResponseEligible &&
-        stepResponse == StepResponse.coherentShift &&
-        coherentShiftTranslation != null) {
-      baselineRect = baselineRect.translate(
-        coherentShiftTranslation.dx,
-        coherentShiftTranslation.dy,
-      );
-      appliedStepResponse = StepResponse.coherentShift;
-    }
-
-    final mergedRaw = Rect.lerp(baselineRect, correctedRect, w)!;
+    //    [positionMergeModel], #58) with the step response (#116) —
+    //    [PositionMerger.resolve]; its eligibility rule (finding D) and
+    //    the snap / coherentShift baselines are documented there.
+    final position = _positionMerger.resolve(
+      fresh: fresh,
+      existing: existing,
+      correctedRect: correctedRect,
+      wasBandFallback: wasBandFallback,
+      coherentShiftTranslation: coherentShiftTranslation,
+    );
+    final baselineRect = position.baselineRect;
+    final residualOverride = position.residualOverride;
+    final appliedStepResponse = position.stepResponseApplied;
+    final mergedRaw = position.mergedRect;
 
     // 4a. Classification vote accumulation
     final classVotes = Map<int, int>.from(existing.classificationVotes);
@@ -1761,7 +1663,7 @@ class StabilizationEngine<T extends Track<P>, P> {
     // decrement the counter until it graduates.
     final mergedRectCalculated = AbsoluteRect(mergedRaw);
     final mergedPositionConf = PositionConfidence.from(
-      _mergedPositionConfidence(
+      _positionMerger.mergedConfidence(
         fresh,
         existing,
         correctedRect,
