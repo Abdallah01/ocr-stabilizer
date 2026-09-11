@@ -3,6 +3,7 @@
 
 import 'package:test/test.dart';
 
+import 'package:ocr_stabilizer/src/carousel_votes.dart';
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/observable_block.dart';
 import 'package:ocr_stabilizer/src/stabilization_engine.dart';
@@ -56,7 +57,7 @@ class _BareTrackedBlock implements ObservableBlock<Object> {
   @override
   Map<int, int> get classificationVotes => const {};
   @override
-  Map<int, int> get carouselIdVotes => const {-1: 1};
+  CarouselVotes get carouselVotes => const CarouselVotes.none();
   @override
   Map<String, TextVote> get textVotes => const {};
   @override

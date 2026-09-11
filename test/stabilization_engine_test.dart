@@ -38,7 +38,7 @@ class _TestBlock implements ObservableBlock<Never> {
   @override
   final Map<int, int> classificationVotes;
   @override
-  final Map<int, int> carouselIdVotes;
+  final CarouselVotes carouselVotes;
   @override
   final Map<String, TextVote> textVotes;
   @override
@@ -75,7 +75,7 @@ class _TestBlock implements ObservableBlock<Never> {
     this.sourceQuality = 0,
     this.observationCount = 1,
     this.classificationVotes = const {},
-    this.carouselIdVotes = const {-1: 1},
+    this.carouselVotes = const CarouselVotes.none(),
     this.textVotes = const {},
     this.isProvisional = false,
     this.provisionalCapturesRemaining = 0,
@@ -113,7 +113,7 @@ class _TestBlock implements ObservableBlock<Never> {
     int? sourceQuality,
     int? observationCount,
     Map<int, int>? classificationVotes,
-    Map<int, int>? carouselIdVotes,
+    CarouselVotes? carouselVotes,
     Map<String, TextVote>? textVotes,
     bool? isProvisional,
     int? provisionalCapturesRemaining,
@@ -133,7 +133,7 @@ class _TestBlock implements ObservableBlock<Never> {
       sourceQuality: sourceQuality ?? this.sourceQuality,
       observationCount: observationCount ?? this.observationCount,
       classificationVotes: classificationVotes ?? this.classificationVotes,
-      carouselIdVotes: carouselIdVotes ?? this.carouselIdVotes,
+      carouselVotes: carouselVotes ?? this.carouselVotes,
       textVotes: textVotes ?? this.textVotes,
       isProvisional: isProvisional ?? this.isProvisional,
       provisionalCapturesRemaining:
@@ -173,7 +173,7 @@ _TestBlock _testMerger(
     textVotes: merge.updatedTextVotes,
     classificationVotes: merge.updatedClassificationVotes,
     needsReclassification: merge.needsReclassification,
-    carouselIdVotes: merge.updatedCarouselIdVotes,
+    carouselVotes: merge.updatedCarouselVotes,
     observationCount: merge.observationCount,
     isProvisional: merge.isProvisional,
     provisionalCapturesRemaining: merge.provisionalCapturesRemaining,
@@ -202,7 +202,7 @@ _TestBlock _block({
   bool isHz = false,
   int hzScrollerIndex = -1,
   Map<int, int>? classVotes,
-  Map<int, int>? carouselVotes,
+  CarouselVotes? carouselVotes,
   Map<String, TextVote>? textVotes,
   bool isProvisional = false,
   int provisionalRemaining = 0,
@@ -220,7 +220,7 @@ _TestBlock _block({
     isHorizontalScrollChild: isHz,
     hzScrollerIndex: hzScrollerIndex,
     classificationVotes: classVotes ?? {10: 1},
-    carouselIdVotes: carouselVotes ?? {-1: 1},
+    carouselVotes: carouselVotes ?? const CarouselVotes.none(),
     textVotes: textVotes ?? {},
     isProvisional: isProvisional,
     provisionalCapturesRemaining: provisionalRemaining,
@@ -471,10 +471,10 @@ void main() {
       expect(result.invalidatedTexts, contains('测试文本内容'));
     });
 
-    test('carousel vote clears phantom -1 on first real observation', () {
+    test('first real carousel observation is the only vote (#148)', () {
       final existing = _block(
         text: '测试文本内容',
-        carouselVotes: {-1: 1},
+        carouselVotes: const CarouselVotes.none(),
         isHz: true,
         hzScrollerIndex: 2,
       );
@@ -484,7 +484,7 @@ void main() {
         originalText: existing.originalText,
         isHorizontalScrollChild: true,
         hzScrollerIndex: -1, // was non-carousel initially
-        carouselIdVotes: {-1: 1},
+        carouselVotes: const CarouselVotes.none(),
       );
       final spatialIndex = SpatialBlockIndex<_TestBlock>();
       spatialIndex.add(existingWithHz);
@@ -499,9 +499,8 @@ void main() {
 
       final result = engine.stabilize([fresh]);
       final merged = result.stableBlocks[0];
-      // Phantom -1 cleared, replaced with carousel 2
-      expect(merged.carouselIdVotes.containsKey(-1), false);
-      expect(merged.carouselIdVotes[2], 1);
+      // No phantom -1 to clear (3.0, #148): carousel 2 is the only vote.
+      expect(merged.carouselVotes.votes, {2: 1});
     });
 
     test('text votes bounded to 5 entries', () {
@@ -608,9 +607,11 @@ void main() {
       expect(merged.absoluteRect.top, closeTo(105.0, 1.0));
     });
 
-    test('carousel vote does NOT clear phantom when multiple votes exist', () {
+    test('a real non-carousel vote is kept when a carousel vote lands', () {
       // Existing already has votes for -1 and carousel 2
-      final existing = _block(text: '测试文本内容', carouselVotes: {-1: 1, 2: 1});
+      final existing = _block(
+          text: '测试文本内容',
+          carouselVotes: CarouselVotes.fromHistogram({-1: 1, 2: 1}));
       final spatialIndex = SpatialBlockIndex<_TestBlock>();
       spatialIndex.add(existing);
 
@@ -619,9 +620,8 @@ void main() {
 
       final result = engine.stabilize([fresh]);
       final merged = result.stableBlocks[0];
-      // -1 should NOT be cleared (length > 1 guard)
-      expect(merged.carouselIdVotes.containsKey(-1), true);
-      expect(merged.carouselIdVotes[3], 1);
+      // -1 is real history here, not the 2.x phantom — it stays.
+      expect(merged.carouselVotes.votes, {-1: 1, 2: 1, 3: 1});
     });
 
     test('text vote eviction removes lowest-score entry', () {

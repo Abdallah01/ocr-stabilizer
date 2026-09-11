@@ -110,7 +110,7 @@ exactly the surface the engine can read — plus consumer extras.
 | `obsN` | int | `observationCount` |
 | `prov` / `provN` | bool / int | `isProvisional` / `provisionalCapturesRemaining` |
 | `cvotes` | `{ "<weight>": count }`, omitted when empty | `classificationVotes` |
-| `carVotes` | `{ "<id>": count }`, omitted when empty | `carouselIdVotes` |
+| `carVotes` | `{ "<id>": count }`, omitted when empty | `carouselVotes` (a `CarouselVotes`, 3.0+) |
 | `tvotes` | `{ key: {raw, score, best} }`, omitted when empty | `textVotes` |
 | `gsig` / `gsigC` | int / bool | consumer extra (group signature) |
 | `origin` | string | consumer extra (block origin) |
@@ -122,8 +122,10 @@ exactly the surface the engine can read — plus consumer extras.
 ## Loader notes (v1)
 
 - Unknown fields are ignored (forward-compatible).
-- `carVotes` absent → `DefaultTrackedBlock`'s phantom default `{-1: 1}`
-  applies (the engine's "never seen in a carousel" sentinel).
+- `carVotes` absent, empty, or exactly `{"-1": 1}` (the 2.x phantom
+  sentinel that recorders wrote for a block first seen outside any
+  carousel) → `CarouselVotes.none()`; any other histogram is kept as
+  recorded (3.0, #148).
 - `tvotes` is **not** reconstructed by the v1 loader (fresh observations
   carry none in practice; the engine rebuilds votes during replay).
 - Replay starts from an empty engine: streams captured mid-session with a

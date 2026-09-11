@@ -3,6 +3,7 @@
 
 import 'types/geometry.dart' show Offset;
 
+import 'carousel_votes.dart';
 import 'internal/confidence_validation.dart';
 import 'step_response.dart';
 import 'text_vote.dart';
@@ -53,8 +54,8 @@ class MergeResult {
 
   // ── Carousel identity voting (engine prevents flip-flop) ──
 
-  /// Updated carousel-index vote tallies (carousel id → count).
-  final Map<int, int> updatedCarouselIdVotes;
+  /// Updated carousel-index vote tallies.
+  final CarouselVotes updatedCarouselVotes;
 
   // ── Observation state (engine increments) ──
 
@@ -134,7 +135,7 @@ class MergeResult {
     required this.textWasPromoted,
     required this.updatedClassificationVotes,
     required this.needsReclassification,
-    required this.updatedCarouselIdVotes,
+    required this.updatedCarouselVotes,
     required this.observationCount,
     required this.isProvisional,
     required this.provisionalCapturesRemaining,

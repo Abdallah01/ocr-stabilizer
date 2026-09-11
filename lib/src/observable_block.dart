@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
 // SPDX-License-Identifier: MIT
 
+import 'carousel_votes.dart';
 import 'text_vote.dart';
 import 'tracked_block.dart';
 
@@ -20,7 +21,7 @@ abstract interface class ObservableBlock<T> implements TrackedBlock<T> {
   Map<int, int> get classificationVotes;
 
   /// Histogram of observed carousel indices across SAR merges.
-  Map<int, int> get carouselIdVotes;
+  CarouselVotes get carouselVotes;
 
   /// Histogram of text variants keyed by normalized significant characters.
   /// Each entry tracks accumulated confidence evidence for one text variant.

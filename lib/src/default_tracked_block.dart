@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
 // SPDX-License-Identifier: MIT
 
+import 'carousel_votes.dart';
 import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
 import 'observable_block.dart';
@@ -29,10 +30,9 @@ import 'types/sticky_fallback.dart';
 /// Defaults that warrant attention because the engine treats them as
 /// load-bearing:
 ///
-/// - [carouselIdVotes] defaults to `{-1: 1}` — **not** `{}`. The engine's
-///   carousel-vote clearing logic checks for the phantom `-1: 1` entry as
-///   the sentinel "this block has never been observed inside a carousel."
-///   An empty map will misclassify the first real carousel observation.
+/// - [carouselVotes] defaults to [CarouselVotes.none] (no observation yet).
+///   A consumer whose block's own construction should count as an
+///   observation passes `CarouselVotes.seeded(hzScrollerIndex)` instead.
 /// - [classificationVotes] defaults to `{}` because the first vote is
 ///   accumulated when the engine first merges this block.
 /// - [textVotes] defaults to `{}` for the same reason.
@@ -92,7 +92,7 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
   final Map<int, int> classificationVotes;
 
   @override
-  final Map<int, int> carouselIdVotes;
+  final CarouselVotes carouselVotes;
 
   @override
   final Map<String, TextVote> textVotes;
@@ -136,7 +136,7 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
     this.sourceQuality = 0,
     this.observationCount = 1,
     this.classificationVotes = const {},
-    this.carouselIdVotes = const {-1: 1},
+    this.carouselVotes = const CarouselVotes.none(),
     this.textVotes = const {},
     this.isProvisional = false,
     this.provisionalCapturesRemaining = 0,
@@ -191,7 +191,7 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
     int? sourceQuality,
     int? observationCount,
     Map<int, int>? classificationVotes,
-    Map<int, int>? carouselIdVotes,
+    CarouselVotes? carouselVotes,
     Map<String, TextVote>? textVotes,
     bool? isProvisional,
     int? provisionalCapturesRemaining,
@@ -218,7 +218,7 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
       sourceQuality: sourceQuality ?? this.sourceQuality,
       observationCount: observationCount ?? this.observationCount,
       classificationVotes: classificationVotes ?? this.classificationVotes,
-      carouselIdVotes: carouselIdVotes ?? this.carouselIdVotes,
+      carouselVotes: carouselVotes ?? this.carouselVotes,
       textVotes: textVotes ?? this.textVotes,
       isProvisional: isProvisional ?? this.isProvisional,
       provisionalCapturesRemaining:
@@ -255,7 +255,7 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
       textVotes: merge.updatedTextVotes,
       classificationVotes: merge.updatedClassificationVotes,
       needsReclassification: merge.needsReclassification,
-      carouselIdVotes: merge.updatedCarouselIdVotes,
+      carouselVotes: merge.updatedCarouselVotes,
       observationCount: merge.observationCount,
       isProvisional: merge.isProvisional,
       provisionalCapturesRemaining: merge.provisionalCapturesRemaining,

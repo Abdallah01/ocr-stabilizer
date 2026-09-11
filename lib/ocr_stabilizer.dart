@@ -41,6 +41,7 @@ export 'src/block_classifier.dart';
 export 'src/block_key.dart';
 export 'src/classification_result.dart';
 export 'src/block_meta.dart';
+export 'src/carousel_votes.dart';
 export 'src/confidence.dart';
 export 'src/default_tracked_block.dart';
 export 'src/merge_decision_diagnostic.dart';

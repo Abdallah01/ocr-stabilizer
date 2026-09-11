@@ -198,8 +198,7 @@ DefaultTrackedBlock<Object> blockFromJson(Map<String, Object?> b) {
       rect[3].toDouble(),
     )),
     originalText: b['otext'] as String,
-    positionConfidence:
-        PositionConfidence.from((b['pconf'] as num).toDouble()),
+    positionConfidence: PositionConfidence.from((b['pconf'] as num).toDouble()),
     textConfidence: TextConfidence.from((b['tconf'] as num).toDouble()),
     sourceQuality: (b['srcQ'] as num?)?.toInt() ?? 0,
     isViewportRelative: b['vr'] as bool? ?? false,
@@ -227,12 +226,12 @@ DefaultTrackedBlock<Object> blockFromJson(Map<String, Object?> b) {
     isProvisional: b['prov'] as bool? ?? false,
     provisionalCapturesRemaining: (b['provN'] as num?)?.toInt() ?? 0,
     classificationVotes: _intMap(b['cvotes']) ?? const {},
-    // Absent OR explicitly empty → the phantom {-1: 1} "never seen in a
-    // carousel" sentinel (mirrors DefaultTrackedBlock's own default; an
-    // empty map would misclassify the first real carousel observation).
+    // Absent, empty, or the 2.x phantom `{-1: 1}` → `CarouselVotes.none()`
+    // (3.0, #148); anything else is real history and is kept verbatim.
     // tvotes is intentionally NOT reconstructed in loader v1 (schema doc).
-    carouselIdVotes:
-        (carVotes == null || carVotes.isEmpty) ? const {-1: 1} : carVotes,
+    carouselVotes: carVotes == null
+        ? const CarouselVotes.none()
+        : CarouselVotes.fromHistogram(carVotes),
   );
 }
 
