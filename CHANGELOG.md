@@ -1,5 +1,13 @@
 ## Unreleased
 
+### Changed
+- **README: quick start first (#144).** The README now opens with the
+  install snippet and a working example; the timing model, band fallback,
+  the `coherentShiftFloorPx` recipe, observing the engine's decisions,
+  the full API tables, the design decisions and the per-version "what's
+  new" narrative moved to `doc/` pages (content unchanged, links
+  rewritten). No code change.
+
 ### Fixed
 - **`SpatialBlockIndex.blocksInRegion` now dedups by object identity (#142).**
   `allBlocks` and `candidates` always did; `blocksInRegion` used value

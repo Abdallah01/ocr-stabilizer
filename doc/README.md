@@ -9,6 +9,13 @@ or provenance.
 | Path | What it is |
 |---|---|
 | [`CONTRACT.md`](CONTRACT.md) | **The 2.x contract** — guarantees, intentionally-unsupported cases, consumer-configurable behaviors; each claim cites its enforcing test, validation entry, or tracking issue. |
+| [`TIMING_MODEL.md`](TIMING_MODEL.md) | Render at first sight, refine on re-sight — what observation counts mean and what never gates availability. |
+| [`API_REFERENCE.md`](API_REFERENCE.md) | Core components (`TrackedBlock`, `DriftTracker`, `SpatialBlockIndex`, `ParagraphGrouper`, extension types), the six-dimension identity model, every public type in tables. |
+| [`OBSERVING_DECISIONS.md`](OBSERVING_DECISIONS.md) | Reading `result.coherentShift`, `result.identityTurnover` and `result.transformEstimate` from a layout layer, with the reading rules. |
+| [`BAND_FALLBACK.md`](BAND_FALLBACK.md) | The band-relaxed second matching pass: counters, adoption flow (`off` → `observeOnly` → `admit`). |
+| [`COHERENT_SHIFT_CALIBRATION.md`](COHERENT_SHIFT_CALIBRATION.md) | The recipe for `coherentShiftFloorPx` — a property of the consumer's capture geometry, not a constant. |
+| [`DESIGN_DECISIONS.md`](DESIGN_DECISIONS.md) | Deliberate trade-offs and known limits, each with its tracking issue. |
+| [`RELEASE_NOTES.md`](RELEASE_NOTES.md) | The narrative "what's new" per version (the README used to carry these). |
 | [`replay/capture_schema.md`](replay/capture_schema.md) | The JSONL capture schema (v1) every corpus below uses. |
 | [`replay/validation/2026-07-scale-sweep/`](replay/validation/2026-07-scale-sweep/) | **ML Kit.** Provenance for the 3× jitter allowance: displacement + confidence per allowance scale, both position models. Report JSONs only — the underlying capture streams contain third-party page text and are not distributable. |
 | [`replay/validation/2026-07-perblock-scale/`](replay/validation/2026-07-perblock-scale/) | **ML Kit.** The 1.1.0 per-block agreement scale: six-scenario before/after. Report JSONs only, same reason. |
