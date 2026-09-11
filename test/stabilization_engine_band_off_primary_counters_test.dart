@@ -29,10 +29,10 @@ void main() {
 
     test('primaryMatchesAdmitted ticks when fresh matches an existing block',
         () {
-      // Seed an existing block. The seed call reaches _findMatch with an
+      // Seed an existing block. The seed call reaches BlockMatcher.find with an
       // empty spatial index — no candidates, no match — so primaryRejected
       // ticks per the spec invariant
-      // (admitted + rejected == total fresh reaching _findMatch).
+      // (admitted + rejected == total fresh reaching BlockMatcher.find).
       engine.stabilize([_block('hello world', left: 0, top: 0)]);
 
       // Re-observe with identical text and overlapping position — primary
@@ -58,7 +58,7 @@ void main() {
 
       expect(engine.bandStats.primaryMatchesAdmitted, 0);
       expect(engine.bandStats.primaryMatchesRejected, 2,
-          reason: 'both calls reached _findMatch without admitting; '
+          reason: 'both calls reached BlockMatcher.find without admitting; '
               'each ticks rejected per the spec invariant');
       expect(engine.bandStats.candidatesConsidered, 0);
     });

@@ -6,7 +6,7 @@ import 'package:meta/meta.dart' show immutable;
 import 'observation.dart';
 
 /// Operating mode for the band-relaxed fallback path inside
-/// `StabilizationEngine._findMatch`.
+/// `StabilizationEngine.BlockMatcher.find`.
 enum BandFallbackMode {
   /// No band-fallback work runs. Primary path counters
   /// (`BandFallbackStats.primaryMatchesAdmitted` and
@@ -88,7 +88,7 @@ typedef BandSpatialPredicate = bool Function(
 /// preserves the original predicate call-site stack so debugging
 /// information is not lost when the engine rewraps the throw. The
 /// outer catch's `StackTrace` parameter reflects the
-/// `throw BandPredicateException(...)` site inside `_findMatch`, not
+/// `throw BandPredicateException(...)` site inside `BlockMatcher.find`, not
 /// the predicate call site — use [predicateStackTrace] for that.
 // `implements` (not `extends Error`) is intentional: extending Error would
 // capture a new stack at construction time, discarding the predicate's
@@ -127,7 +127,7 @@ class BandPredicateException implements Exception {
 }
 
 /// Configuration for the band-relaxed fallback path inside
-/// `StabilizationEngine._findMatch`.
+/// `StabilizationEngine.BlockMatcher.find`.
 ///
 /// Default is [BandFallbackMode.off]. Recommended adoption flow:
 /// ship with `mode: off`, switch to `observeOnly` to read

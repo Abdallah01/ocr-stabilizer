@@ -632,7 +632,7 @@ void main() {
     });
 
     test('text vote eviction removes lowest-score entry', () {
-      // Use a common base text so fresh matches existing via _findMatch
+      // Use a common base text so fresh matches existing via BlockMatcher.find
       const baseText = '测试文本内容示例样本';
       final votes = <String, TextVote>{};
       // 5 variants that are minor OCR variations of the base text

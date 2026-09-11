@@ -46,7 +46,7 @@ void main() {
         'snapshot', () {
       // Seed the drift tracker directly with exactly 2 prior observations
       // for this space key (region index 1, since regionSize defaults to
-      // 500 and every rect below sits at top in [500, 999)). `_findMatch`'s
+      // 500 and every rect below sits at top in [500, 999)). `BlockMatcher.find`'s
       // band spatial-confirm reads `driftMarginForKey`, which is pinned to
       // Offset.zero below 3 observations — so this space key's margin is
       // 0.0 until a 3rd observation lands.
@@ -154,7 +154,7 @@ void main() {
               "cand2's seeded 1 — a rejected match would instead insert "
               'fresh2 as a brand-new block with observationCount 1');
 
-      // Counters: both fresh blocks reach _findMatch and miss primary (2,
+      // Counters: both fresh blocks reach BlockMatcher.find and miss primary (2,
       // from this capture) plus cand1/cand2's own seeding capture (2,
       // empty index) == 4 total. Each fresh block's spatial-index query
       // only ever reaches its own same-position candidate (2 considered).

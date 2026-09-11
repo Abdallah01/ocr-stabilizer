@@ -7,7 +7,7 @@ import 'package:meta/meta.dart' show internal;
 ///
 /// **Core invariant**:
 /// `primaryMatchesAdmitted + primaryMatchesRejected ==` total fresh
-/// observations that reached `_findMatch` (i.e. every observation that the
+/// observations that reached `BlockMatcher.find` (i.e. every observation that the
 /// engine evaluated for matching) **since the last [reset] call, or since
 /// construction if [reset] was never called**. The two counters partition
 /// the primary-path outcome, regardless of whether the band-fallback
@@ -38,7 +38,7 @@ class BandFallbackStats {
 
   /// Number of fresh observations that the primary path rejected.
   /// `primaryMatchesAdmitted + primaryMatchesRejected` equals the total
-  /// number of fresh observations that reached `_findMatch`.
+  /// number of fresh observations that reached `BlockMatcher.find`.
   int get primaryMatchesRejected => _primaryMatchesRejected;
   int _primaryMatchesRejected = 0;
 
@@ -112,7 +112,7 @@ class BandFallbackStats {
   int get bandMatchesIdentified => _bandMatchesIdentified;
   int _bandMatchesIdentified = 0;
 
-  /// Number of band-relaxed matches actually returned by `_findMatch`.
+  /// Number of band-relaxed matches actually returned by `BlockMatcher.find`.
   /// Always `<= bandMatchesIdentified`. In `observeOnly` mode this stays
   /// at zero by construction.
   int get matchesAdmitted => _matchesAdmitted;
