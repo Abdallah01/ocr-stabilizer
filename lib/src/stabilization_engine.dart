@@ -9,13 +9,13 @@ import 'band_fallback_stats.dart';
 import 'block_key.dart';
 import 'coherent_shift_event.dart';
 import 'drift_tracker.dart';
-import 'hierarchy_weight.dart';
 import 'identity_turnover.dart';
 import 'internal/block_geometry.dart';
 import 'internal/coherent_shift_detector.dart';
 import 'internal/position_merger.dart';
 import 'internal/retention_manager.dart';
 import 'internal/transform_estimator.dart';
+import 'internal/vote_accumulator.dart';
 import 'internal/batch_dedup.dart';
 import 'internal/block_matcher.dart';
 import 'internal/contradiction_detector.dart';
@@ -28,8 +28,6 @@ import 'stabilization_result.dart';
 import 'step_response.dart';
 import 'stabilizer_config.dart';
 import 'submap_membership.dart';
-import 'text_dedup_utils.dart';
-import 'text_vote.dart';
 import 'observation.dart';
 import 'types/absolute_rect.dart';
 import 'types/confidence_types.dart';
@@ -79,9 +77,6 @@ enum PositionMergeModel {
 /// Well-observed threshold: blocks with this many observations signal
 /// translation stability to the consumer.
 const int _kWellObservedThreshold = 3;
-
-/// Maximum text vote entries per block to prevent OOM on noisy edges.
-const int _kMaxTextVotes = 5;
 
 /// Core stabilization engine: answers "is this block the same as that block,
 /// and what are its corrected coordinates?"
@@ -212,6 +207,10 @@ class StabilizationEngine<T extends Track<P>, P> {
     index: _spatialIndex,
     resolver: _resolver,
   );
+
+  /// The vote half of a merge (its own class since #150): classification,
+  /// carousel and text votes, text confidence, source quality.
+  final VoteAccumulator _votes = const VoteAccumulator();
 
   late final PositionMerger<T> _positionMerger = PositionMerger<T>(
     model: positionMergeModel,
@@ -1350,87 +1349,17 @@ class StabilizationEngine<T extends Track<P>, P> {
     final appliedStepResponse = position.stepResponseApplied;
     final mergedRaw = position.mergedRect;
 
-    // 4a. Classification vote accumulation
-    final classVotes = Map<int, int>.from(existing.classificationVotes);
-    classVotes[fresh.hierarchyWeight] =
-        (classVotes[fresh.hierarchyWeight] ?? 0) + 1;
-    final bestWeight =
-        classVotes.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
-    final needsReclass = bestWeight != existing.hierarchyWeight;
-
-    // 4b. Carousel ID vote accumulation (#148: the value type owns the
-    // histogram; a freshly constructed block carries no phantom vote to
-    // clear).
-    final carouselVotes =
-        existing.carouselVotes.record(fresh.scrollContext.hzScrollerIndex);
-
-    // 4c. Text vote accumulation
-    final updatedTextVotes = Map<String, TextVote>.from(existing.textVotes);
-
-    // Seed existing block's text on first merge (textVotes starts empty).
-    if (updatedTextVotes.isEmpty) {
-      final existingNormKey = String.fromCharCodes(
-        TextDedupUtils.significantCharList(existing.originalText),
-      );
-      if (existingNormKey.isNotEmpty) {
-        updatedTextVotes[existingNormKey] = TextVote(
-          rawText: existing.originalText,
-          score: existing.textConfidence.raw,
-          bestConfidence: existing.textConfidence.raw,
-        );
-      }
-    }
-
-    final freshText = fresh.originalText;
-    final normalizedKey = String.fromCharCodes(
-      TextDedupUtils.significantCharList(freshText),
-    );
-    final existingVote = updatedTextVotes[normalizedKey];
-    final bestRaw = (existingVote == null ||
-            fresh.textConfidence.raw > existingVote.bestConfidence)
-        ? freshText
-        : existingVote.rawText;
-    updatedTextVotes[normalizedKey] = TextVote(
-      rawText: bestRaw,
-      bestConfidence: max(
-        fresh.textConfidence.raw,
-        existingVote?.bestConfidence ?? 0.0,
-      ),
-      score: (existingVote?.score ?? 0.0) + fresh.textConfidence.raw,
-    );
-    // Bounded growth: cap at top entries
-    if (updatedTextVotes.length > _kMaxTextVotes) {
-      final entries = updatedTextVotes.entries.toList()
-        ..sort((a, b) => b.value.score.compareTo(a.value.score));
-      updatedTextVotes.removeWhere((key, _) => key == entries.last.key);
-    }
-    // Find the winner: highest accumulated score
-    final winningVote = updatedTextVotes.values.reduce(
-      (a, b) => a.score >= b.score ? a : b,
-    );
-    final winningText = winningVote.rawText;
-    final winnerBestConf = winningVote.bestConfidence;
-    final textWasPromoted = winningText != existing.originalText;
-
-    // Text confidence: snap on promotion, blend when same text.
-    double mergedTextConf;
-    if (textWasPromoted) {
-      mergedTextConf = winnerBestConf;
-    } else if (existing.originalText == fresh.originalText) {
-      final existingTC = existing.textConfidence.raw;
-      final freshTC = fresh.textConfidence.raw;
-      final totalTextConf = existingTC + freshTC;
-      final tw = totalTextConf > 0 ? freshTC / totalTextConf : 0.5;
-      mergedTextConf = (existingTC * (1 - tw) + freshTC * tw).clamp(0.0, 1.0);
-    } else {
-      mergedTextConf = existing.textConfidence.raw;
-    }
-
-    // 4d. Source quality: prefer higher tier
-    final mergedSourceQuality = max(
-      existing.sourceQuality,
-      fresh.sourceQuality,
-    );
+    // 4. Votes (classification, carousel, text, source quality) —
+    //    [VoteAccumulator.accumulate], steps 4a-4d in that order.
+    final votes = _votes.accumulate(fresh: fresh, existing: existing);
+    final classVotes = votes.classificationVotes;
+    final needsReclass = votes.needsReclassification;
+    final carouselVotes = votes.carouselVotes;
+    final updatedTextVotes = votes.textVotes;
+    final winningText = votes.winningText;
+    final textWasPromoted = votes.textWasPromoted;
+    final mergedTextConf = votes.mergedTextConfidence;
+    final mergedSourceQuality = votes.sourceQuality;
 
     final newObservationCount = existing.observationCount + 1;
 

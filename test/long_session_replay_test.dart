@@ -74,21 +74,28 @@ void main() {
     expect(capsPerPass.isOdd, isTrue,
         reason: 'the parity term flips each pass, so the period is TWO '
             'passes — the same-phase comparison below depends on it');
-    // Mirrors _kMaxTextVotes (private) in stabilization_engine.dart; the
-    // source-parse assert directly below turns the mirror into an
-    // enforced link — if the engine constant changes, this test goes red
-    // here rather than silently pinning a stale value.
+    // Mirrors VoteAccumulator.maxTextVotes (lib/src/internal/
+    // vote_accumulator.dart, #150); the two source-parse asserts below turn
+    // the mirror into an enforced link — if the cap's default changes, or
+    // the engine stops constructing the accumulator on its default, this
+    // test goes red here rather than silently pinning a stale value.
     const maxTextVotes = 5;
+    final accumulatorSource =
+        File('lib/src/internal/vote_accumulator.dart').readAsStringSync();
+    final capDecl = RegExp(r'this\.maxTextVotes = (\d+)')
+        .allMatches(accumulatorSource);
+    expect(capDecl, hasLength(1),
+        reason: 'the maxTextVotes default moved or was renamed — re-anchor '
+            'this parse AND re-derive the vote-cap fixture');
+    expect(int.parse(capDecl.single.group(1)!), maxTextVotes,
+        reason: 'the cap default changed; update maxTextVotes and re-check '
+            'the text-churn fixture still exceeds it');
     final engineSource =
         File('lib/src/stabilization_engine.dart').readAsStringSync();
-    final capDecl =
-        RegExp(r'const int _kMaxTextVotes = (\d+);').allMatches(engineSource);
-    expect(capDecl, hasLength(1),
-        reason: 'the _kMaxTextVotes declaration moved or was renamed — '
-            're-anchor this parse AND re-derive the vote-cap fixture');
-    expect(int.parse(capDecl.single.group(1)!), maxTextVotes,
-        reason: 'the engine cap changed; update maxTextVotes and re-check '
-            'the text-churn fixture still exceeds it');
+    expect(RegExp(r'const VoteAccumulator\(\)').allMatches(engineSource),
+        hasLength(1),
+        reason: 'the engine must construct VoteAccumulator on its default '
+            'cap, or this mirror pins the wrong value');
 
     final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
       merger: (existing, fresh, merge) => existing.applyMerge(merge),
