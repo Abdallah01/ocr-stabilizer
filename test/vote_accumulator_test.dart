@@ -75,5 +75,30 @@ void main() {
       expect(r.carouselVotes.votes, {-1: 1});
       expect(r.needsReclassification, isFalse);
     });
+
+    test(
+        'the reclassification flag turns on when the fresh vote moves the '
+        'majority away from the current weight', () {
+      // A page-frame block (weight 10) already tied 1:1 with a viewport
+      // vote (weight 40); one more viewport observation makes 40 the
+      // majority. No replay stream exercises this (every replay block is
+      // page-frame), so the differential harness cannot see this flag —
+      // this test is its only pin.
+      final existing = DefaultTrackedBlock<Object>(
+        absoluteRect: AbsoluteRect.fromLTWH(10, 100, 200, 30),
+        originalText: 't',
+        payload: const Object(),
+        classificationVotes: const {10: 1, 40: 1},
+      );
+      final fresh = DefaultTrackedBlock<Object>(
+        absoluteRect: AbsoluteRect.fromLTWH(10, 100, 200, 30),
+        originalText: 't',
+        payload: const Object(),
+        coordinates: const CoordinateContext.viewport(),
+      );
+      final r = votes.accumulate(fresh: fresh, existing: existing);
+      expect(r.classificationVotes, {10: 1, 40: 2});
+      expect(r.needsReclassification, isTrue);
+    });
   });
 }
