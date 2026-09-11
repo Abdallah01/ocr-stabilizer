@@ -1,4 +1,4 @@
-## 3.0.0 - Unreleased
+## 3.0.0 - 2026-09-11
 
 The adoption release (#145): the same engine, a surface a stranger can
 pick up in an hour. Breaking; each entry carries its migration.

@@ -22,7 +22,7 @@ does not do, and what is yours to configure — is one page:
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^2.6.1
+  ocr_stabilizer: ^3.0.0
 ```
 
 ## Quick start

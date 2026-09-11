@@ -6,6 +6,24 @@
 The narrative "What's new" entries that used to open the README, newest
 first. The authoritative per-version record is [`../CHANGELOG.md`](../CHANGELOG.md).
 
+**What's new in 3.0.0** — the adoption release: the same engine, a
+surface a stranger can pick up in an hour. Four breaking, mechanical
+changes, each with a migration table in the CHANGELOG:
+`StabilizerConfig` replaces the engine's twelve lever parameters, grouped
+by stage (the two calibration-dependent coherent-shift levers sit under
+`CoherentShiftConfig.experimental`); `CarouselVotes` replaces the
+`{-1: 1}` phantom-vote sentinel a block type had to default to;
+`CoordinateContext` — `page(scroll:)`, `innerScroller(top:, containerId:,
+scroll:)`, `viewport(stickyFallback:)` — replaces the eight coordinate
+flags, so the combinations the engine never expected are unrepresentable
+(the flags survive as derived views, and `fromFlags` adapts a flat-flag
+block type); and the two block interfaces now say what they are —
+`Observation<T>` (the 7 getters you supply per capture) and `Track<T>`
+(an observation plus the engine's state). `DefaultTrackedBlock` needs
+four arguments to feed a capture. No numerics changed: every committed
+replay stream is byte-identical to 2.6.1
+([#145](https://github.com/Abdallah01/ocr-stabilizer/issues/145)).
+
 **What's new in 2.6.0** — every result reports a similarity-transform
 estimate over the capture's matched pairs, `result.transformEstimate`
 (a `TransformEstimate`: isotropic `scale`, `translation`, `fixedPoint`,
