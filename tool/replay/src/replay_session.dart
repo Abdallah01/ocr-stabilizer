@@ -9,6 +9,16 @@ import 'capture_stream.dart';
 
 typedef ReplayBlock = DefaultTrackedBlock<Object>;
 
+/// Called by [replay] after every `stabilize()` call with the capture id,
+/// the result and the engine (its tracked state and telemetry as of that
+/// capture). The #150 differential harness reads everything from here so
+/// its arms are built by the exact code path the reports use.
+typedef CaptureCallback = void Function(
+  int captureId,
+  StabilizationResult<ReplayBlock> result,
+  StabilizationEngine<ReplayBlock, Object> engine,
+);
+
 /// JSON form of a viewport for report `input` blocks; null stays null so
 /// a report on default buckets says so.
 Map<String, double>? viewportJson(Viewport? v) =>
@@ -305,6 +315,14 @@ BucketPolicy? bucketPolicyFromArg(String arg) {
 ///   explicitly, and the shipping-default configuration is represented by
 ///   the `agreementCoherentAdopt` arm, not the base `agreementCoherent`
 ///   one, from 2.4.0 on.
+/// - [onCapture] (#150) is observation only: called after each
+///   `stabilize()` with that capture's result and the engine; it does not
+///   feed anything back, so a replay with or without it is byte-identical.
+/// - [retention] (#150) defaults to the engine's own default (zero missed
+///   frames: an unmatched cached block is dropped at once, and the
+///   supersession pass never runs). Every report arm keeps that default;
+///   only the differential harness's `retention2` arm sets it, so the
+///   retention/supersession branch is on the guard's path at all.
 ReplayResult replay(
   CaptureStream stream, {
   BandFallbackConfig band = const BandFallbackConfig(),
@@ -316,6 +334,8 @@ ReplayResult replay(
   Viewport? viewport,
   bool useStreamViewport = true,
   BucketPolicy bucketPolicy = BucketPolicy.auto,
+  CaptureCallback? onCapture,
+  RetentionConfig retention = const RetentionConfig(),
 }) {
   final effectiveViewport =
       viewport ?? (useStreamViewport ? stream.viewport : null);
@@ -377,6 +397,7 @@ ReplayResult replay(
       merge: MergeConfig(
         positionModel: model,
       ),
+      retention: retention,
       stepResponse: StepResponseConfig(
         mode: stepResponse,
         coherentShift: CoherentShiftConfig(
@@ -412,6 +433,7 @@ ReplayResult replay(
     final result = engine.stabilize(batch.blocks);
     transformEstimates.add(result.transformEstimate);
     identityTurnovers.add(result.identityTurnover);
+    onCapture?.call(batch.captureId, result, engine);
   }
 
   return ReplayResult(
