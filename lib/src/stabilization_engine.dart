@@ -11,10 +11,11 @@ import 'coherent_shift_event.dart';
 import 'drift_tracker.dart';
 import 'hierarchy_weight.dart';
 import 'identity_turnover.dart';
-import 'transform_estimate.dart';
 import 'internal/block_geometry.dart';
 import 'internal/coherent_shift_detector.dart';
 import 'internal/position_merger.dart';
+import 'internal/retention_manager.dart';
+import 'internal/transform_estimator.dart';
 import 'internal/block_matcher.dart';
 import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
@@ -180,12 +181,21 @@ class StabilizationEngine<T extends Track<P>, P> {
           resolver: _resolver, driftTracker: driftTracker),
       final predicate => ConsumerSpatialEvidence(predicate),
     },
-    regionCandidates: _supersessionCandidates,
+    regionCandidates: _retention.regionCandidates,
   );
 
   /// The position merger (weight, step response, lerp, confidence; its
   /// own class since #150) over [positionMergeModel], [stepResponse] and
   /// [snapThresholdMultiplier].
+  /// Missed-frame retention + cross-frame supersession (its own class
+  /// since #150) over [missedFrameRetention], the spatial index and the
+  /// resolver; also the region query the matcher's nested path uses.
+  late final RetentionManager<T> _retention = RetentionManager<T>(
+    missedFrames: missedFrameRetention,
+    index: _spatialIndex,
+    resolver: _resolver,
+  );
+
   late final PositionMerger<T> _positionMerger = PositionMerger<T>(
     model: positionMergeModel,
     stepResponse: stepResponse,
@@ -293,10 +303,6 @@ class StabilizationEngine<T extends Track<P>, P> {
   /// other. With retention 0 nothing is retained, so default-configuration
   /// behavior is unchanged.
   final int missedFrameRetention;
-
-  /// Consecutive-miss counter per retained block (identity-keyed; block
-  /// instances persist across frames precisely when unmatched).
-  final Map<T, int> _missCounts = Map<T, int>.identity();
 
   /// Position merge model (#58). Default [PositionMergeModel.agreementWeighted]
   /// since 1.0 (#74 flip, validated against production captures); pass
@@ -917,7 +923,8 @@ class StabilizationEngine<T extends Track<P>, P> {
     // viewport-relative fresh block or carousel child), from RAW rects:
     // no drift correction, so the fit never depends on the tracker's
     // same-capture mutations (finding C's hazard does not arise).
-    final transformPairs = <(Offset, Offset)>[];
+    final transform =
+        TransformEstimator<T>(minPairs: transformEstimateMinPairs);
     for (final fresh in deduped) {
       final matchResult = _matcher.find(fresh);
       final existing = matchResult.match;
@@ -932,14 +939,8 @@ class StabilizationEngine<T extends Track<P>, P> {
       }
       matchedExisting.add(existing);
       mergedCount++;
-      if (!matchResult.wasBandFallback &&
-          !existing.isProvisional &&
-          !fresh.isViewportRelative &&
-          !fresh.isHorizontalScrollChild &&
-          !existing.isHorizontalScrollChild) {
-        transformPairs.add(
-            (existing.absoluteRect.raw.center, fresh.absoluteRect.raw.center));
-      }
+      transform.observe(fresh, existing,
+          wasBandFallback: matchResult.wasBandFallback);
       // #116 finding C: `frozenRegionDrift` threads the SAME drift
       // snapshot `CoherentShiftDetector.detect`'s dry pre-pass used for this
       // member's displacement into its real merge — see that method's
@@ -985,70 +986,16 @@ class StabilizationEngine<T extends Track<P>, P> {
       ).merged);
     }
 
-    // Missed-frame retention (#46): cached blocks that were not matched
-    // this capture stay in the index as match candidates for up to
-    // [missedFrameRetention] further calls, so a single OCR miss does
-    // not reset a block's accumulated identity. Matched blocks are
-    // consumed (their history lives on in the merged result); expired
-    // blocks are dropped along with their miss counter.
-    //
-    // The counter map is REBUILT from the current index contents each
-    // call rather than mutated incrementally: [spatialIndex] is a queryable
-    // field the app may rebuild, clear, or remove blocks from between
-    // calls, and an incrementally-maintained map would keep strong
-    // references (and stale counts) for every instance that left the
-    // index externally. Rebuilding bounds the map to exactly the
-    // currently-retained set (PR #61 review).
-    final retained = <T>[];
-    var droppedCount = 0;
-    if (missedFrameRetention > 0) {
-      // Cross-frame supersession (2.1.0): a cached block that was NOT
-      // matched this capture, but whose region a fresh block now covers
-      // (measured against the CACHED block's own area, so a single line
-      // reported inside a retained paragraph does not evict the
-      // paragraph), is not retained. The region has visibly changed — or
-      // the old box sat in a lagged coordinate frame — and retaining it
-      // makes a consumer of the tracked state draw the old box on top of
-      // the new one for the whole retention window. This deliberately
-      // trades identity for a clean frame: when the FRESH block is the
-      // wrongly placed one (a lagged scroll stamp), a correct retained
-      // block loses its history; the alternative is two boxes on screen.
-      // Batch-scoped NMS in `_dedup` never sees cached blocks; this is the
-      // only cross-frame rule. Retention 0 is untouched: nothing is
-      // retained to evict.
-      final superseded = Set<T>.identity();
-      for (final fresh in stableBlocks) {
-        for (final cached in _supersessionCandidates(fresh)) {
-          if (matchedExisting.contains(cached)) continue;
-          if (_coversRetained(fresh, cached)) superseded.add(cached);
-        }
-      }
-      final nextMissCounts = Map<T, int>.identity();
-      for (final cached in _spatialIndex.allBlocks) {
-        if (matchedExisting.contains(cached)) continue;
-        if (superseded.contains(cached)) {
-          droppedCount++;
-          continue;
-        }
-        final misses = (_missCounts[cached] ?? 0) + 1;
-        if (misses <= missedFrameRetention) {
-          nextMissCounts[cached] = misses;
-          retained.add(cached);
-        } else {
-          droppedCount++;
-        }
-      }
-      _missCounts
-        ..clear()
-        ..addAll(nextMissCounts);
-    } else {
-      _missCounts.clear();
-      // Retention 0: every cached identity nothing matched leaves the
-      // index at the rebuild below.
-      for (final cached in _spatialIndex.allBlocks) {
-        if (!matchedExisting.contains(cached)) droppedCount++;
-      }
-    }
+    // Missed-frame retention (#46) and cross-frame supersession (2.1.0):
+    // [RetentionManager.retain]. Matched blocks are consumed; unmatched
+    // ones stay matchable for `missedFrameRetention` further calls unless
+    // a fresh block now covers their region.
+    final retention = _retention.retain(
+      stableBlocks: stableBlocks,
+      matchedExisting: matchedExisting,
+    );
+    final retained = retention.retained;
+    final droppedCount = retention.dropped;
 
     // Rebuild the spatial index so callers cannot get it wrong (#13).
     _spatialIndex.rebuild([...stableBlocks, ...retained]);
@@ -1078,8 +1025,7 @@ class StabilizationEngine<T extends Track<P>, P> {
         dropped: droppedCount,
       ),
       // 2.6.0 (#135): observed, never applied — nothing above read it.
-      transformEstimate: TransformEstimate.fit(transformPairs,
-          minPairs: transformEstimateMinPairs),
+      transformEstimate: transform.estimate(),
     );
   }
 
@@ -1279,66 +1225,6 @@ class StabilizationEngine<T extends Track<P>, P> {
       if (match != null) return match;
     }
     return null;
-  }
-
-  /// Least share of a retained block's own area one fresh block must cover
-  /// to supersede it. Script-independent on purpose: the resolver's
-  /// per-script NMS threshold gives CJK-dominant text its LOOSEST value
-  /// (0.35), which is right for matching jittery boxes of the same text
-  /// and wrong here, where the texts differ — a sliver covering 40% of a
-  /// CJK block must not evict it while an equal Latin block survives.
-  static const double _kSupersessionCoverageFloor = 0.5;
-
-  /// Cached blocks a fresh block could supersede: every block whose cell
-  /// intersects the fresh block's RECT (plus the index's one-cell margin),
-  /// not just the 3×3 cells around the fresh block's centre — a tall
-  /// paragraph covers blocks whose cells sit far from its centre cell.
-  /// [SpatialIndexView.candidates] is added for the viewport-relative
-  /// namespace, which [SpatialIndexView.blocksInRegion] excludes.
-  Iterable<T> _supersessionCandidates(T fresh) sync* {
-    final seen = Set<T>.identity();
-    for (final b in _spatialIndex.blocksInRegion(fresh.absoluteRect.raw)) {
-      if (seen.add(b)) yield b;
-    }
-    for (final b in _spatialIndex.candidates(fresh)) {
-      if (seen.add(b)) yield b;
-    }
-  }
-
-  /// Cross-frame supersession test (2.1.0): does [fresh] cover enough of
-  /// [cached]'s OWN area to say the cached region has been replaced?
-  ///
-  /// Deliberately not the smaller-area ratio `checkOverlap` uses for
-  /// batch NMS: there a small fresh box inside a large cached one would
-  /// score 1.0 and evict a paragraph because one of its lines was
-  /// reported. The bar is [_kSupersessionCoverageFloor] (half of the
-  /// cached block's own area), raised to the resolver's per-script NMS
-  /// threshold only where that is stricter (short Latin snippets, 0.65).
-  /// No drift margin is applied (a margin only makes eviction easier, and
-  /// the fail-safe direction here is to retain). The two coordinate
-  /// contracts `checkOverlap` refuses to compare are refused here too:
-  /// viewport-relative vs page-absolute blocks, and blocks from different
-  /// carousels.
-  bool _coversRetained(T fresh, T cached) {
-    if (fresh.isViewportRelative != cached.isViewportRelative) return false;
-    if (fresh.isHorizontalScrollChild &&
-        cached.isHorizontalScrollChild &&
-        fresh.scrollContext.hzScrollerIndex !=
-            cached.scrollContext.hzScrollerIndex) {
-      return false;
-    }
-    final f = fresh.absoluteRect.raw;
-    final c = cached.absoluteRect.raw;
-    final cachedArea = c.width * c.height;
-    if (!(cachedArea > 0)) return false;
-    final inter = f.intersect(c);
-    if (inter.isEmpty) return false;
-    final covered = inter.width * inter.height;
-    final scriptThreshold = _resolver.overlapThresholdFor(cached);
-    final threshold = scriptThreshold > _kSupersessionCoverageFloor
-        ? scriptThreshold
-        : _kSupersessionCoverageFloor;
-    return covered / cachedArea >= threshold;
   }
 
   /// Perform SAR (Scan-Accumulate-Replace) merge of [fresh] into [existing].

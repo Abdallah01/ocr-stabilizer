@@ -25,6 +25,14 @@
   lerp) / `mergedConfidence`, pure over the two blocks and the corrected
   rect. `_mergeImpl` keeps its order of operations (resolve at step 3,
   confidence after the votes). Engine 1,989 → 1,891 lines. Not exported.
+- **Internal: retention and the transform estimate are their own classes
+  (#150, no behaviour change).** `lib/src/internal/retention_manager.dart`
+  — `RetentionManager.retain` (miss counters, cross-frame supersession),
+  `regionCandidates` (the region query the nested matcher shares),
+  `coversRetained`; `lib/src/internal/transform_estimator.dart` — a
+  per-capture `TransformEstimator` (pair eligibility + `fit`). Engine
+  1,891 → 1,778 lines, from 2,787 before the decomposition began. Not
+  exported.
 
 ### Added
 - **Differential replay harness (#150, tooling only — no engine
