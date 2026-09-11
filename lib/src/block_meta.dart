@@ -3,35 +3,18 @@
 
 import 'types/confidence_types.dart';
 import 'types/container_id.dart';
+import 'types/coordinate_context.dart';
 import 'types/scroll_context.dart';
 import 'types/sticky_fallback.dart';
 
-/// Per-block metadata collected during classification.
+/// Per-block metadata the classifier attaches to each classified group:
+/// the coordinate frame and the two confidences.
 ///
-/// Captures all classification flags and confidence scores for a group,
-/// parallel to the group's absolute rect. Uses [ScrollContext] and
-/// [StickyFallback] to group semantically related scroll fields.
+/// 3.0 (#147): the seven coordinate fields collapsed into [coordinates];
+/// every former field name is still readable as a derived view.
 class BlockMeta {
-  /// Whether this block is viewport-relative (fixed/sticky).
-  final bool isViewportRelative;
-
-  /// Whether this block lives inside an inner scrollable container.
-  final bool isInnerScrollerChild;
-
-  /// CSS top offset of the inner scroller relative to viewport.
-  final double innerScrollerTop;
-
-  /// Stable hash identifying the DOM container this block belongs to.
-  final ContainerId? containerId;
-
-  /// Scroll offsets and carousel index at capture time.
-  final ScrollContext captureContext;
-
-  /// Whether this block originates from a CSS `position:sticky` element.
-  final bool isFromStickyElement;
-
-  /// Fallback coordinate context for sticky element demotion.
-  final StickyFallback stickyFallback;
+  /// The frame the group's rect is expressed in.
+  final CoordinateContext coordinates;
 
   /// Spatial confidence score from position stability.
   final PositionConfidence positionConfidence;
@@ -41,22 +24,36 @@ class BlockMeta {
 
   /// Creates block metadata for a classified group.
   const BlockMeta({
-    required this.isViewportRelative,
-    required this.isInnerScrollerChild,
-    required this.innerScrollerTop,
-    required this.captureContext,
+    required this.coordinates,
     required this.positionConfidence,
     required this.textConfidence,
-    this.containerId,
-    this.isFromStickyElement = false,
-    this.stickyFallback = const StickyFallback(),
   });
 
-  // ── Convenience accessors for backward compatibility ──
+  // ── Derived views (the 2.x fields) ──
+
+  /// Whether this block is viewport-relative (fixed/sticky).
+  bool get isViewportRelative => coordinates.isViewportRelative;
+
+  /// Whether this block lives inside an inner scrollable container.
+  bool get isInnerScrollerChild => coordinates.isInnerScrollerChild;
+
+  /// Page-absolute top of the inner scroller (`0` when not inside one).
+  double get innerScrollerTop => coordinates.innerScrollerTop;
+
+  /// Stable hash identifying the DOM container this block belongs to.
+  ContainerId? get containerId => coordinates.containerId;
+
+  /// Scroll offsets and carousel index at capture time.
+  ScrollContext get captureContext => coordinates.scrollContext;
+
+  /// Whether this block originates from a CSS `position:sticky` element.
+  bool get isFromStickyElement => coordinates.isFromStickyElement;
+
+  /// Fallback coordinate context for sticky element demotion.
+  StickyFallback get stickyFallback => coordinates.stickyFallback;
 
   /// Whether this block is a direct child of a horizontal scroller.
-  bool get isHorizontalScrollChild =>
-      captureContext.hzScrollerIndex >= 0 && !isViewportRelative;
+  bool get isHorizontalScrollChild => coordinates.isHorizontalScrollChild;
 
   /// Carousel index from capture context (-1 = not carousel).
   int get hzScrollerIndex => captureContext.hzScrollerIndex;

@@ -19,17 +19,25 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
 /// Minimal test block for package-level DriftTracker tests.
 class _TestBlock implements TrackedBlock<Never> {
+  // 3.0 (#147): the engine reads the frame through this one getter; the
+  // flat fields below stay as this fixture's construction convenience.
+  @override
+  CoordinateContext get coordinates => CoordinateContext.fromFlags(
+        isViewportRelative: isViewportRelative,
+        isInnerScrollerChild: isInnerScrollerChild,
+        innerScrollerTop: innerScrollerTop,
+        isHorizontalScrollChild: isHorizontalScrollChild,
+        containerId: containerId,
+        scrollContext: scrollContext,
+        isFromStickyElement: isFromStickyElement,
+        stickyFallback: stickyFallback,
+      );
   @override
   final AbsoluteRect absoluteRect;
-  @override
   final ContainerId? containerId;
-  @override
   final bool isViewportRelative;
-  @override
   final bool isInnerScrollerChild;
-  @override
   final bool isHorizontalScrollChild;
-  @override
   final double innerScrollerTop;
   @override
   Never get payload => throw UnsupportedError('_TestBlock has no payload');
@@ -40,7 +48,6 @@ class _TestBlock implements TrackedBlock<Never> {
   final double captureScrollY;
   final double captureScrollX;
   final int hzScrollerIndex;
-  @override
   final bool isFromStickyElement;
   final double stickyFallbackScrollY;
   final double stickyFallbackScrollX;
@@ -74,14 +81,12 @@ class _TestBlock implements TrackedBlock<Never> {
     this.sourceQuality = 0,
   });
 
-  @override
   ScrollContext get scrollContext => ScrollContext(
         scrollY: captureScrollY,
         scrollX: captureScrollX,
         hzScrollerIndex: hzScrollerIndex,
       );
 
-  @override
   StickyFallback get stickyFallback => StickyFallback(
         scrollY: stickyFallbackScrollY,
         scrollX: stickyFallbackScrollX,
@@ -92,23 +97,30 @@ class _TestBlock implements TrackedBlock<Never> {
 
 /// Test block with a typed payload for generic contract testing.
 class _PayloadBlock implements TrackedBlock<String> {
+  // 3.0 (#147): the engine reads the frame through this one getter; the
+  // flat fields below stay as this fixture's construction convenience.
+  @override
+  CoordinateContext get coordinates => CoordinateContext.fromFlags(
+        isViewportRelative: isViewportRelative,
+        isInnerScrollerChild: isInnerScrollerChild,
+        innerScrollerTop: innerScrollerTop,
+        isHorizontalScrollChild: isHorizontalScrollChild,
+        containerId: containerId,
+        scrollContext: scrollContext,
+        isFromStickyElement: isFromStickyElement,
+        stickyFallback: stickyFallback,
+      );
   @override
   final AbsoluteRect absoluteRect;
   @override
   final String payload;
-  @override
   ContainerId? get containerId => null;
-  @override
   bool get isViewportRelative => false;
-  @override
   bool get isInnerScrollerChild => false;
-  @override
   double get innerScrollerTop => 0;
-  @override
   bool get isHorizontalScrollChild => false;
   @override
   String get originalText => '';
-  @override
   bool get isFromStickyElement => false;
   @override
   PositionConfidence get positionConfidence => const PositionConfidence(0.5);
@@ -119,10 +131,8 @@ class _PayloadBlock implements TrackedBlock<String> {
 
   _PayloadBlock({required this.absoluteRect, required this.payload});
 
-  @override
   ScrollContext get scrollContext => ScrollContext.none;
 
-  @override
   StickyFallback get stickyFallback => StickyFallback.none;
 }
 
@@ -140,6 +150,7 @@ _TestBlock _makeBlock({
     isViewportRelative: isViewportRelative,
     isInnerScrollerChild: isInnerScrollerChild,
     isHorizontalScrollChild: isHorizontalScrollChild,
+    hzScrollerIndex: isHorizontalScrollChild ? 0 : -1,
   );
 }
 

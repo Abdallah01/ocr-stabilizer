@@ -39,8 +39,8 @@ DefaultTrackedBlock<void> _block({
     absoluteRect: AbsoluteRect(rect),
     payload: null,
     originalText: text,
-    isViewportRelative: vr,
     observationCount: observations,
+    coordinates: CoordinateContext.fromFlags(isViewportRelative: vr),
   );
 }
 

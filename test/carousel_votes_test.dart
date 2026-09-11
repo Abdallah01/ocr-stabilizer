@@ -79,8 +79,8 @@ void main() {
           absoluteRect: AbsoluteRect.fromLTWH(0, 0, 200, 30),
           payload: null,
           originalText: text,
-          scrollContext: ScrollContext(hzScrollerIndex: hz),
-          isHorizontalScrollChild: hz >= 0,
+          coordinates: CoordinateContext.page(
+              scroll: ScrollContext(hzScrollerIndex: hz)),
         );
     StabilizationEngine<DefaultTrackedBlock<void>, void> engine() =>
         StabilizationEngine<DefaultTrackedBlock<void>, void>(

@@ -46,7 +46,8 @@ DefaultTrackedBlock<void> _at(
       absoluteRect: AbsoluteRect(r),
       payload: null,
       originalText: text,
-      isViewportRelative: viewportRelative,
+      coordinates:
+          CoordinateContext.fromFlags(isViewportRelative: viewportRelative),
     );
 
 /// An index that ignores the viewport-relative cell namespace and offers

@@ -54,6 +54,41 @@ pick up in an hour. Breaking; each entry carries its migration.
   | `carouselIdVotes: merge.updatedCarouselIdVotes` | `carouselVotes: merge.updatedCarouselVotes` |
   | reading the histogram | `block.carouselVotes.votes` |
 
+- **`CoordinateContext` replaces the eight coordinate getters (#147).**
+  `TrackedBlock` now declares one `coordinates` getter instead of
+  `isViewportRelative`, `isInnerScrollerChild`, `innerScrollerTop`,
+  `isHorizontalScrollChild`, `containerId`, `scrollContext`,
+  `isFromStickyElement` and `stickyFallback` (14 getters → 7). The sealed
+  type has three shapes — `CoordinateContext.page(scroll:)`,
+  `.innerScroller(top:, containerId:, scroll:)`, `.viewport(stickyFallback:)`
+  — so the combinations the engine never expected (a container id without
+  an inner scroller, a carousel child without a carousel index, an
+  inner-scroller top on a page block, sticky without viewport, viewport +
+  inner scroller) are unrepresentable; the old constructor invariant and
+  the spatial index's assert are gone. The eight names survive as derived
+  views on every block (`TrackedBlockCoordinateViews`) and on `BlockMeta`,
+  so read sites are unchanged. `CoordinateContext.fromFlags(...)` adapts a
+  consumer that still holds flat flags and throws `ArgumentError` on an
+  inexpressible combination. `BlockMeta` takes `coordinates` in place of
+  its seven coordinate fields. `DefaultTrackedBlock.copyWith` takes a whole
+  `coordinates` frame; the `containerId: null` clearing sentinel (#47) is
+  gone with the need for it. One derived value differs from 2.x: a
+  viewport-relative block's `scrollContext` is always `ScrollContext.none`
+  (the classifier already zeroed its offsets; its carousel index only fed
+  the carousel-vote histogram, which nothing reads). Every committed
+  replay stream is byte-identical (all 34,449 recorded blocks are page
+  blocks). Migration:
+
+  | 2.6.x | 3.0 |
+  |---|---|
+  | implement the eight getters | implement `CoordinateContext get coordinates` (build it with `CoordinateContext.fromFlags(...)` from existing flat fields, or one of the three constructors) |
+  | `DefaultTrackedBlock(isViewportRelative: true, ...)` | `DefaultTrackedBlock(coordinates: const CoordinateContext.viewport(), ...)` |
+  | `DefaultTrackedBlock(isInnerScrollerChild: true, innerScrollerTop: t, containerId: id, scrollContext: sc)` | `coordinates: CoordinateContext.innerScroller(top: t, containerId: id, scroll: sc)` |
+  | `DefaultTrackedBlock(isHorizontalScrollChild: true, scrollContext: ScrollContext(hzScrollerIndex: i))` | `coordinates: CoordinateContext.page(scroll: ScrollContext(hzScrollerIndex: i))` |
+  | `block.copyWith(isInnerScrollerChild: false, containerId: null)` | `block.copyWith(coordinates: const CoordinateContext.page())` |
+  | `BlockMeta(isViewportRelative:, isInnerScrollerChild:, innerScrollerTop:, containerId:, captureContext:, isFromStickyElement:, stickyFallback:, ...)` | `BlockMeta(coordinates: ..., positionConfidence:, textConfidence:)` |
+  | reading `block.isViewportRelative` etc. | unchanged (derived views) |
+
 ## 2.6.1 - 2026-09-11
 
 ### Changed

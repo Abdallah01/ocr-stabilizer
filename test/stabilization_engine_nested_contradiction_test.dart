@@ -52,8 +52,10 @@ DefaultTrackedBlock<void> _block(
       payload: null,
       originalText: text,
       observationCount: observations,
-      isHorizontalScrollChild: carousel,
-      scrollContext: ScrollContext(hzScrollerIndex: carouselIndex),
+      coordinates: CoordinateContext.page(
+          scroll: ScrollContext(
+              hzScrollerIndex:
+                  carousel ? (carouselIndex < 0 ? 0 : carouselIndex) : -1)),
     );
 
 // The grouping detector's own positive-control fixture: a paragraph seen
@@ -64,7 +66,8 @@ const Rect kLine2 = Rect.fromLTWH(0, 50, 200, 40);
 
 void main() {
   group('nested rule vs grouping contradiction (#112 × #49)', () {
-    test('a host the grouping detector flags this call is NOT confirmed by '
+    test(
+        'a host the grouping detector flags this call is NOT confirmed by '
         'its own lines — they enter as new blocks and the contradiction '
         'stands', () {
       final (:engine, :index) = _engine();
@@ -79,8 +82,8 @@ void main() {
       expect(r.contradictions, hasLength(1));
       expect(r.contradictions.single.type, ContradictionType.grouping);
       expect(identical(r.contradictions.single.target, host), isTrue);
-      expect(r.stableBlocks.map((b) => b.originalText).toSet(),
-          {'hello', 'world'},
+      expect(
+          r.stableBlocks.map((b) => b.originalText).toSet(), {'hello', 'world'},
           reason: 'both subdividers enter as new blocks — none is silently '
               'absorbed as a confirmation, none is dropped');
       expect(r.stableBlocks.every((b) => b.observationCount == 1), isTrue);
@@ -89,7 +92,8 @@ void main() {
               'well-observed threshold)');
     });
 
-    test('control: a single line (no contradiction possible) still confirms '
+    test(
+        'control: a single line (no contradiction possible) still confirms '
         'the host as a nested fragment', () {
       final (:engine, :index) = _engine();
       index.add(_block('hello world', kPara, observations: 3));
@@ -103,9 +107,9 @@ void main() {
   });
 
   group('merger contract on a nested confirmation (#112)', () {
-    test('the engine hands the HOST as `fresh`, so pass-through copying '
-        'cannot overwrite it; a full merge still passes the observation',
-        () {
+    test(
+        'the engine hands the HOST as `fresh`, so pass-through copying '
+        'cannot overwrite it; a full merge still passes the observation', () {
       final seen = <({bool nested, bool hostAsFresh})>[];
       final (:engine, :index) = _engine(
         merger: (existing, fresh, merge) {
@@ -132,7 +136,8 @@ void main() {
   });
 
   group('nested predicate carousel guard (#112)', () {
-    test('a line inside a paragraph from a DIFFERENT carousel is not its '
+    test(
+        'a line inside a paragraph from a DIFFERENT carousel is not its '
         'fragment; the same carousel is', () {
       final other = _engine();
       other.index.add(_block('hello world', kPara,

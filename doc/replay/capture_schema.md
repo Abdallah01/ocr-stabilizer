@@ -99,14 +99,14 @@ exactly the surface the engine can read — plus consumer extras.
 | `otext` | string | `originalText` |
 | `pconf` / `tconf` | double 0..1 | `positionConfidence` / `textConfidence` |
 | `srcQ` | int | `sourceQuality` |
-| `vr` | bool | `isViewportRelative` |
-| `isc` | bool | `isInnerScrollerChild` |
-| `iscTop` | double | `innerScrollerTop` |
-| `hsc` | bool | `isHorizontalScrollChild` |
-| `cid` | string or null | `containerId` |
-| `sticky` | bool | `isFromStickyElement` |
-| `sc` | `[scrollY, scrollX, hzScrollerIndex]` | `scrollContext` |
-| `sf` | `[scrollY, scrollX, isIc, hzScrollerIndex]` | `stickyFallback` |
+| `vr` | bool | `coordinates` (3.0+, via `CoordinateContext.fromFlags`; view `isViewportRelative`) |
+| `isc` | bool | `coordinates` (view `isInnerScrollerChild`) |
+| `iscTop` | double | `coordinates` (view `innerScrollerTop`) |
+| `hsc` | bool | `coordinates` (view `isHorizontalScrollChild`) |
+| `cid` | string or null | `coordinates` (view `containerId`) |
+| `sticky` | bool | `coordinates` (view `isFromStickyElement`) |
+| `sc` | `[scrollY, scrollX, hzScrollerIndex]` | `coordinates` (view `scrollContext`) |
+| `sf` | `[scrollY, scrollX, isIc, hzScrollerIndex]` | `coordinates` (view `stickyFallback`) |
 | `obsN` | int | `observationCount` |
 | `prov` / `provN` | bool / int | `isProvisional` / `provisionalCapturesRemaining` |
 | `cvotes` | `{ "<weight>": count }`, omitted when empty | `classificationVotes` |
@@ -122,6 +122,11 @@ exactly the surface the engine can read — plus consumer extras.
 ## Loader notes (v1)
 
 - Unknown fields are ignored (forward-compatible).
+- The eight coordinate fields are folded into one `CoordinateContext`
+  through `fromFlags` (3.0, #147); a recorded combination the sealed type
+  cannot express (e.g. `hsc: true` with `sc[2] == -1`, or `cid` without
+  `isc`) throws at load rather than replaying as a block the engine never
+  expected. Every committed stream is page-only and unaffected.
 - `carVotes` absent, empty, or exactly `{"-1": 1}` (the 2.x phantom
   sentinel that recorders wrote for a block first seen outside any
   carousel) → `CarouselVotes.none()`; any other histogram is kept as

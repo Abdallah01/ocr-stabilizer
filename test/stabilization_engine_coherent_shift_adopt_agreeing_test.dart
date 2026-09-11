@@ -35,6 +35,8 @@ import 'package:ocr_stabilizer/src/stabilization_engine.dart';
 import 'package:ocr_stabilizer/src/stabilizer_config.dart';
 import 'package:ocr_stabilizer/src/step_response.dart';
 import 'package:ocr_stabilizer/src/types/absolute_rect.dart';
+import 'package:ocr_stabilizer/src/types/coordinate_context.dart';
+import 'package:ocr_stabilizer/src/types/scroll_context.dart';
 
 DefaultTrackedBlock<Object> _block(
   String text, {
@@ -48,8 +50,10 @@ DefaultTrackedBlock<Object> _block(
       payload: const Object(),
       originalText: text,
       observationCount: 3,
-      isViewportRelative: vr,
-      isHorizontalScrollChild: carousel,
+      coordinates: vr
+          ? const CoordinateContext.viewport()
+          : CoordinateContext.page(
+              scroll: ScrollContext(hzScrollerIndex: carousel ? 0 : -1)),
     );
 
 const _a = 'alpha block text one';

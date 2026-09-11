@@ -30,6 +30,19 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 /// `DefaultTrackedBlock.applyMerge`, used the same way by
 /// `stabilization_engine_coherent_shift_frozen_drift_test.dart`).
 class _TextKeyedBlock implements ObservableBlock<void> {
+  // 3.0 (#147): the engine reads the frame through this one getter; the
+  // flat fields below stay as this fixture's construction convenience.
+  @override
+  CoordinateContext get coordinates => CoordinateContext.fromFlags(
+        isViewportRelative: isViewportRelative,
+        isInnerScrollerChild: isInnerScrollerChild,
+        innerScrollerTop: innerScrollerTop,
+        isHorizontalScrollChild: isHorizontalScrollChild,
+        containerId: containerId,
+        scrollContext: scrollContext,
+        isFromStickyElement: isFromStickyElement,
+        stickyFallback: stickyFallback,
+      );
   @override
   final AbsoluteRect absoluteRect;
   @override
@@ -61,26 +74,18 @@ class _TextKeyedBlock implements ObservableBlock<void> {
   int get hashCode => originalText.hashCode;
 
   // ── Inert interface plumbing (unused by this scenario) ──
-  @override
   ContainerId? get containerId => null;
-  @override
   bool get isViewportRelative => false;
-  @override
   bool get isInnerScrollerChild => false;
-  @override
   double get innerScrollerTop => 0;
-  @override
   bool get isHorizontalScrollChild => false;
-  @override
   bool get isFromStickyElement => false;
   @override
   int get sourceQuality => 0;
   @override
   void get payload {}
-  @override
   ScrollContext get scrollContext =>
       const ScrollContext(scrollY: 0, scrollX: 0, hzScrollerIndex: -1);
-  @override
   StickyFallback get stickyFallback => const StickyFallback(
       scrollY: 0, scrollX: 0, isIc: false, hzScrollerIndex: -1);
   @override
