@@ -64,6 +64,16 @@
   order). Engine 1,542 → 1,474 lines. Not exported.
 
 ### Added
+- **`OcrStabilizer<P>` — the common path is one object (#170).**
+  `OcrStabilizer<MyPayload>()` is `StabilizationEngine<DefaultTrackedBlock<MyPayload>,
+  MyPayload>` with the canonical merger (`existing.applyMerge(merge)`) already wired:
+  one generic parameter, no callback, every constructor option forwarded
+  (`config`, `driftTracker`, `spatialIndex`, `submapMembership`, `contextualCheck`).
+  Nothing else is new — `stabilize` / `merge` / the result type are inherited, and
+  `test/ocr_stabilizer_test.dart` pins that it is capture-for-capture identical to the
+  spelled-out engine over a jittered scroll stream, with and without a custom config.
+  `StabilizationEngine` is unchanged and stays the entry point for a custom `Track` type.
+  The example now uses it. Additive; no numerics changed.
 - **Differential replay harness (#150, tooling only — no engine
   change).** `tool/replay/differential.dart` serialises every capture's
   full engine state (result blocks, tracked set, contradictions, events,

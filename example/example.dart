@@ -5,8 +5,8 @@
 
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
-/// Minimal example: stabilize two batches of OCR observations using
-/// [DefaultTrackedBlock] as the block implementation.
+/// Minimal example: stabilize two batches of OCR observations through
+/// [OcrStabilizer] — the engine over [DefaultTrackedBlock]s.
 ///
 /// The engine is constructed with `BandFallbackMode.observeOnly` — the
 /// band-relaxed second-pass match path runs and populates
@@ -17,8 +17,11 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 /// observeOnly by construction — the counter only ticks when a band
 /// match is actually returned, which requires [BandFallbackMode.admit].
 void main() {
-  final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
-    merger: (existing, fresh, merge) => existing.applyMerge(merge),
+  // The common path (#170): one object, one generic parameter, the merger
+  // pre-wired. `StabilizationEngine<DefaultTrackedBlock<void>, void>(
+  // merger: (existing, fresh, merge) => existing.applyMerge(merge), ...)`
+  // is the same engine spelled out — use that form for a custom Track type.
+  final engine = OcrStabilizer<void>(
     config: StabilizerConfig(
       matching: MatchingConfig(
         bandFallback:

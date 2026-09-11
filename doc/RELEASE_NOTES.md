@@ -6,6 +6,14 @@
 The narrative "What's new" entries that used to open the README, newest
 first. The authoritative per-version record is [`../CHANGELOG.md`](../CHANGELOG.md).
 
+**What's new in the next minor (unreleased)** — the first-use path is one
+object: `OcrStabilizer<MyPayload>()` is the engine over
+`DefaultTrackedBlock`s with the merger pre-wired, one generic parameter,
+defaults for everything ([#170](https://github.com/Abdallah01/ocr-stabilizer/issues/170)).
+It is `StabilizationEngine<DefaultTrackedBlock<P>, P>` exactly — a
+differential test pins the two identical capture for capture — so growing
+into a custom `Track` type later changes nothing about behaviour.
+
 **What's new in 3.0.0** — the adoption release: the same engine, a
 surface a stranger can pick up in an hour. Four breaking, mechanical
 changes, each with a migration table in the CHANGELOG:
