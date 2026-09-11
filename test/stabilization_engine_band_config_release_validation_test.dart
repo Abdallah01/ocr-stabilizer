@@ -6,6 +6,7 @@ import 'package:test/test.dart';
 import 'package:ocr_stabilizer/src/band_fallback_config.dart';
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/stabilization_engine.dart';
+import 'package:ocr_stabilizer/src/stabilizer_config.dart';
 
 /// Locks the layered defense against `NaN`/`Infinity` band floors:
 ///
@@ -37,7 +38,11 @@ void main() {
       ) {
         return StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
           merger: (existing, fresh, m) => existing.applyMerge(m),
-          bandFallback: cfg,
+          config: StabilizerConfig(
+            matching: MatchingConfig(
+              bandFallback: cfg,
+            ),
+          ),
         );
       }
 

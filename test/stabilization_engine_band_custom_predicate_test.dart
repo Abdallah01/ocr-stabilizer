@@ -6,7 +6,8 @@ import 'package:test/test.dart';
 import 'package:ocr_stabilizer/src/band_fallback_config.dart';
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/stabilization_engine.dart';
-import 'package:ocr_stabilizer/src/tracked_block.dart';
+import 'package:ocr_stabilizer/src/stabilizer_config.dart';
+import 'package:ocr_stabilizer/src/observation.dart';
 import 'package:ocr_stabilizer/src/types/absolute_rect.dart';
 
 DefaultTrackedBlock<Object> _block(String text,
@@ -30,13 +31,17 @@ void main() {
       final calls = <(String, String)>[];
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: BandFallbackConfig(
-          mode: BandFallbackMode.admit,
-          candidateObservationFloor: 1,
-          spatialConfirm: (TrackedBlock fresh, TrackedBlock candidate) {
-            calls.add((fresh.originalText, candidate.originalText));
-            return true; // accept all
-          },
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: BandFallbackConfig(
+              mode: BandFallbackMode.admit,
+              candidateObservationFloor: 1,
+              spatialConfirm: (Observation fresh, Observation candidate) {
+                calls.add((fresh.originalText, candidate.originalText));
+                return true; // accept all
+              },
+            ),
+          ),
         ),
       );
       engine.stabilize(
@@ -54,10 +59,14 @@ void main() {
         () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: const BandFallbackConfig(
-          mode: BandFallbackMode.admit,
-          candidateObservationFloor: 1,
-          // spatialConfirm: null → engine uses default drift-aware closure
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: const BandFallbackConfig(
+              mode: BandFallbackMode.admit,
+              candidateObservationFloor: 1,
+              // spatialConfirm: null → engine uses default drift-aware closure
+            ),
+          ),
         ),
       );
       engine.stabilize(
@@ -74,9 +83,13 @@ void main() {
         () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: const BandFallbackConfig(
-          mode: BandFallbackMode.admit,
-          candidateObservationFloor: 1,
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: const BandFallbackConfig(
+              mode: BandFallbackMode.admit,
+              candidateObservationFloor: 1,
+            ),
+          ),
         ),
       );
       engine.stabilize(
@@ -97,12 +110,16 @@ void main() {
         () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: BandFallbackConfig(
-          mode: BandFallbackMode.admit,
-          candidateObservationFloor: 1,
-          spatialConfirm: (TrackedBlock fresh, TrackedBlock candidate) {
-            throw StateError('consumer-supplied predicate failed');
-          },
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: BandFallbackConfig(
+              mode: BandFallbackMode.admit,
+              candidateObservationFloor: 1,
+              spatialConfirm: (Observation fresh, Observation candidate) {
+                throw StateError('consumer-supplied predicate failed');
+              },
+            ),
+          ),
         ),
       );
       engine.stabilize(
@@ -130,12 +147,16 @@ void main() {
       // admit mode (the catch is mode-agnostic by construction).
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: BandFallbackConfig(
-          mode: BandFallbackMode.observeOnly,
-          candidateObservationFloor: 1,
-          spatialConfirm: (TrackedBlock fresh, TrackedBlock candidate) {
-            throw const FormatException('predicate boom (observeOnly)');
-          },
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: BandFallbackConfig(
+              mode: BandFallbackMode.observeOnly,
+              candidateObservationFloor: 1,
+              spatialConfirm: (Observation fresh, Observation candidate) {
+                throw const FormatException('predicate boom (observeOnly)');
+              },
+            ),
+          ),
         ),
       );
       engine.stabilize(

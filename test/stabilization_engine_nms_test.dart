@@ -17,7 +17,20 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
 /// Block with VALUE equality on [originalText] only — models Equatable-style
 /// consumer blocks, which the spatial index explicitly supports.
-class _EquatableBlock implements ObservableBlock<void> {
+class _EquatableBlock implements Track<void> {
+  // 3.0 (#147): the engine reads the frame through this one getter; the
+  // flat fields below stay as this fixture's construction convenience.
+  @override
+  CoordinateContext get coordinates => CoordinateContext.fromFlags(
+        isViewportRelative: isViewportRelative,
+        isInnerScrollerChild: isInnerScrollerChild,
+        innerScrollerTop: innerScrollerTop,
+        isHorizontalScrollChild: isHorizontalScrollChild,
+        containerId: containerId,
+        scrollContext: scrollContext,
+        isFromStickyElement: isFromStickyElement,
+        stickyFallback: stickyFallback,
+      );
   @override
   final AbsoluteRect absoluteRect;
   @override
@@ -27,7 +40,6 @@ class _EquatableBlock implements ObservableBlock<void> {
   @override
   final TextConfidence textConfidence;
 
-  @override
   final bool isHorizontalScrollChild;
 
   _EquatableBlock({
@@ -46,24 +58,20 @@ class _EquatableBlock implements ObservableBlock<void> {
   int get hashCode => originalText.hashCode;
 
   // ── Inert interface plumbing ──
-  @override
   ContainerId? get containerId => null;
-  @override
   bool get isViewportRelative => false;
-  @override
   bool get isInnerScrollerChild => false;
-  @override
   double get innerScrollerTop => 0;
-  @override
   bool get isFromStickyElement => false;
   @override
   int get sourceQuality => 0;
   @override
   void get payload {}
-  @override
-  ScrollContext get scrollContext =>
-      const ScrollContext(scrollY: 0, scrollX: 0, hzScrollerIndex: -1);
-  @override
+  // 3.0 (#147): a carousel child always carries its index.
+  ScrollContext get scrollContext => ScrollContext(
+      scrollY: 0,
+      scrollX: 0,
+      hzScrollerIndex: isHorizontalScrollChild ? 0 : -1);
   StickyFallback get stickyFallback => const StickyFallback(
       scrollY: 0, scrollX: 0, isIc: false, hzScrollerIndex: -1);
   @override
@@ -71,7 +79,7 @@ class _EquatableBlock implements ObservableBlock<void> {
   @override
   Map<int, int> get classificationVotes => const {};
   @override
-  Map<int, int> get carouselIdVotes => const {-1: 1};
+  CarouselVotes get carouselVotes => const CarouselVotes.none();
   @override
   Map<String, TextVote> get textVotes => const {};
   @override

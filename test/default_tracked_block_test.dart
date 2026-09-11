@@ -20,9 +20,8 @@ void main() {
       expect(block.positionConfidence, PositionConfidence.groundTruth);
       expect(block.textConfidence, TextConfidence.groundTruth);
 
-      // Critical: carouselIdVotes must be {-1: 1}, NOT {}, so the engine's
-      // phantom-carousel-vote clearing logic works on first observation.
-      expect(block.carouselIdVotes, {-1: 1});
+      // 3.0 (#148): no phantom vote — the value type starts empty.
+      expect(block.carouselVotes, const CarouselVotes.none());
       expect(block.classificationVotes, isEmpty);
       expect(block.textVotes, isEmpty);
 
@@ -55,18 +54,14 @@ void main() {
       expect(clone.observationCount, 1);
     });
 
-    test('constructor throws on TrackedBlock invariant violation', () {
-      // containerId set without isInnerScrollerChild=true violates the
-      // TrackedBlock invariant — DefaultTrackedBlock throws ArgumentError
-      // (not just asserts) so the check holds in release builds, where
-      // a silent misclassification would corrupt drift corrections.
+    test('a container id without an inner scroller is unrepresentable', () {
+      // 3.0 (#147): the old constructor invariant (containerId requires
+      // isInnerScrollerChild) is now a property of the sealed type — the
+      // only way to spell the invalid combination is the flat-flag adapter,
+      // which rejects it.
       expect(
-        () => DefaultTrackedBlock<int>(
-          absoluteRect: const AbsoluteRect(Rect.fromLTWH(0, 0, 100, 30)),
-          payload: 0,
-          containerId: const ContainerId('sidebar'),
-          // intentionally NOT setting isInnerScrollerChild: true
-        ),
+        () => CoordinateContext.fromFlags(
+            containerId: const ContainerId('sidebar')),
         throwsA(isA<ArgumentError>()),
       );
     });
@@ -88,7 +83,7 @@ void main() {
         textWasPromoted: true,
         updatedClassificationVotes: const {10: 2},
         needsReclassification: false,
-        updatedCarouselIdVotes: const {-1: 2},
+        updatedCarouselVotes: CarouselVotes.fromHistogram({-1: 2}),
         observationCount: 2,
         isProvisional: false,
         provisionalCapturesRemaining: 0,
@@ -138,28 +133,27 @@ void main() {
     });
   });
 
-  group('copyWith containerId sentinel (#47 / v0.6.0)', () {
+  group('copyWith(coordinates:) replaces the whole frame (3.0, #147)', () {
     DefaultTrackedBlock<void> icBlock() => DefaultTrackedBlock<void>(
           absoluteRect: const AbsoluteRect(Rect.fromLTWH(0, 0, 100, 30)),
           payload: null,
           originalText: 'ic text',
-          isInnerScrollerChild: true,
-          containerId: const ContainerId('c1'),
+          coordinates: const CoordinateContext.innerScroller(
+              top: 0, containerId: ContainerId('c1')),
         );
 
-    test('demoting an IC block clears containerId without throwing', () {
-      // Pre-0.6.0: `containerId ?? this.containerId` could never restore
-      // null, so this exact call threw ArgumentError from the ctor
-      // invariant (containerId requires isInnerScrollerChild).
-      final demoted = icBlock().copyWith(
-        isInnerScrollerChild: false,
-        containerId: null,
-      );
+    test('demoting an IC block is one frame swap; nothing to clear', () {
+      // Before 3.0 this took `copyWith(isInnerScrollerChild: false,
+      // containerId: null)` with a sentinel to tell "not passed" from
+      // "clear" (#47). A frame cannot carry a container id without being
+      // an inner scroller, so the demotion is the new frame itself.
+      final demoted =
+          icBlock().copyWith(coordinates: const CoordinateContext.page());
       expect(demoted.isInnerScrollerChild, isFalse);
       expect(demoted.containerId, isNull);
     });
 
-    test('omitting containerId preserves the current value', () {
+    test('omitting coordinates preserves the current frame', () {
       final moved = icBlock().copyWith(
         absoluteRect: const AbsoluteRect(Rect.fromLTWH(5, 5, 100, 30)),
       );
@@ -167,27 +161,11 @@ void main() {
       expect(moved.isInnerScrollerChild, isTrue);
     });
 
-    test('passing a new containerId updates it', () {
-      final rehomed = icBlock().copyWith(
-        containerId: const ContainerId('c2'),
-      );
-      expect(rehomed.containerId, const ContainerId('c2'));
-    });
-
-    test('clearing containerId alone still enforces the ctor invariant', () {
-      // containerId: null with isInnerScrollerChild still true is valid —
-      // an IC block without a known container. The reverse (keeping the
-      // container on a non-IC block) is what the constructor rejects.
-      final anonymous = icBlock().copyWith(containerId: null);
+    test('an inner scroller without a known container is still valid', () {
+      final anonymous = icBlock()
+          .copyWith(coordinates: const CoordinateContext.innerScroller(top: 0));
       expect(anonymous.containerId, isNull);
       expect(anonymous.isInnerScrollerChild, isTrue);
-
-      expect(
-        () => icBlock().copyWith(isInnerScrollerChild: false),
-        throwsArgumentError,
-        reason: 'demotion without clearing containerId keeps violating '
-            'the invariant and must still throw',
-      );
     });
   });
 }

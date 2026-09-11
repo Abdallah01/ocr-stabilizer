@@ -28,8 +28,12 @@ StabilizationEngine<DefaultTrackedBlock<void>, void> _engine({
 }) =>
     StabilizationEngine<DefaultTrackedBlock<void>, void>(
       merger: (existing, fresh, merge) => existing.applyMerge(merge),
-      missedFrameRetention: retention,
       spatialIndex: index,
+      config: StabilizerConfig(
+        retention: RetentionConfig(
+          missedFrames: retention,
+        ),
+      ),
     );
 
 // Geometry from the #112 fixture: a two-line paragraph and its first line.

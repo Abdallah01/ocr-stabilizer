@@ -11,18 +11,26 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 // =============================================================================
 
 /// Minimal test block for package-level BlockKeyGenerator tests.
-class _TestBlock implements TrackedBlock<Never> {
+class _TestBlock implements Observation<Never> {
+  // 3.0 (#147): the engine reads the frame through this one getter; the
+  // flat fields below stay as this fixture's construction convenience.
+  @override
+  CoordinateContext get coordinates => CoordinateContext.fromFlags(
+        isViewportRelative: isViewportRelative,
+        isInnerScrollerChild: isInnerScrollerChild,
+        innerScrollerTop: innerScrollerTop,
+        isHorizontalScrollChild: isHorizontalScrollChild,
+        containerId: containerId,
+        scrollContext: scrollContext,
+        isFromStickyElement: isFromStickyElement,
+        stickyFallback: stickyFallback,
+      );
   @override
   final AbsoluteRect absoluteRect;
-  @override
   final bool isViewportRelative;
-  @override
   final bool isInnerScrollerChild;
-  @override
   final double innerScrollerTop;
-  @override
   final ContainerId? containerId;
-  @override
   final bool isHorizontalScrollChild;
   @override
   Never get payload => throw UnsupportedError('_TestBlock has no payload');
@@ -32,7 +40,6 @@ class _TestBlock implements TrackedBlock<Never> {
   final double captureScrollY;
   final double captureScrollX;
   final int hzScrollerIndex;
-  @override
   final bool isFromStickyElement;
   final double stickyFallbackScrollY;
   final double stickyFallbackScrollX;
@@ -66,14 +73,12 @@ class _TestBlock implements TrackedBlock<Never> {
     this.sourceQuality = 0,
   });
 
-  @override
   ScrollContext get scrollContext => ScrollContext(
         scrollY: captureScrollY,
         scrollX: captureScrollX,
         hzScrollerIndex: hzScrollerIndex,
       );
 
-  @override
   StickyFallback get stickyFallback => StickyFallback(
         scrollY: stickyFallbackScrollY,
         scrollX: stickyFallbackScrollX,

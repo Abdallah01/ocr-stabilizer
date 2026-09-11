@@ -27,8 +27,10 @@ DefaultTrackedBlock<void> _at(
       payload: null,
       originalText: text,
       observationCount: observations,
-      isHorizontalScrollChild: carousel,
-      isViewportRelative: vr,
+      coordinates: vr
+          ? const CoordinateContext.viewport()
+          : CoordinateContext.page(
+              scroll: ScrollContext(hzScrollerIndex: carousel ? 0 : -1)),
     );
 
 StabilizationEngine<DefaultTrackedBlock<void>, void> _engine({
@@ -38,10 +40,20 @@ StabilizationEngine<DefaultTrackedBlock<void>, void> _engine({
 }) =>
     StabilizationEngine<DefaultTrackedBlock<void>, void>(
       merger: (existing, fresh, merge) => existing.applyMerge(merge),
-      stepResponse: stepResponse,
-      missedFrameRetention: 3,
-      bandFallback: bandFallback,
-      transformEstimateMinPairs: minPairs ?? 3,
+      config: StabilizerConfig(
+        stepResponse: StepResponseConfig(
+          mode: stepResponse,
+        ),
+        retention: RetentionConfig(
+          missedFrames: 3,
+        ),
+        matching: MatchingConfig(
+          bandFallback: bandFallback,
+        ),
+        diagnostics: DiagnosticsConfig(
+          transformEstimateMinPairs: minPairs ?? 3,
+        ),
+      ),
     );
 
 const _texts = [

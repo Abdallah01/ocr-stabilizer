@@ -90,7 +90,7 @@ Two families of records coexist in one file:
 
 ## `<block>` (obs entries)
 
-Serialized via this package's `TrackedBlock`/`ObservableBlock` interfaces —
+Serialized via this package's `Observation`/`Track` interfaces —
 exactly the surface the engine can read — plus consumer extras.
 
 | Field | Type | Interface member |
@@ -99,18 +99,18 @@ exactly the surface the engine can read — plus consumer extras.
 | `otext` | string | `originalText` |
 | `pconf` / `tconf` | double 0..1 | `positionConfidence` / `textConfidence` |
 | `srcQ` | int | `sourceQuality` |
-| `vr` | bool | `isViewportRelative` |
-| `isc` | bool | `isInnerScrollerChild` |
-| `iscTop` | double | `innerScrollerTop` |
-| `hsc` | bool | `isHorizontalScrollChild` |
-| `cid` | string or null | `containerId` |
-| `sticky` | bool | `isFromStickyElement` |
-| `sc` | `[scrollY, scrollX, hzScrollerIndex]` | `scrollContext` |
-| `sf` | `[scrollY, scrollX, isIc, hzScrollerIndex]` | `stickyFallback` |
+| `vr` | bool | `coordinates` (3.0+, via `CoordinateContext.fromFlags`; view `isViewportRelative`) |
+| `isc` | bool | `coordinates` (view `isInnerScrollerChild`) |
+| `iscTop` | double | `coordinates` (view `innerScrollerTop`) |
+| `hsc` | bool | `coordinates` (view `isHorizontalScrollChild`) |
+| `cid` | string or null | `coordinates` (view `containerId`) |
+| `sticky` | bool | `coordinates` (view `isFromStickyElement`) |
+| `sc` | `[scrollY, scrollX, hzScrollerIndex]` | `coordinates` (view `scrollContext`) |
+| `sf` | `[scrollY, scrollX, isIc, hzScrollerIndex]` | `coordinates` (view `stickyFallback`) |
 | `obsN` | int | `observationCount` |
 | `prov` / `provN` | bool / int | `isProvisional` / `provisionalCapturesRemaining` |
 | `cvotes` | `{ "<weight>": count }`, omitted when empty | `classificationVotes` |
-| `carVotes` | `{ "<id>": count }`, omitted when empty | `carouselIdVotes` |
+| `carVotes` | `{ "<id>": count }`, omitted when empty | `carouselVotes` (a `CarouselVotes`, 3.0+) |
 | `tvotes` | `{ key: {raw, score, best} }`, omitted when empty | `textVotes` |
 | `gsig` / `gsigC` | int / bool | consumer extra (group signature) |
 | `origin` | string | consumer extra (block origin) |
@@ -122,8 +122,15 @@ exactly the surface the engine can read — plus consumer extras.
 ## Loader notes (v1)
 
 - Unknown fields are ignored (forward-compatible).
-- `carVotes` absent → `DefaultTrackedBlock`'s phantom default `{-1: 1}`
-  applies (the engine's "never seen in a carousel" sentinel).
+- The eight coordinate fields are folded into one `CoordinateContext`
+  through `fromFlags` (3.0, #147); a recorded combination the sealed type
+  cannot express (e.g. `hsc: true` with `sc[2] == -1`, or `cid` without
+  `isc`) throws at load rather than replaying as a block the engine never
+  expected. Every committed stream is page-only and unaffected.
+- `carVotes` absent, empty, or exactly `{"-1": 1}` (the 2.x phantom
+  sentinel that recorders wrote for a block first seen outside any
+  carousel) → `CarouselVotes.none()`; any other histogram is kept as
+  recorded (3.0, #148).
 - `tvotes` is **not** reconstructed by the v1 loader (fresh observations
   carry none in practice; the engine rebuilds votes during replay).
 - Replay starts from an empty engine: streams captured mid-session with a

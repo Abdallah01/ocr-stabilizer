@@ -29,7 +29,20 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 /// position back in as the next capture's tracked baseline (mirroring
 /// `DefaultTrackedBlock.applyMerge`, used the same way by
 /// `stabilization_engine_coherent_shift_frozen_drift_test.dart`).
-class _TextKeyedBlock implements ObservableBlock<void> {
+class _TextKeyedBlock implements Track<void> {
+  // 3.0 (#147): the engine reads the frame through this one getter; the
+  // flat fields below stay as this fixture's construction convenience.
+  @override
+  CoordinateContext get coordinates => CoordinateContext.fromFlags(
+        isViewportRelative: isViewportRelative,
+        isInnerScrollerChild: isInnerScrollerChild,
+        innerScrollerTop: innerScrollerTop,
+        isHorizontalScrollChild: isHorizontalScrollChild,
+        containerId: containerId,
+        scrollContext: scrollContext,
+        isFromStickyElement: isFromStickyElement,
+        stickyFallback: stickyFallback,
+      );
   @override
   final AbsoluteRect absoluteRect;
   @override
@@ -61,26 +74,18 @@ class _TextKeyedBlock implements ObservableBlock<void> {
   int get hashCode => originalText.hashCode;
 
   // ── Inert interface plumbing (unused by this scenario) ──
-  @override
   ContainerId? get containerId => null;
-  @override
   bool get isViewportRelative => false;
-  @override
   bool get isInnerScrollerChild => false;
-  @override
   double get innerScrollerTop => 0;
-  @override
   bool get isHorizontalScrollChild => false;
-  @override
   bool get isFromStickyElement => false;
   @override
   int get sourceQuality => 0;
   @override
   void get payload {}
-  @override
   ScrollContext get scrollContext =>
       const ScrollContext(scrollY: 0, scrollX: 0, hzScrollerIndex: -1);
-  @override
   StickyFallback get stickyFallback => const StickyFallback(
       scrollY: 0, scrollX: 0, isIc: false, hzScrollerIndex: -1);
   @override
@@ -88,7 +93,7 @@ class _TextKeyedBlock implements ObservableBlock<void> {
   @override
   Map<int, int> get classificationVotes => const {};
   @override
-  Map<int, int> get carouselIdVotes => const {-1: 1};
+  CarouselVotes get carouselVotes => const CarouselVotes.none();
   @override
   Map<String, TextVote> get textVotes => const {};
   @override
@@ -101,7 +106,8 @@ class _TextKeyedBlock implements ObservableBlock<void> {
   bool get needsReclassification => false;
 }
 
-_TextKeyedBlock _block(String text, {required double left, required double top}) =>
+_TextKeyedBlock _block(String text,
+        {required double left, required double top}) =>
     _TextKeyedBlock(
       absoluteRect: AbsoluteRect.fromLTWH(left, top, 100, 20),
       originalText: text,
@@ -137,8 +143,6 @@ void main() {
     };
 
     final engine = StabilizationEngine<_TextKeyedBlock, void>(
-      stepResponse: StepResponse.coherentShift,
-      missedFrameRetention: 3,
       merger: (existing, fresh, m) {
         final role = _roleFor(fresh.absoluteRect.left);
         driftCorrectionByRole[role] = m.driftCorrection;
@@ -146,6 +150,14 @@ void main() {
         mergedTopByRole[role] = merged.absoluteRect.top;
         return merged;
       },
+      config: StabilizerConfig(
+        stepResponse: StepResponseConfig(
+          mode: StepResponse.coherentShift,
+        ),
+        retention: RetentionConfig(
+          missedFrames: 3,
+        ),
+      ),
     );
 
     // Capture 1: seed. Brand-new blocks -- no existing match, so nothing

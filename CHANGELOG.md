@@ -1,3 +1,118 @@
+## 3.0.0 - 2026-09-11
+
+The adoption release (#145): the same engine, a surface a stranger can
+pick up in an hour. Breaking; each entry carries its migration.
+
+### Changed
+- **`StabilizerConfig` replaces the engine's twelve lever parameters
+  (#149).** `StabilizationEngine(merger:, config: StabilizerConfig(...))`
+  groups the levers by stage — `matching` (band fallback), `merge`
+  (position model), `stepResponse` (mode, snap multiplier,
+  `CoherentShiftConfig`), `retention`, `diagnostics`. The two
+  calibration-dependent coherent-shift levers moved to
+  `CoherentShiftConfig.experimental`
+  (`ExperimentalCoherentShiftOptions(floorPx:, reanchorMinBlocks:)`).
+  `StabilizerConfig()` reproduces the 2.6.x defaults bit for bit (pinned
+  by `test/stabilizer_config_test.dart`); the engine's public getters
+  (`engine.coherentShiftMinBlocks` …) still report the effective values
+  and keep each lever's measured history. Every committed replay stream
+  is byte-identical. Migration:
+
+  | 2.6.x constructor parameter | 3.0 |
+  |---|---|
+  | `bandFallback:` | `config: StabilizerConfig(matching: MatchingConfig(bandFallback: …))` |
+  | `positionMergeModel:` | `merge: MergeConfig(positionModel: …)` |
+  | `stepResponse:` | `stepResponse: StepResponseConfig(mode: …)` |
+  | `snapThresholdMultiplier:` | `stepResponse: StepResponseConfig(snapThresholdMultiplier: …)` |
+  | `coherentShiftMinBlocks:` / `MinShare` / `Tolerance` / `AdoptAgreeing` | `stepResponse: StepResponseConfig(coherentShift: CoherentShiftConfig(minBlocks: …, minShare: …, tolerance: …, adoptAgreeing: …))` |
+  | `coherentShiftFloorPx:` / `coherentShiftReanchorMinBlocks:` | `… CoherentShiftConfig(experimental: ExperimentalCoherentShiftOptions(floorPx: …, reanchorMinBlocks: …))` |
+  | `missedFrameRetention:` | `retention: RetentionConfig(missedFrames: …)` |
+  | `transformEstimateMinPairs:` | `diagnostics: DiagnosticsConfig(transformEstimateMinPairs: …)` |
+
+- **`CarouselVotes` replaces the `{-1: 1}` phantom-vote sentinel (#148).**
+  `ObservableBlock.carouselIdVotes: Map<int, int>` is now
+  `carouselVotes: CarouselVotes`, and `MergeResult.updatedCarouselIdVotes`
+  is `updatedCarouselVotes`. A freshly constructed block carries
+  `CarouselVotes.none()` — no vote at all — so the engine no longer has to
+  recognise and clear a phantom `-1` entry on the first real carousel
+  observation, and a consumer's block type no longer has to default to
+  it. The engine advances the histogram with `record(hzScrollerIndex)`;
+  `hasObservedCarousel` says whether any observation placed the block in
+  a horizontal scroller. Vote counts differ from 2.x in one way: a
+  block's own non-carousel construction is no longer a vote, so a
+  block observed twice outside any carousel now tallies `{-1: 1}` where
+  2.x tallied `{-1: 2}`. Nothing in the engine or the replay reports
+  reads the counts; every committed replay stream is byte-identical.
+  The replay loader maps a recorded lone `{-1: 1}` to `none()`.
+  Migration:
+
+  | 2.6.x | 3.0 |
+  |---|---|
+  | `Map<int, int> get carouselIdVotes` | `CarouselVotes get carouselVotes` |
+  | `carouselIdVotes: const {-1: 1}` (default) | `carouselVotes: const CarouselVotes.none()` |
+  | `carouselIdVotes: {hzScrollerIndex: 1}` (own context as first vote) | `carouselVotes: CarouselVotes.seeded(hzScrollerIndex)` |
+  | `carouselIdVotes: merge.updatedCarouselIdVotes` | `carouselVotes: merge.updatedCarouselVotes` |
+  | reading the histogram | `block.carouselVotes.votes` |
+
+- **`CoordinateContext` replaces the eight coordinate getters (#147).**
+  `TrackedBlock` now declares one `coordinates` getter instead of
+  `isViewportRelative`, `isInnerScrollerChild`, `innerScrollerTop`,
+  `isHorizontalScrollChild`, `containerId`, `scrollContext`,
+  `isFromStickyElement` and `stickyFallback` (14 getters → 7). The sealed
+  type has three shapes — `CoordinateContext.page(scroll:)`,
+  `.innerScroller(top:, containerId:, scroll:)`, `.viewport(stickyFallback:)`
+  — so the combinations the engine never expected (a container id without
+  an inner scroller, a carousel child without a carousel index, an
+  inner-scroller top on a page block, sticky without viewport, viewport +
+  inner scroller) are unrepresentable; the old constructor invariant and
+  the spatial index's assert are gone. The eight names survive as derived
+  views on every block (`TrackedBlockCoordinateViews`) and on `BlockMeta`,
+  so read sites are unchanged. `CoordinateContext.fromFlags(...)` adapts a
+  consumer that still holds flat flags and throws `ArgumentError` on an
+  inexpressible combination. `BlockMeta` takes `coordinates` in place of
+  its seven coordinate fields. `DefaultTrackedBlock.copyWith` takes a whole
+  `coordinates` frame; the `containerId: null` clearing sentinel (#47) is
+  gone with the need for it. One derived value differs from 2.x: a
+  viewport-relative block's `scrollContext` is always `ScrollContext.none`
+  (the classifier already zeroed its offsets; its carousel index only fed
+  the carousel-vote histogram, which nothing reads). Every committed
+  replay stream is byte-identical (all 34,449 recorded blocks are page
+  blocks). Migration:
+
+  | 2.6.x | 3.0 |
+  |---|---|
+  | implement the eight getters | implement `CoordinateContext get coordinates` (build it with `CoordinateContext.fromFlags(...)` from existing flat fields, or one of the three constructors) |
+  | `DefaultTrackedBlock(isViewportRelative: true, ...)` | `DefaultTrackedBlock(coordinates: const CoordinateContext.viewport(), ...)` |
+  | `DefaultTrackedBlock(isInnerScrollerChild: true, innerScrollerTop: t, containerId: id, scrollContext: sc)` | `coordinates: CoordinateContext.innerScroller(top: t, containerId: id, scroll: sc)` |
+  | `DefaultTrackedBlock(isHorizontalScrollChild: true, scrollContext: ScrollContext(hzScrollerIndex: i))` | `coordinates: CoordinateContext.page(scroll: ScrollContext(hzScrollerIndex: i))` |
+  | `block.copyWith(isInnerScrollerChild: false, containerId: null)` | `block.copyWith(coordinates: const CoordinateContext.page())` |
+  | `BlockMeta(isViewportRelative:, isInnerScrollerChild:, innerScrollerTop:, containerId:, captureContext:, isFromStickyElement:, stickyFallback:, ...)` | `BlockMeta(coordinates: ..., positionConfidence:, textConfidence:)` |
+  | reading `block.isViewportRelative` etc. | unchanged (derived views) |
+
+- **`Observation` and `Track` name the two halves of a block (#146).**
+  `TrackedBlock<T>` is now `Observation<T>` — the 7 getters a consumer
+  supplies per capture — and `ObservableBlock<T>` is `Track<T>` — an
+  observation plus the 8 state getters the engine accumulates. Member
+  sets, `DefaultTrackedBlock`, `BlockMerger` and the engine's generics are
+  unchanged apart from the names (`StabilizationEngine<T extends Track<P>,
+  P>`); the coordinate-views extension is `ObservationCoordinateViews`.
+  The library files moved with them (`src/observation.dart`,
+  `src/track.dart`). The engine-owned track wrapper the issue sketched
+  (`Track<O>` holding the consumer's observation) was evaluated and not
+  adopted: the engine never reads state from a fresh block, so there is no
+  compile-time gain to buy, and it would have re-homed every consumer read
+  of `observationCount` / `isProvisional` for no adoption gain now that
+  `DefaultTrackedBlock` + `StabilizerConfig` make the quick start four
+  arguments. Migration:
+
+  | 2.6.x | 3.0 |
+  |---|---|
+  | `implements TrackedBlock<P>` | `implements Observation<P>` |
+  | `implements ObservableBlock<P>` | `implements Track<P>` |
+  | `import 'package:ocr_stabilizer/src/tracked_block.dart'` | `.../src/observation.dart` (or the barrel) |
+  | `import 'package:ocr_stabilizer/src/observable_block.dart'` | `.../src/track.dart` (or the barrel) |
+  | `TrackedBlockCoordinateViews` | `ObservationCoordinateViews` |
+
 ## 2.6.1 - 2026-09-11
 
 ### Changed

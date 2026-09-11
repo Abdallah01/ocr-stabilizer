@@ -19,7 +19,12 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 void main() {
   final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
     merger: (existing, fresh, merge) => existing.applyMerge(merge),
-    bandFallback: const BandFallbackConfig(mode: BandFallbackMode.observeOnly),
+    config: StabilizerConfig(
+      matching: MatchingConfig(
+        bandFallback:
+            const BandFallbackConfig(mode: BandFallbackMode.observeOnly),
+      ),
+    ),
   );
 
   // First capture: two text blocks observed.

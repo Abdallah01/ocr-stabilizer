@@ -11,6 +11,7 @@ import 'ocr_block.dart';
 import 'types/absolute_rect.dart';
 import 'types/geometry.dart' show Offset, Rect;
 import 'types/confidence_types.dart';
+import 'types/coordinate_context.dart';
 import 'types/scroll_context.dart';
 import 'types/sticky_fallback.dart';
 
@@ -348,24 +349,37 @@ class BlockClassifierService {
         );
       }
 
-      // #8: Use nested ScrollContext and StickyFallback types
-      final meta = BlockMeta(
-        isViewportRelative: insideFixedSticky,
-        isInnerScrollerChild: isIcChild,
-        innerScrollerTop: icTop,
-        containerId: isIcChild ? input.innerScrollerContainerId : null,
-        captureContext: ScrollContext(
+      // One sealed frame per group (3.0, #147). A fixed/sticky group is
+      // viewport-relative and never a carousel child; a sticky origin
+      // carries the fallback context a consumer demotes it to.
+      final CoordinateContext coordinates;
+      if (insideFixedSticky) {
+        coordinates = CoordinateContext.viewport(
+          stickyFallback: fromStickyElement
+              ? StickyFallback(
+                  scrollY: fallbackScrollY,
+                  scrollX: fallbackScrollX,
+                  isIc: fallbackIsIc,
+                  hzScrollerIndex: matchedHzIndex,
+                )
+              : null,
+        );
+      } else {
+        final scroll = ScrollContext(
           scrollY: effectiveScrollY,
           scrollX: effectiveScrollX,
           hzScrollerIndex: matchedHzIndex,
-        ),
-        isFromStickyElement: fromStickyElement,
-        stickyFallback: StickyFallback(
-          scrollY: fallbackScrollY,
-          scrollX: fallbackScrollX,
-          isIc: fallbackIsIc,
-          hzScrollerIndex: matchedHzIndex,
-        ),
+        );
+        coordinates = isIcChild
+            ? CoordinateContext.innerScroller(
+                top: icTop,
+                containerId: input.innerScrollerContainerId,
+                scroll: scroll,
+              )
+            : CoordinateContext.page(scroll: scroll);
+      }
+      final meta = BlockMeta(
+        coordinates: coordinates,
         positionConfidence: PositionConfidence.from(posConf),
         textConfidence: TextConfidence.from(txtConf),
       );

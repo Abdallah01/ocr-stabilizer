@@ -20,8 +20,12 @@ StabilizationEngine<DefaultTrackedBlock<void>, void> _engine({
 }) {
   return StabilizationEngine<DefaultTrackedBlock<void>, void>(
     merger: (existing, fresh, merge) => existing.applyMerge(merge),
-    missedFrameRetention: retention,
     spatialIndex: index,
+    config: StabilizerConfig(
+      retention: RetentionConfig(
+        missedFrames: retention,
+      ),
+    ),
   );
 }
 
@@ -197,8 +201,7 @@ void main() {
     // The resolver's per-script NMS threshold gives CJK-dominant text the
     // LOOSEST value (0.35); reusing it verbatim let a sliver covering 40%
     // of a CJK block evict it while an equal Latin block survived.
-    test('a sliver covering 40% of a retained CJK block does not evict it',
-        () {
+    test('a sliver covering 40% of a retained CJK block does not evict it', () {
       final engine = _engine(retention: 2);
       final cjk = at(const Rect.fromLTWH(10, 100, 200, 30), '这是一段中文正文');
       engine.stabilize([cjk]);
@@ -229,12 +232,12 @@ void main() {
           absoluteRect: AbsoluteRect(const Rect.fromLTWH(10, 100, 200, 30)),
           payload: null,
           originalText: text,
-          isHorizontalScrollChild: true,
-          scrollContext: ScrollContext(
+          coordinates: CoordinateContext.page(
+              scroll: ScrollContext(
             scrollY: 0,
             scrollX: 0,
             hzScrollerIndex: index,
-          ),
+          )),
         );
 
     test('a block from another carousel never evicts a retained one', () {
@@ -257,8 +260,7 @@ void main() {
     // 3×3 cells around its centre: a tall paragraph covers a small cached
     // block near its top edge whose cell is far from the paragraph's
     // centre cell.
-    test('a tall fresh paragraph evicts a covered block near its far edge',
-        () {
+    test('a tall fresh paragraph evicts a covered block near its far edge', () {
       final engine = _engine(retention: 2); // default 200 px buckets
       engine.stabilize([
         at(const Rect.fromLTWH(10, 55, 200, 20), 'hello world'), // centre y 65

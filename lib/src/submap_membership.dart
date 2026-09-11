@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
 // SPDX-License-Identifier: MIT
 
-import 'tracked_block.dart';
+import 'observation.dart';
 import 'types/space_key.dart';
 
 /// Strategy for determining which coordinate submap a block belongs to.
@@ -25,7 +25,7 @@ abstract interface class SubmapMembership {
   /// Returns the [SpaceKey] that determines which drift submap this block's
   /// observations are recorded in. Blocks with the same key share drift
   /// corrections; blocks with different keys are independent.
-  SpaceKey spaceKeyFor(TrackedBlock block);
+  SpaceKey spaceKeyFor(Observation block);
 
   /// Whether this block should be excluded from drift observation recording.
   ///
@@ -33,7 +33,7 @@ abstract interface class SubmapMembership {
   /// median) but don't contribute observations. Use this for blocks whose
   /// position changes aren't caused by scroll drift (e.g. viewport-fixed
   /// elements, animating carousels).
-  bool shouldExcludeFromObservation(TrackedBlock block);
+  bool shouldExcludeFromObservation(Observation block);
 
   /// Size of each scroll region in layout pixels.
   ///

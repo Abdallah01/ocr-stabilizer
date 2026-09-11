@@ -46,7 +46,7 @@ const int kMedianWarmUpBlocks = 4;
 /// Median = the upper-middle element of the sorted heights (the
 /// consumer's `heights[n ~/ 2]`), doubled, clamped to the consumer's
 /// 80–220 px range.
-Buckets? medianHeightBuckets(Iterable<TrackedBlock> tracked) {
+Buckets? medianHeightBuckets(Iterable<Observation> tracked) {
   final heights = [for (final b in tracked) b.absoluteRect.raw.height]..sort();
   if (heights.length < kMedianWarmUpBlocks) return null;
   final size = (heights[heights.length ~/ 2] * 2).clamp(80.0, 220.0);
@@ -329,12 +329,6 @@ ReplayResult replay(
 
   late final StabilizationEngine<ReplayBlock, Object> engine;
   engine = StabilizationEngine<ReplayBlock, Object>(
-    bandFallback: band,
-    positionMergeModel: model,
-    stepResponse: stepResponse,
-    coherentShiftFloorPx: coherentShiftFloorPx,
-    coherentShiftReanchorMinBlocks: coherentShiftReanchorMinBlocks,
-    coherentShiftAdoptAgreeing: coherentShiftAdoptAgreeing,
     merger: (existing, fresh, m) {
       final merged = existing.applyMerge(m);
       final e = existing.absoluteRect.raw.center;
@@ -376,6 +370,24 @@ ReplayResult replay(
       }
       return merged;
     },
+    config: StabilizerConfig(
+      matching: MatchingConfig(
+        bandFallback: band,
+      ),
+      merge: MergeConfig(
+        positionModel: model,
+      ),
+      stepResponse: StepResponseConfig(
+        mode: stepResponse,
+        coherentShift: CoherentShiftConfig(
+          adoptAgreeing: coherentShiftAdoptAgreeing,
+          experimental: ExperimentalCoherentShiftOptions(
+            floorPx: coherentShiftFloorPx,
+            reanchorMinBlocks: coherentShiftReanchorMinBlocks,
+          ),
+        ),
+      ),
+    ),
   );
 
   if (effectiveViewport != null) {

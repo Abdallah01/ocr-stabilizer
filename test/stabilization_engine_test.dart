@@ -10,22 +10,29 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 // TEST BLOCK STUB
 // =============================================================================
 
-class _TestBlock implements ObservableBlock<Never> {
+class _TestBlock implements Track<Never> {
+  // 3.0 (#147): the engine reads the frame through this one getter; the
+  // flat fields below stay as this fixture's construction convenience.
+  @override
+  CoordinateContext get coordinates => CoordinateContext.fromFlags(
+        isViewportRelative: isViewportRelative,
+        isInnerScrollerChild: isInnerScrollerChild,
+        innerScrollerTop: innerScrollerTop,
+        isHorizontalScrollChild: isHorizontalScrollChild,
+        containerId: containerId,
+        scrollContext: scrollContext,
+        isFromStickyElement: isFromStickyElement,
+        stickyFallback: stickyFallback,
+      );
   @override
   final AbsoluteRect absoluteRect;
-  @override
   final ContainerId? containerId;
-  @override
   final bool isViewportRelative;
-  @override
   final bool isInnerScrollerChild;
-  @override
   final bool isHorizontalScrollChild;
-  @override
   final double innerScrollerTop;
   @override
   final String originalText;
-  @override
   final bool isFromStickyElement;
   @override
   final PositionConfidence positionConfidence;
@@ -38,7 +45,7 @@ class _TestBlock implements ObservableBlock<Never> {
   @override
   final Map<int, int> classificationVotes;
   @override
-  final Map<int, int> carouselIdVotes;
+  final CarouselVotes carouselVotes;
   @override
   final Map<String, TextVote> textVotes;
   @override
@@ -75,7 +82,7 @@ class _TestBlock implements ObservableBlock<Never> {
     this.sourceQuality = 0,
     this.observationCount = 1,
     this.classificationVotes = const {},
-    this.carouselIdVotes = const {-1: 1},
+    this.carouselVotes = const CarouselVotes.none(),
     this.textVotes = const {},
     this.isProvisional = false,
     this.provisionalCapturesRemaining = 0,
@@ -90,14 +97,12 @@ class _TestBlock implements ObservableBlock<Never> {
     this.stickyFallbackHzIndex = -1,
   });
 
-  @override
   ScrollContext get scrollContext => ScrollContext(
         scrollY: captureScrollY,
         scrollX: captureScrollX,
         hzScrollerIndex: hzScrollerIndex,
       );
 
-  @override
   StickyFallback get stickyFallback => StickyFallback(
         scrollY: stickyFallbackScrollY,
         scrollX: stickyFallbackScrollX,
@@ -113,7 +118,7 @@ class _TestBlock implements ObservableBlock<Never> {
     int? sourceQuality,
     int? observationCount,
     Map<int, int>? classificationVotes,
-    Map<int, int>? carouselIdVotes,
+    CarouselVotes? carouselVotes,
     Map<String, TextVote>? textVotes,
     bool? isProvisional,
     int? provisionalCapturesRemaining,
@@ -133,7 +138,7 @@ class _TestBlock implements ObservableBlock<Never> {
       sourceQuality: sourceQuality ?? this.sourceQuality,
       observationCount: observationCount ?? this.observationCount,
       classificationVotes: classificationVotes ?? this.classificationVotes,
-      carouselIdVotes: carouselIdVotes ?? this.carouselIdVotes,
+      carouselVotes: carouselVotes ?? this.carouselVotes,
       textVotes: textVotes ?? this.textVotes,
       isProvisional: isProvisional ?? this.isProvisional,
       provisionalCapturesRemaining:
@@ -173,7 +178,7 @@ _TestBlock _testMerger(
     textVotes: merge.updatedTextVotes,
     classificationVotes: merge.updatedClassificationVotes,
     needsReclassification: merge.needsReclassification,
-    carouselIdVotes: merge.updatedCarouselIdVotes,
+    carouselVotes: merge.updatedCarouselVotes,
     observationCount: merge.observationCount,
     isProvisional: merge.isProvisional,
     provisionalCapturesRemaining: merge.provisionalCapturesRemaining,
@@ -202,7 +207,7 @@ _TestBlock _block({
   bool isHz = false,
   int hzScrollerIndex = -1,
   Map<int, int>? classVotes,
-  Map<int, int>? carouselVotes,
+  CarouselVotes? carouselVotes,
   Map<String, TextVote>? textVotes,
   bool isProvisional = false,
   int provisionalRemaining = 0,
@@ -217,10 +222,12 @@ _TestBlock _block({
     observationCount: observationCount,
     isViewportRelative: isVR,
     isInnerScrollerChild: isIC,
-    isHorizontalScrollChild: isHz,
-    hzScrollerIndex: hzScrollerIndex,
+    // 3.0 (#147): a carousel child always has an index, and an index
+    // always makes a carousel child — keep the two in step.
+    isHorizontalScrollChild: isHz || hzScrollerIndex >= 0,
+    hzScrollerIndex: isHz && hzScrollerIndex < 0 ? 0 : hzScrollerIndex,
     classificationVotes: classVotes ?? {10: 1},
-    carouselIdVotes: carouselVotes ?? {-1: 1},
+    carouselVotes: carouselVotes ?? const CarouselVotes.none(),
     textVotes: textVotes ?? {},
     isProvisional: isProvisional,
     provisionalCapturesRemaining: provisionalRemaining,
@@ -248,7 +255,11 @@ StabilizationEngine<_TestBlock, Never> _createEngine({
           driftTracker: driftTracker,
           spatialIndex: spatialIndex,
           contextualCheck: contextualCheck,
-          positionMergeModel: positionMergeModel,
+          config: StabilizerConfig(
+            merge: MergeConfig(
+              positionModel: positionMergeModel,
+            ),
+          ),
         );
 }
 
@@ -268,7 +279,8 @@ void main() {
       expect(result.stableBlocks[0].observationCount, 1);
     });
 
-    test('fresh block matching existing merges position (legacy numerics '
+    test(
+        'fresh block matching existing merges position (legacy numerics '
         'pinned — the 1.0 changelog promises them unchanged)', () {
       final existing = _block(text: '测试文本内容', posConf: 0.5);
       final spatialIndex = SpatialBlockIndex<_TestBlock>();
@@ -466,10 +478,10 @@ void main() {
       expect(result.invalidatedTexts, contains('测试文本内容'));
     });
 
-    test('carousel vote clears phantom -1 on first real observation', () {
+    test('first real carousel observation is the only vote (#148)', () {
       final existing = _block(
         text: '测试文本内容',
-        carouselVotes: {-1: 1},
+        carouselVotes: const CarouselVotes.none(),
         isHz: true,
         hzScrollerIndex: 2,
       );
@@ -477,9 +489,9 @@ void main() {
       final existingWithHz = _TestBlock(
         absoluteRect: existing.absoluteRect,
         originalText: existing.originalText,
-        isHorizontalScrollChild: true,
-        hzScrollerIndex: -1, // was non-carousel initially
-        carouselIdVotes: {-1: 1},
+        isHorizontalScrollChild: false, // was non-carousel initially
+        hzScrollerIndex: -1,
+        carouselVotes: const CarouselVotes.none(),
       );
       final spatialIndex = SpatialBlockIndex<_TestBlock>();
       spatialIndex.add(existingWithHz);
@@ -494,9 +506,8 @@ void main() {
 
       final result = engine.stabilize([fresh]);
       final merged = result.stableBlocks[0];
-      // Phantom -1 cleared, replaced with carousel 2
-      expect(merged.carouselIdVotes.containsKey(-1), false);
-      expect(merged.carouselIdVotes[2], 1);
+      // No phantom -1 to clear (3.0, #148): carousel 2 is the only vote.
+      expect(merged.carouselVotes.votes, {2: 1});
     });
 
     test('text votes bounded to 5 entries', () {
@@ -603,9 +614,11 @@ void main() {
       expect(merged.absoluteRect.top, closeTo(105.0, 1.0));
     });
 
-    test('carousel vote does NOT clear phantom when multiple votes exist', () {
+    test('a real non-carousel vote is kept when a carousel vote lands', () {
       // Existing already has votes for -1 and carousel 2
-      final existing = _block(text: '测试文本内容', carouselVotes: {-1: 1, 2: 1});
+      final existing = _block(
+          text: '测试文本内容',
+          carouselVotes: CarouselVotes.fromHistogram({-1: 1, 2: 1}));
       final spatialIndex = SpatialBlockIndex<_TestBlock>();
       spatialIndex.add(existing);
 
@@ -614,9 +627,8 @@ void main() {
 
       final result = engine.stabilize([fresh]);
       final merged = result.stableBlocks[0];
-      // -1 should NOT be cleared (length > 1 guard)
-      expect(merged.carouselIdVotes.containsKey(-1), true);
-      expect(merged.carouselIdVotes[3], 1);
+      // -1 is real history here, not the 2.x phantom — it stays.
+      expect(merged.carouselVotes.votes, {-1: 1, 2: 1, 3: 1});
     });
 
     test('text vote eviction removes lowest-score entry', () {

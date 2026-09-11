@@ -1,17 +1,16 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
 // SPDX-License-Identifier: MIT
 
+import 'carousel_votes.dart';
 import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
-import 'observable_block.dart';
+import 'track.dart';
 import 'text_vote.dart';
 import 'types/absolute_rect.dart';
 import 'types/confidence_types.dart';
-import 'types/container_id.dart';
-import 'types/scroll_context.dart';
-import 'types/sticky_fallback.dart';
+import 'types/coordinate_context.dart';
 
-/// Concrete reference implementation of [ObservableBlock] with documented
+/// Concrete reference implementation of [Track] with documented
 /// defaults for every required field.
 ///
 /// New integrators can use this directly for the simplest case (text-only,
@@ -29,10 +28,9 @@ import 'types/sticky_fallback.dart';
 /// Defaults that warrant attention because the engine treats them as
 /// load-bearing:
 ///
-/// - [carouselIdVotes] defaults to `{-1: 1}` — **not** `{}`. The engine's
-///   carousel-vote clearing logic checks for the phantom `-1: 1` entry as
-///   the sentinel "this block has never been observed inside a carousel."
-///   An empty map will misclassify the first real carousel observation.
+/// - [carouselVotes] defaults to [CarouselVotes.none] (no observation yet).
+///   A consumer whose block's own construction should count as an
+///   observation passes `CarouselVotes.seeded(hzScrollerIndex)` instead.
 /// - [classificationVotes] defaults to `{}` because the first vote is
 ///   accumulated when the engine first merges this block.
 /// - [textVotes] defaults to `{}` for the same reason.
@@ -42,39 +40,18 @@ import 'types/sticky_fallback.dart';
 ///   [PositionConfidence.groundTruth] / [TextConfidence.groundTruth] —
 ///   appropriate for deterministic origins (DOM extraction). OCR producers
 ///   should override with [PositionConfidence.from] / [TextConfidence.from].
-class DefaultTrackedBlock<T> implements ObservableBlock<T> {
+class DefaultTrackedBlock<T> implements Track<T> {
   @override
   final AbsoluteRect absoluteRect;
 
   @override
-  final ContainerId? containerId;
-
-  @override
-  final bool isViewportRelative;
-
-  @override
-  final bool isInnerScrollerChild;
-
-  @override
-  final double innerScrollerTop;
-
-  @override
-  final bool isHorizontalScrollChild;
+  final CoordinateContext coordinates;
 
   @override
   final T payload;
 
   @override
   final String originalText;
-
-  @override
-  final ScrollContext scrollContext;
-
-  @override
-  final bool isFromStickyElement;
-
-  @override
-  final StickyFallback stickyFallback;
 
   @override
   final PositionConfidence positionConfidence;
@@ -92,7 +69,7 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
   final Map<int, int> classificationVotes;
 
   @override
-  final Map<int, int> carouselIdVotes;
+  final CarouselVotes carouselVotes;
 
   @override
   final Map<String, TextVote> textVotes;
@@ -112,46 +89,26 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
   /// Construct a tracked block. All fields are optional except [absoluteRect]
   /// and [payload] — defaults are documented in the class docstring.
   ///
-  /// Throws [ArgumentError] if the [TrackedBlock] invariant is violated:
-  /// when [containerId] is non-null, [isInnerScrollerChild] must be true.
-  /// Mismatched flags would misclassify the block into the wrong drift
-  /// coordinate space (see TrackedBlock). Uses `throw` rather than `assert`
-  /// per project policy (feedback_assert_vs_throw_in_storage) — this is the
-  /// public reference implementation of a state-owning type, so the check
-  /// must hold in release builds as well as debug.
+  /// The coordinate frame is one [CoordinateContext] (3.0, #147); the
+  /// combinations the 2.x flags had to reject at construction are now
+  /// unrepresentable, so there is no invariant check here.
   DefaultTrackedBlock({
     required this.absoluteRect,
     required this.payload,
-    this.containerId,
-    this.isViewportRelative = false,
-    this.isInnerScrollerChild = false,
-    this.innerScrollerTop = 0,
-    this.isHorizontalScrollChild = false,
+    this.coordinates = const CoordinateContext.page(),
     this.originalText = '',
-    this.scrollContext = ScrollContext.none,
-    this.isFromStickyElement = false,
-    this.stickyFallback = StickyFallback.none,
     this.positionConfidence = PositionConfidence.groundTruth,
     this.textConfidence = TextConfidence.groundTruth,
     this.sourceQuality = 0,
     this.observationCount = 1,
     this.classificationVotes = const {},
-    this.carouselIdVotes = const {-1: 1},
+    this.carouselVotes = const CarouselVotes.none(),
     this.textVotes = const {},
     this.isProvisional = false,
     this.provisionalCapturesRemaining = 0,
     this.groupSignature = 0,
     this.needsReclassification = false,
   }) {
-    if (containerId != null && !isInnerScrollerChild) {
-      throw ArgumentError(
-        'TrackedBlock invariant: containerId requires isInnerScrollerChild '
-        '(got containerId=$containerId, isInnerScrollerChild=false). '
-        'Setting containerId without isInnerScrollerChild misclassifies the '
-        'block into the wrong drift coordinate space and silently corrupts '
-        'drift corrections.',
-      );
-    }
     // Confidence-range guard: throws ArgumentError if either value is not
     // a finite double in [0.0, 1.0]. Uses `throw` (not `assert`) so it
     // holds in release builds — the unchecked primary `extension type`
@@ -161,37 +118,22 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
     assertConfidenceRange('textConfidence', textConfidence.raw);
   }
 
-  /// Sentinel distinguishing "parameter not passed" from an explicit null
-  /// in [copyWith] — `containerId ?? this.containerId` could never *clear*
-  /// the field, which made IC demotion via `copyWith` impossible (#47).
-  static const Object _unset = Object();
-
   /// Per-field immutable update. Pass only the fields that change.
   ///
-  /// [containerId] accepts an explicit `null` to clear the field — required
-  /// when demoting an inner-scroller block
-  /// (`copyWith(isInnerScrollerChild: false, containerId: null)`), because
-  /// the constructor rejects `containerId` without `isInnerScrollerChild`.
-  /// Passing a non-null value must be a [ContainerId]; omitting the
-  /// parameter keeps the current value.
+  /// To demote an inner-scroller block to page coordinates, pass a whole
+  /// new frame: `copyWith(coordinates: const CoordinateContext.page())`.
+  /// (Before 3.0 this took a `containerId: null` sentinel dance — #47.)
   DefaultTrackedBlock<T> copyWith({
     AbsoluteRect? absoluteRect,
-    Object? containerId = _unset,
-    bool? isViewportRelative,
-    bool? isInnerScrollerChild,
-    double? innerScrollerTop,
-    bool? isHorizontalScrollChild,
+    CoordinateContext? coordinates,
     T? payload,
     String? originalText,
-    ScrollContext? scrollContext,
-    bool? isFromStickyElement,
-    StickyFallback? stickyFallback,
     PositionConfidence? positionConfidence,
     TextConfidence? textConfidence,
     int? sourceQuality,
     int? observationCount,
     Map<int, int>? classificationVotes,
-    Map<int, int>? carouselIdVotes,
+    CarouselVotes? carouselVotes,
     Map<String, TextVote>? textVotes,
     bool? isProvisional,
     int? provisionalCapturesRemaining,
@@ -201,24 +143,14 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
     return DefaultTrackedBlock<T>(
       absoluteRect: absoluteRect ?? this.absoluteRect,
       payload: payload ?? this.payload,
-      containerId: identical(containerId, _unset)
-          ? this.containerId
-          : containerId as ContainerId?,
-      isViewportRelative: isViewportRelative ?? this.isViewportRelative,
-      isInnerScrollerChild: isInnerScrollerChild ?? this.isInnerScrollerChild,
-      innerScrollerTop: innerScrollerTop ?? this.innerScrollerTop,
-      isHorizontalScrollChild:
-          isHorizontalScrollChild ?? this.isHorizontalScrollChild,
+      coordinates: coordinates ?? this.coordinates,
       originalText: originalText ?? this.originalText,
-      scrollContext: scrollContext ?? this.scrollContext,
-      isFromStickyElement: isFromStickyElement ?? this.isFromStickyElement,
-      stickyFallback: stickyFallback ?? this.stickyFallback,
       positionConfidence: positionConfidence ?? this.positionConfidence,
       textConfidence: textConfidence ?? this.textConfidence,
       sourceQuality: sourceQuality ?? this.sourceQuality,
       observationCount: observationCount ?? this.observationCount,
       classificationVotes: classificationVotes ?? this.classificationVotes,
-      carouselIdVotes: carouselIdVotes ?? this.carouselIdVotes,
+      carouselVotes: carouselVotes ?? this.carouselVotes,
       textVotes: textVotes ?? this.textVotes,
       isProvisional: isProvisional ?? this.isProvisional,
       provisionalCapturesRemaining:
@@ -255,7 +187,7 @@ class DefaultTrackedBlock<T> implements ObservableBlock<T> {
       textVotes: merge.updatedTextVotes,
       classificationVotes: merge.updatedClassificationVotes,
       needsReclassification: merge.needsReclassification,
-      carouselIdVotes: merge.updatedCarouselIdVotes,
+      carouselVotes: merge.updatedCarouselVotes,
       observationCount: merge.observationCount,
       isProvisional: merge.isProvisional,
       provisionalCapturesRemaining: merge.provisionalCapturesRemaining,

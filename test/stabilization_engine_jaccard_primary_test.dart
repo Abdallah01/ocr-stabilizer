@@ -69,8 +69,13 @@ void main() {
       final index = SpatialBlockIndex<DefaultTrackedBlock<void>>();
       final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
         merger: (existing, fresh, merge) => existing.applyMerge(merge),
-        bandFallback: const BandFallbackConfig(mode: BandFallbackMode.admit),
         spatialIndex: index,
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback:
+                const BandFallbackConfig(mode: BandFallbackMode.admit),
+          ),
+        ),
       );
       // Candidate must clear the default candidateObservationFloor (4).
       index.add(DefaultTrackedBlock<void>(

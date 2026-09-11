@@ -22,7 +22,7 @@
 
 import 'types/geometry.dart' show Rect;
 
-import 'tracked_block.dart';
+import 'observation.dart';
 
 /// Read-only query surface of a [SpatialBlockIndex] (#96).
 ///
@@ -35,7 +35,7 @@ import 'tracked_block.dart';
 /// mutation, and with it the guarded-construction responsibility
 /// (`PositionConfidence.from` / `TextConfidence.from`, or
 /// [DefaultTrackedBlock]'s validating constructor).
-abstract interface class SpatialIndexView<T extends TrackedBlock> {
+abstract interface class SpatialIndexView<T extends Observation> {
   /// Current bucket width (for testing).
   double get bucketWidth;
 
@@ -73,7 +73,7 @@ abstract interface class SpatialIndexView<T extends TrackedBlock> {
 /// index.remove(block);
 /// index.rebuild(allBlocks);
 /// ```
-class SpatialBlockIndex<T extends TrackedBlock> implements SpatialIndexView<T> {
+class SpatialBlockIndex<T extends Observation> implements SpatialIndexView<T> {
   final Map<String, List<T>> _cells = {};
 
   // ── Adaptive bucket dimensions ──
@@ -161,7 +161,7 @@ class SpatialBlockIndex<T extends TrackedBlock> implements SpatialIndexView<T> {
   /// For auxiliary short-lived grids (e.g. the engine's per-batch NMS
   /// index, #55) that must quantize identically to a primary index
   /// without recomputing from viewport dimensions.
-  void adoptBucketSizes(SpatialBlockIndex<TrackedBlock> other) {
+  void adoptBucketSizes(SpatialBlockIndex<Observation> other) {
     _bucketWidth = other._bucketWidth;
     _bucketHeight = other._bucketHeight;
   }
@@ -191,10 +191,6 @@ class SpatialBlockIndex<T extends TrackedBlock> implements SpatialIndexView<T> {
 
   /// Add [block] to the spatial index.
   void add(T block) {
-    assert(
-      block.containerId == null || block.isInnerScrollerChild,
-      'TrackedBlock invariant: containerId requires isInnerScrollerChild',
-    );
     final absKey = absoluteCellKey(block);
     (_cells[absKey] ??= []).add(block);
     if (block.isInnerScrollerChild) {

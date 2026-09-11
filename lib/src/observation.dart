@@ -1,0 +1,90 @@
+// SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
+// SPDX-License-Identifier: MIT
+
+import 'types/absolute_rect.dart';
+import 'types/confidence_types.dart';
+import 'types/container_id.dart';
+import 'types/coordinate_context.dart';
+import 'types/scroll_context.dart';
+import 'types/sticky_fallback.dart';
+
+/// What a consumer supplies per capture: one recognised block — its rect,
+/// the frame that rect is in, its text, the two confidences, a source
+/// quality tier, and an opaque payload.
+///
+/// This is the whole input contract (7 getters). The engine's accumulated
+/// state — observation count, votes, provisional status — lives on [Track],
+/// which the engine reads and writes through the consumer's merger. A
+/// consumer that does not want to hold that state itself feeds
+/// `DefaultTrackedBlock` instances, which carry it with sane defaults.
+///
+/// The generic [T] carries an opaque payload the engine passes through without
+/// reading — use it for translation data, styling, or any app-specific fields.
+///
+/// **Coordinate frame (3.0, #147):** [coordinates] says which frame
+/// [absoluteRect] is expressed in — page, inner scroller, or viewport. The
+/// eight 2.x flag getters (`isViewportRelative`, `isInnerScrollerChild`,
+/// `innerScrollerTop`, `isHorizontalScrollChild`, `containerId`,
+/// `scrollContext`, `isFromStickyElement`, `stickyFallback`) are derived
+/// views, available on every block through [ObservationCoordinateViews];
+/// implement the one getter, read whichever view is convenient.
+abstract interface class Observation<T> {
+  /// World-space bounding box in absolute coordinates.
+  AbsoluteRect get absoluteRect;
+
+  /// The frame [absoluteRect] is expressed in.
+  CoordinateContext get coordinates;
+
+  /// Opaque payload — the engine carries it without reading.
+  T get payload;
+
+  // ── Textual (identity) ──
+
+  /// Original OCR text (source language) for deduplication and similarity.
+  String get originalText;
+
+  // ── Confidence ──
+
+  /// Position accuracy confidence. Range [0, 1].
+  PositionConfidence get positionConfidence;
+
+  /// OCR text confidence. Range [0, 1].
+  TextConfidence get textConfidence;
+
+  // ── Source quality ──
+
+  /// Higher value = higher quality source. Engine prefers the higher tier
+  /// during merge. Consumer defines the scale.
+  int get sourceQuality;
+}
+
+/// The 2.x coordinate getters, derived from [Observation.coordinates].
+///
+/// The engine reads these; a consumer may too. A block type that declares
+/// members of the same names shadows them for its own static type, which is
+/// harmless as long as they agree with its [Observation.coordinates].
+extension ObservationCoordinateViews<T> on Observation<T> {
+  /// Whether this block uses viewport-relative coordinates (fixed/sticky).
+  bool get isViewportRelative => coordinates.isViewportRelative;
+
+  /// Whether this block is inside a vertical inner-scroller container.
+  bool get isInnerScrollerChild => coordinates.isInnerScrollerChild;
+
+  /// Page-absolute top of the inner-scroller element at capture time.
+  double get innerScrollerTop => coordinates.innerScrollerTop;
+
+  /// Whether this block is inside a horizontal scroll container (carousel).
+  bool get isHorizontalScrollChild => coordinates.isHorizontalScrollChild;
+
+  /// Stable container identifier when the host can compute one.
+  ContainerId? get containerId => coordinates.containerId;
+
+  /// Scroll offsets and carousel identity at capture time.
+  ScrollContext get scrollContext => coordinates.scrollContext;
+
+  /// Whether this block was captured from a `position:sticky` element.
+  bool get isFromStickyElement => coordinates.isFromStickyElement;
+
+  /// Fallback coordinate context if demoted from viewport-relative.
+  StickyFallback get stickyFallback => coordinates.stickyFallback;
+}

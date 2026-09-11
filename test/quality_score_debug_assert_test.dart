@@ -4,17 +4,17 @@
 import 'package:test/test.dart';
 
 import 'package:ocr_stabilizer/src/overlap_resolver.dart';
-import 'package:ocr_stabilizer/src/tracked_block.dart';
+import 'package:ocr_stabilizer/src/observation.dart';
 import 'package:ocr_stabilizer/src/types/confidence_types.dart';
 
-/// Minimal `TrackedBlock` implementor that bypasses `DefaultTrackedBlock`'s
+/// Minimal `Observation` implementor that bypasses `DefaultTrackedBlock`'s
 /// ctor throw. Lets us hand a NaN-confidence block directly to
 /// `qualityScore` to exercise the debug assert.
 ///
 /// `qualityScore` reads exactly two fields — `positionConfidence` and
 /// `textConfidence` — so we use `noSuchMethod` to stub the rest of the
-/// `TrackedBlock` surface without writing 20+ getter overrides.
-class _NaNConfBlock implements TrackedBlock {
+/// `Observation` surface without writing 20+ getter overrides.
+class _NaNConfBlock implements Observation {
   _NaNConfBlock(
       {this.posIsNan = false,
       this.txtIsNan = false,

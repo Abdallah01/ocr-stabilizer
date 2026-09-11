@@ -92,7 +92,11 @@ void main() {
 
     final engine = StabilizationEngine<DefaultTrackedBlock<void>, void>(
       merger: (existing, fresh, merge) => existing.applyMerge(merge),
-      missedFrameRetention: 2,
+      config: StabilizerConfig(
+        retention: RetentionConfig(
+          missedFrames: 2,
+        ),
+      ),
     );
 
     var maxPopulation = 0;

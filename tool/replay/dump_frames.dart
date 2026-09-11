@@ -90,9 +90,12 @@ void main(List<String> args) {
   }
   final stream = CaptureStream.parse(File(positional[0]).readAsLinesSync());
   final engine = StabilizationEngine<ReplayBlock, Object>(
-    positionMergeModel: PositionMergeModel.agreementWeighted,
-    missedFrameRetention: retention,
     merger: (existing, fresh, m) => existing.applyMerge(m),
+    config: StabilizerConfig(
+      merge: const MergeConfig(
+          positionModel: PositionMergeModel.agreementWeighted),
+      retention: RetentionConfig(missedFrames: retention),
+    ),
   );
   final viewport = viewportOverride ?? stream.viewport;
   if (viewport == null) {
@@ -134,8 +137,8 @@ void main(List<String> args) {
       'tracked': [for (final b in engine.spatialIndex.allBlocks) enc(b)],
     });
   }
-  File(positional[1]).writeAsStringSync(const JsonEncoder.withIndent(' ')
-      .convert({
+  File(positional[1])
+      .writeAsStringSync(const JsonEncoder.withIndent(' ').convert({
     'source': positional[0],
     'viewport': viewport == null
         ? null

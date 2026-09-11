@@ -34,8 +34,8 @@ void main() {
       expect(b.originalText, 'hello world');
       expect(b.absoluteRect.raw.left, 0);
       expect(b.positionConfidence.raw, 0.5);
-      expect(b.carouselIdVotes, {-1: 1},
-          reason: 'absent carVotes must map to the phantom sentinel');
+      expect(b.carouselVotes, const CarouselVotes.none(),
+          reason: 'absent carVotes = no observation (3.0, #148)');
     });
 
     // 2.1.0 — the meta record may carry the producer's CSS viewport so the
@@ -86,8 +86,19 @@ void main() {
     test('rejects malformed and non-positive values', () {
       // The CLI override must carry the same constraint as meta.vp: a zero
       // or negative viewport reached updateViewport before this fix.
-      for (final bad in ['0x587', '360x0', '360x-1', '-1x587', 'abc',
-          '360x', 'x587', '360', '360x587x1', '', ' 360x587']) {
+      for (final bad in [
+        '0x587',
+        '360x0',
+        '360x-1',
+        '-1x587',
+        'abc',
+        '360x',
+        'x587',
+        '360',
+        '360x587x1',
+        '',
+        ' 360x587'
+      ]) {
         expect(viewportFromWxH(bad), isNull, reason: 'input: "$bad"');
       }
     });
@@ -140,8 +151,7 @@ void main() {
   group('bucket policy (#113, 2.2.0)', () {
     // Inline stream: five 50 px-tall blocks per capture so the median
     // policy warms up (>= 4 tracked blocks) after the first capture.
-    String block(int i) =>
-        '{"rect": [0, ${i * 100}, 300, ${i * 100 + 50}], '
+    String block(int i) => '{"rect": [0, ${i * 100}, 300, ${i * 100 + 50}], '
         '"otext": "paragraph number $i", "pconf": 0.5, "tconf": 0.5, '
         '"obsN": 1, "prov": false, "provN": 0}';
     String obs(int cap) =>
@@ -149,7 +159,8 @@ void main() {
         '${[for (var i = 0; i < 5; i++) block(i)].join(', ')}]}';
     const meta = '{"t": "meta", "v": 1, "ts": 0, "vp": [360, 587]}';
 
-    test('loader: meta.bk is carried onto every later batch, and a change '
+    test(
+        'loader: meta.bk is carried onto every later batch, and a change '
         'lands exactly where the producer applied it', () {
       final s = CaptureStream.parse([
         meta,
@@ -182,7 +193,8 @@ void main() {
       expect(s.batches.single.buckets, isNull);
     });
 
-    test('auto: the stream bk is applied where it appears; without bk the '
+    test(
+        'auto: the stream bk is applied where it appears; without bk the '
         'result says viewportFormula', () {
       final withBk = CaptureStream.parse([
         meta,
@@ -211,7 +223,8 @@ void main() {
       expect(r.bucketsApplied, isEmpty);
     });
 
-    test('medianHeight: warms up on the tracked state, then 2x median '
+    test(
+        'medianHeight: warms up on the tracked state, then 2x median '
         'clamped to 80-220 on both sides', () {
       final s = CaptureStream.parse([meta, obs(1), obs(2), obs(3)]);
       final r = replay(s, bucketPolicy: BucketPolicy.medianHeight);
@@ -257,7 +270,8 @@ void main() {
           'medianHeight');
     });
 
-    test('ab-report keeps nested-fragment confirmations out of the '
+    test(
+        'ab-report keeps nested-fragment confirmations out of the '
         'displacement buckets (#112): counted, not averaged', () {
       // cap 1: paragraph. cap 2: the same paragraph 10 px lower -> one
       // position merge, displacement 10. cap 3: its first line alone ->
@@ -287,7 +301,8 @@ void main() {
       }
     });
 
-    test('freeze-report keeps nested-fragment confirmations out of the '
+    test(
+        'freeze-report keeps nested-fragment confirmations out of the '
         'merge denominator (#112): counted beside it', () {
       String para(int cap, int top) =>
           '{"t": "obs", "cap": $cap, "raw": 1, "blocks": ['
@@ -299,8 +314,7 @@ void main() {
           '{"rect": [33, 768, 313, 786], "otext": "The quick brown fox jumps", '
           '"pconf": 0.5, "tconf": 0.5, "obsN": 1, "prov": false, "provN": 0}]}';
       final s = CaptureStream.parse([meta, para(1, 754), para(2, 764), line]);
-      final freeze =
-          freezeReport(s)['freeze'] as Map<String, Object?>;
+      final freeze = freezeReport(s)['freeze'] as Map<String, Object?>;
       expect(freeze['totalMerges'], 1, reason: 'one position merge');
       expect(freeze['nestedFragmentMerges'], 1,
           reason: 'the confirmation is counted beside the denominator');
@@ -308,7 +322,8 @@ void main() {
       expect(freeze['frozenShare'], 0.0);
     });
 
-    test('BucketPolicyApplier (shared with dump_frames.dart) applies a '
+    test(
+        'BucketPolicyApplier (shared with dump_frames.dart) applies a '
         'stream size once per change and names its source', () {
       final s = CaptureStream.parse([
         meta,
@@ -354,8 +369,7 @@ void main() {
   });
 
   group('freeze-report (#57)', () {
-    test('band-admit replay measures freeze frequency, evidence, latency',
-        () {
+    test('band-admit replay measures freeze frequency, evidence, latency', () {
       final report = freezeReport(loadFixture());
       final freeze = report['freeze'] as Map<String, Object?>;
       final prov = report['provisional'] as Map<String, Object?>;
@@ -382,19 +396,19 @@ void main() {
   });
 
   group('ab-report (#58)', () {
-    test('agreementWeighted is positionally stickier than legacy on the '
+    test(
+        'agreementWeighted is positionally stickier than legacy on the '
         'same stream', () {
       final s = loadFixture();
       final legacy = replay(s);
-      final agreement =
-          replay(s, model: PositionMergeModel.agreementWeighted);
+      final agreement = replay(s, model: PositionMergeModel.agreementWeighted);
 
       expect(legacy.merges.length, agreement.merges.length,
           reason: 'arms must pair identically on this fixture for the '
               'displacement comparison to be meaningful');
 
-      double sumDisp(ReplayResult r) => r.merges
-          .fold(0.0, (sum, m) => sum + m.displacement);
+      double sumDisp(ReplayResult r) =>
+          r.merges.fold(0.0, (sum, m) => sum + m.displacement);
       expect(sumDisp(agreement), lessThan(sumDisp(legacy)),
           reason: 'merge-weight decay must damp movement of '
               'well-observed blocks (#58)');
@@ -402,8 +416,7 @@ void main() {
       // Legacy saturates position confidence (0.5 + 0.5 clamps to 1.0)
       // on the first re-observation; agreement-weighted keeps it
       // informative under the cap8 outlier.
-      final legacyWell =
-          legacy.merges.where((m) => m.obsNBefore >= 5).toList();
+      final legacyWell = legacy.merges.where((m) => m.obsNBefore >= 5).toList();
       expect(legacyWell.every((m) => m.pconfAfter >= 0.999), isTrue);
       final agreementWell =
           agreement.merges.where((m) => m.obsNBefore >= 5).toList();
@@ -422,8 +435,12 @@ void main() {
 
     test('report shape carries the two #116 candidate arms too', () {
       final report = abReport(loadFixture());
-      for (final arm in ['legacy', 'agreementWeighted', 'agreementSnap',
-          'agreementCoherent']) {
+      for (final arm in [
+        'legacy',
+        'agreementWeighted',
+        'agreementSnap',
+        'agreementCoherent'
+      ]) {
         final a = report[arm] as Map<String, Object?>;
         expect(a['mergeCount'], isNonZero, reason: arm);
         expect(a['displacementByObsN'], isA<Map<String, Object?>>(),
@@ -437,8 +454,14 @@ void main() {
       }
       final applied =
           (report['input'] as Map)['bucketsApplied'] as Map<String, Object?>;
-      expect(applied.keys, containsAll(
-          ['legacy', 'agreementWeighted', 'agreementSnap', 'agreementCoherent']));
+      expect(
+          applied.keys,
+          containsAll([
+            'legacy',
+            'agreementWeighted',
+            'agreementSnap',
+            'agreementCoherent'
+          ]));
     });
 
     // #116 finding F: the test above only shape-checks meanTopLagByCapture
@@ -446,7 +469,8 @@ void main() {
     // (wrong sign, wrong axis, wrong averaging) would sail through green.
     // This hand-builds a tiny 2-capture stream with a known, clean step
     // and pins the exact numbers under all three step-response arms.
-    group('meanTopLagByCapture: a VALUE test, not just a shape check '
+    group(
+        'meanTopLagByCapture: a VALUE test, not just a shape check '
         '(#116 finding F)', () {
       // 3 blocks (coherentShiftMinBlocks's default floor), 600px apart --
       // well outside the spatial index's default 200px-bucket 3x3
@@ -481,7 +505,8 @@ void main() {
             capture(2, [160, 760, 1360]), // +60px each, identical shift
           ]);
 
-      test('damp: lag is the UN-DAMPED remainder -- w=0.5 halves the 60px '
+      test(
+          'damp: lag is the UN-DAMPED remainder -- w=0.5 halves the 60px '
           'step, so the lag is the other half (30.0), exactly, every '
           'block', () {
         final report = abReport(fixture());
@@ -497,7 +522,8 @@ void main() {
                 'other, un-applied half of the 60px step');
       });
 
-      test('snap: lag is (approximately) zero -- a full re-anchor to the '
+      test(
+          'snap: lag is (approximately) zero -- a full re-anchor to the '
           "block's own corrected position", () {
         final report = abReport(fixture());
         final snap = report['agreementSnap'] as Map<String, Object?>;
@@ -511,7 +537,8 @@ void main() {
                 'first re-observation)');
       });
 
-      test('coherentShift: lag is (approximately) zero -- the group vote '
+      test(
+          'coherentShift: lag is (approximately) zero -- the group vote '
           'lands exactly on the step', () {
         final report = abReport(fixture());
         final coherent = report['agreementCoherent'] as Map<String, Object?>;
@@ -525,7 +552,8 @@ void main() {
       });
     });
 
-    test('identityByCapture matches the merges/observed-blocks ratio the '
+    test(
+        'identityByCapture matches the merges/observed-blocks ratio the '
         'dynamic-reflow corpus test computes independently', () {
       final s = loadFixture();
       final report = abReport(s);
@@ -533,9 +561,8 @@ void main() {
       final identity = agreement['identityByCapture'] as Map<String, Object?>;
       final replayed = replay(s, model: PositionMergeModel.agreementWeighted);
       for (final batch in s.batches) {
-        final mergesThisCapture = replayed.merges
-            .where((m) => m.captureId == batch.captureId)
-            .length;
+        final mergesThisCapture =
+            replayed.merges.where((m) => m.captureId == batch.captureId).length;
         final expected = batch.blocks.isEmpty
             ? null
             : (mergesThisCapture * 1000 / batch.blocks.length).round() / 1000;
@@ -544,11 +571,12 @@ void main() {
       }
     });
 
-    test('damp arms never set a step response; the #116 candidate arms are '
+    test(
+        'damp arms never set a step response; the #116 candidate arms are '
         'non-vacuous on the push-down corpus (#116)', () {
-      final s = CaptureStream.parse(File(
-              'doc/replay/validation/2026-08-dynamic-reflow/pushdown.jsonl')
-          .readAsLinesSync());
+      final s = CaptureStream.parse(
+          File('doc/replay/validation/2026-08-dynamic-reflow/pushdown.jsonl')
+              .readAsLinesSync());
       final report = abReport(s);
 
       for (final arm in ['legacy', 'agreementWeighted']) {
@@ -594,7 +622,8 @@ void main() {
       expect(liveReport(s)['mode'], 'live-report');
     });
 
-    test('invariant-violating obs blocks count as invalidRecords, '
+    test(
+        'invariant-violating obs blocks count as invalidRecords, '
         'separate from line noise', () {
       final s = CaptureStream.parse([
         'not json at all',
@@ -607,7 +636,8 @@ void main() {
       expect(s.batches, isEmpty);
     });
 
-    test('latency join is rect-aware: recurring text across unrelated '
+    test(
+        'latency join is rect-aware: recurring text across unrelated '
         'windows does not false-join', () {
       final s = CaptureStream.parse([
         '{"t":"band_stamp","cap":10,"fresh":{"otext":"dup","rect":[0,0,50,20]},'
@@ -627,8 +657,7 @@ void main() {
       expect(lifecycle['unjoinedTerminals'], 0);
     });
 
-    test('terminal with no stamp inside the join radius counts unjoined',
-        () {
+    test('terminal with no stamp inside the join radius counts unjoined', () {
       final s = CaptureStream.parse([
         '{"t":"band_stamp","cap":10,"fresh":{"otext":"dup","rect":[0,0,50,20]},'
             '"existing":{"otext":"other","rect":[0,10,50,30]}}',
@@ -646,8 +675,7 @@ void main() {
     test('aggregates lifecycle events and joins promotion latency', () {
       final report = liveReport(loadFixture());
       final freeze = report['freeze'] as Map<String, Object?>;
-      final lifecycle =
-          report['provisionalLifecycle'] as Map<String, Object?>;
+      final lifecycle = report['provisionalLifecycle'] as Map<String, Object?>;
 
       expect(freeze['frozenMerges'], 2);
       expect(freeze['merges'], 1);

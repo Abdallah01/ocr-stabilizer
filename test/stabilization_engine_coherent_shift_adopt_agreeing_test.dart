@@ -32,8 +32,11 @@ import 'package:test/test.dart';
 
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/stabilization_engine.dart';
+import 'package:ocr_stabilizer/src/stabilizer_config.dart';
 import 'package:ocr_stabilizer/src/step_response.dart';
 import 'package:ocr_stabilizer/src/types/absolute_rect.dart';
+import 'package:ocr_stabilizer/src/types/coordinate_context.dart';
+import 'package:ocr_stabilizer/src/types/scroll_context.dart';
 
 DefaultTrackedBlock<Object> _block(
   String text, {
@@ -47,8 +50,10 @@ DefaultTrackedBlock<Object> _block(
       payload: const Object(),
       originalText: text,
       observationCount: 3,
-      isViewportRelative: vr,
-      isHorizontalScrollChild: carousel,
+      coordinates: vr
+          ? const CoordinateContext.viewport()
+          : CoordinateContext.page(
+              scroll: ScrollContext(hzScrollerIndex: carousel ? 0 : -1)),
     );
 
 const _a = 'alpha block text one';
@@ -88,11 +93,21 @@ _Outcome _run({
       steps[fresh.originalText] = m.stepResponseApplied;
       return merged;
     },
-    stepResponse: StepResponse.coherentShift,
-    coherentShiftAdoptAgreeing: adopt,
-    coherentShiftFloorPx: floorPx,
-    coherentShiftReanchorMinBlocks: reanchorMinBlocks,
-    missedFrameRetention: 3,
+    config: StabilizerConfig(
+      stepResponse: StepResponseConfig(
+        mode: StepResponse.coherentShift,
+        coherentShift: CoherentShiftConfig(
+          adoptAgreeing: adopt,
+          experimental: ExperimentalCoherentShiftOptions(
+            floorPx: floorPx,
+            reanchorMinBlocks: reanchorMinBlocks,
+          ),
+        ),
+      ),
+      retention: RetentionConfig(
+        missedFrames: 3,
+      ),
+    ),
   );
   final texts = _short.take(shortCount).toList();
   DefaultTrackedBlock<Object> fourth(double top) => _block(_tall,
@@ -128,8 +143,7 @@ void main() {
       expect(off.steps[_tall], isNull,
           reason: 'under its 180 px gate the tall pair cannot vote and is '
               'not carried along — merged as damp');
-      expect(off.tops[_tall], lessThan(949.5),
-          reason: 'it damps short of 950');
+      expect(off.tops[_tall], lessThan(949.5), reason: 'it damps short of 950');
       expect(off.tops[_tall], greaterThan(800));
     });
 
@@ -192,16 +206,16 @@ void main() {
       // allows. Found by review (PR #132 C1): every earlier fixture had
       // the fourth block TALLER than the voters, so min() always picked
       // the group median and this half of the rule was never observed.
-      final outside = _run(
-          adopt: true, voterDy: 62, tallHeight: 18, tallDy: 52.5);
+      final outside =
+          _run(adopt: true, voterDy: 62, tallHeight: 18, tallDy: 52.5);
       for (final t in _short) {
         expect(outside.steps[t], StepResponse.coherentShift,
             reason: 'CONTROL: the 62 px step forms the quorum');
       }
       expect(outside.steps[_tall], isNull,
           reason: '9.5 px off > 0.5 x min(18, 20) = 9 px — not adopted');
-      final inside = _run(
-          adopt: true, voterDy: 62, tallHeight: 18, tallDy: 53.5);
+      final inside =
+          _run(adopt: true, voterDy: 62, tallHeight: 18, tallDy: 53.5);
       expect(inside.steps[_tall], StepResponse.coherentShift,
           reason: '8.5 px off <= 9 px — adopted (the fixture CAN adopt)');
     });
@@ -276,8 +290,7 @@ void main() {
       expect(off.tops[_tall], lessThan(949.5));
     });
 
-    test('ON with no decided plan is identical to OFF (nothing to follow)',
-        () {
+    test('ON with no decided plan is identical to OFF (nothing to follow)', () {
       final on = _run(adopt: true, shortCount: 1);
       final off = _run(adopt: false, shortCount: 1);
       expect(on.tops, equals(off.tops));

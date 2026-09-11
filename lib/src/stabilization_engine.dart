@@ -14,16 +14,17 @@ import 'identity_turnover.dart';
 import 'transform_estimate.dart';
 import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
-import 'observable_block.dart';
+import 'track.dart';
 import 'overlap_resolver.dart';
 import 'robust_stats.dart';
 import 'spatial_block_index.dart';
 import 'stabilization_result.dart';
 import 'step_response.dart';
+import 'stabilizer_config.dart';
 import 'submap_membership.dart';
 import 'text_dedup_utils.dart';
 import 'text_vote.dart';
-import 'tracked_block.dart';
+import 'observation.dart';
 import 'types/absolute_rect.dart';
 import 'types/confidence_types.dart';
 import 'types/space_key.dart';
@@ -160,15 +161,23 @@ const double _kDirectionEpsilonPx = 1.0;
 /// retention and drift-propagation state carry the previous document
 /// forward, and only [resetDriftPropagation] is individually resettable
 /// today. Discard consumer-owned state at the same boundary — text votes
-/// and observation history live on the consumer's [TrackedBlock]s, and
+/// and observation history live on the consumer's [Observation]s, and
 /// the shared [driftTracker] is the consumer's to reset or keep. Whether
 /// an engine-wide reset() should exist instead is issue #95.
 ///
 /// Generic parameters:
-/// - [T] — concrete block type (must implement [ObservableBlock<P>])
+/// - [T] — the track type (must implement [Track<P>]); a fresh block is a
+///   track at its first observation, and the engine only ever reads the
+///   [Observation] half of a fresh one
 /// - [P] — opaque payload type carried by the block
-class StabilizationEngine<T extends ObservableBlock<P>, P> {
+class StabilizationEngine<T extends Track<P>, P> {
   final BlockMerger<T, P> _merger;
+
+  /// Every lever of this engine, grouped by stage (#149). The public
+  /// getters below (`bandFallback`, `missedFrameRetention`,
+  /// `coherentShiftMinBlocks`, …) report the EFFECTIVE values read from it
+  /// and carry each lever's measured history.
+  final StabilizerConfig config;
 
   /// Drift tracker shared with the app (the app may also feed observations).
   final DriftTracker driftTracker;
@@ -223,7 +232,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   // Engine-owned default predicate. Lives as a separate method so the
   // _findMatch try/catch can scope itself to consumer code only (engine
   // bugs in this default closure must surface with their real type).
-  bool _defaultSpatialConfirm(TrackedBlock fresh, TrackedBlock candidate) =>
+  bool _defaultSpatialConfirm(Observation fresh, Observation candidate) =>
       _resolver.overlapRatio(
         fresh,
         candidate,
@@ -246,19 +255,24 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     SpatialBlockIndex<T>? spatialIndex,
     SubmapMembership? submapMembership,
     bool Function(T fresh, T existing)? contextualCheck,
-    this.bandFallback = const BandFallbackConfig(),
-    this.missedFrameRetention = 0,
-    this.positionMergeModel = PositionMergeModel.agreementWeighted,
-    this.stepResponse = StepResponse.coherentShift,
-    this.snapThresholdMultiplier = 1.5,
-    this.coherentShiftMinBlocks = 3,
-    this.coherentShiftMinShare = 0.5,
-    this.coherentShiftTolerance = 0.5,
-    this.coherentShiftFloorPx,
-    this.coherentShiftReanchorMinBlocks,
-    this.coherentShiftAdoptAgreeing = true,
-    this.transformEstimateMinPairs = 3,
+    this.config = const StabilizerConfig(),
   })  : _merger = merger,
+        bandFallback = config.matching.bandFallback,
+        missedFrameRetention = config.retention.missedFrames,
+        positionMergeModel = config.merge.positionModel,
+        stepResponse = config.stepResponse.mode,
+        snapThresholdMultiplier = config.stepResponse.snapThresholdMultiplier,
+        coherentShiftMinBlocks = config.stepResponse.coherentShift.minBlocks,
+        coherentShiftMinShare = config.stepResponse.coherentShift.minShare,
+        coherentShiftTolerance = config.stepResponse.coherentShift.tolerance,
+        coherentShiftFloorPx =
+            config.stepResponse.coherentShift.experimental.floorPx,
+        coherentShiftReanchorMinBlocks =
+            config.stepResponse.coherentShift.experimental.reanchorMinBlocks,
+        coherentShiftAdoptAgreeing =
+            config.stepResponse.coherentShift.adoptAgreeing,
+        transformEstimateMinPairs =
+            config.diagnostics.transformEstimateMinPairs,
         driftTracker =
             driftTracker ?? DriftTracker(submapMembership: submapMembership),
         _spatialIndex = spatialIndex ?? SpatialBlockIndex<T>(),
@@ -878,7 +892,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// When both are null, no prefix is prepended.
   ///
   /// Throws [ArgumentError.value] naming the offending field on the first
-  /// violation. Catches any [ObservableBlock] implementor — `DefaultTrackedBlock`
+  /// violation. Catches any [Track] implementor — `DefaultTrackedBlock`
   /// already early-fails at construction, but a hand-rolled implementor can
   /// still slip past the unchecked-`const` `PositionConfidence(double)` /
   /// `TextConfidence(double)` primary constructors documented at
@@ -932,7 +946,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Throws [ArgumentError] if any observation carries an invalid (NaN or
   /// out-of-range) [PositionConfidence] or [TextConfidence] value (#27).
   StabilizationResult<T> stabilize(List<T> freshBlocks) {
-    // Engine-entry Confidence validation (#27). Catches any ObservableBlock
+    // Engine-entry Confidence validation (#27). Catches any Track
     // implementor at one seam, complementing MergeResult's engine-output guard.
     for (var i = 0; i < freshBlocks.length; i++) {
       _assertValidConfidence(freshBlocks[i], index: i);
@@ -1247,7 +1261,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// `wasBandFallback`/`wasNestedFragment` flag is checked explicitly for
   /// clarity), provisional existing blocks (their merge freezes
   /// regardless), viewport-relative blocks (a different coordinate
-  /// contract — see [TrackedBlock.isViewportRelative]), and
+  /// contract — see [Observation.isViewportRelative]), and
   /// horizontal-scroll children (carousel motion is not page-scroll
   /// motion).
   ///
@@ -2321,7 +2335,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         textWasPromoted: false,
         updatedClassificationVotes: existing.classificationVotes,
         needsReclassification: existing.needsReclassification,
-        updatedCarouselIdVotes: existing.carouselIdVotes,
+        updatedCarouselVotes: existing.carouselVotes,
         observationCount: existing.observationCount + 1,
         isProvisional: false,
         provisionalCapturesRemaining: 0,
@@ -2368,7 +2382,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         textWasPromoted: false,
         updatedClassificationVotes: existing.classificationVotes,
         needsReclassification: existing.needsReclassification,
-        updatedCarouselIdVotes: existing.carouselIdVotes,
+        updatedCarouselVotes: existing.carouselVotes,
         observationCount: existing.observationCount,
         isProvisional: remaining > 0,
         provisionalCapturesRemaining: remaining,
@@ -2462,16 +2476,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         classVotes.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
     final needsReclass = bestWeight != existing.hierarchyWeight;
 
-    // 4b. Carousel ID vote accumulation
-    final carouselVotes = Map<int, int>.from(existing.carouselIdVotes);
-    final freshHzIdx = fresh.scrollContext.hzScrollerIndex;
-    // Clear phantom non-carousel vote on first real carousel observation
-    if (freshHzIdx != -1 &&
-        carouselVotes.length == 1 &&
-        carouselVotes[-1] == 1) {
-      carouselVotes.remove(-1);
-    }
-    carouselVotes[freshHzIdx] = (carouselVotes[freshHzIdx] ?? 0) + 1;
+    // 4b. Carousel ID vote accumulation (#148: the value type owns the
+    // histogram; a freshly constructed block carries no phantom vote to
+    // clear).
+    final carouselVotes =
+        existing.carouselVotes.record(fresh.scrollContext.hzScrollerIndex);
 
     // 4c. Text vote accumulation
     final updatedTextVotes = Map<String, TextVote>.from(existing.textVotes);
@@ -2581,7 +2590,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       textWasPromoted: textWasPromoted,
       updatedClassificationVotes: Map.unmodifiable(classVotes),
       needsReclassification: needsReclass,
-      updatedCarouselIdVotes: Map.unmodifiable(carouselVotes),
+      updatedCarouselVotes: carouselVotes,
       observationCount: newObservationCount,
       isProvisional: admitAsProvisional,
       provisionalCapturesRemaining:

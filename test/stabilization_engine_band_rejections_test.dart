@@ -6,7 +6,8 @@ import 'package:test/test.dart';
 import 'package:ocr_stabilizer/src/band_fallback_config.dart';
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/stabilization_engine.dart';
-import 'package:ocr_stabilizer/src/tracked_block.dart';
+import 'package:ocr_stabilizer/src/stabilizer_config.dart';
+import 'package:ocr_stabilizer/src/observation.dart';
 import 'package:ocr_stabilizer/src/types/absolute_rect.dart';
 
 DefaultTrackedBlock<Object> _block(String text,
@@ -25,9 +26,13 @@ void main() {
     test('rejected by candidateObservationFloor', () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: const BandFallbackConfig(
-          mode: BandFallbackMode.admit,
-          candidateObservationFloor: 2,
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: const BandFallbackConfig(
+              mode: BandFallbackMode.admit,
+              candidateObservationFloor: 2,
+            ),
+          ),
         ),
       );
       // Seed candidate with observationCount: 1 — below floor 2.
@@ -45,10 +50,14 @@ void main() {
         () {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: BandFallbackConfig(
-          mode: BandFallbackMode.admit,
-          candidateObservationFloor: 1,
-          spatialConfirm: (TrackedBlock a, TrackedBlock b) => false,
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: BandFallbackConfig(
+              mode: BandFallbackMode.admit,
+              candidateObservationFloor: 1,
+              spatialConfirm: (Observation a, Observation b) => false,
+            ),
+          ),
         ),
       );
       engine.stabilize(
@@ -68,9 +77,13 @@ void main() {
       // test is renamed and now asserts the new tick.)
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
-        bandFallback: const BandFallbackConfig(
-          mode: BandFallbackMode.admit,
-          candidateObservationFloor: 1,
+        config: StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: const BandFallbackConfig(
+              mode: BandFallbackMode.admit,
+              candidateObservationFloor: 1,
+            ),
+          ),
         ),
       );
       engine.stabilize(
