@@ -1,0 +1,491 @@
+{
+  "mode": "differential",
+  "input": {
+    "batches": 12,
+    "observations": 360,
+    "viewport": {
+      "width": 1080.0,
+      "height": 2200.0
+    },
+    "bucketPolicy": "auto"
+  },
+  "arms": {
+    "legacy": {
+      "captures": [
+        {
+          "capture": 1,
+          "hash": "140bae824bb5cb06"
+        },
+        {
+          "capture": 2,
+          "hash": "7d7fa25eb4090f24"
+        },
+        {
+          "capture": 3,
+          "hash": "040313f48b8eba9d"
+        },
+        {
+          "capture": 4,
+          "hash": "f05728118e23a984"
+        },
+        {
+          "capture": 5,
+          "hash": "5192a417da2d5357"
+        },
+        {
+          "capture": 6,
+          "hash": "704542af82363a76"
+        },
+        {
+          "capture": 7,
+          "hash": "8bbff6d130721dbf"
+        },
+        {
+          "capture": 8,
+          "hash": "f88de010f307cbdb"
+        },
+        {
+          "capture": 9,
+          "hash": "169824c024834083"
+        },
+        {
+          "capture": 10,
+          "hash": "4f34d07c9641b09e"
+        },
+        {
+          "capture": 11,
+          "hash": "a96d01a013c103a3"
+        },
+        {
+          "capture": 12,
+          "hash": "2088fcfcc1b08058"
+        }
+      ],
+      "digest": "bf63a1401a06233f"
+    },
+    "agreementWeighted": {
+      "captures": [
+        {
+          "capture": 1,
+          "hash": "140bae824bb5cb06"
+        },
+        {
+          "capture": 2,
+          "hash": "e65d81660a09941c"
+        },
+        {
+          "capture": 3,
+          "hash": "a4268c3da8d2c95b"
+        },
+        {
+          "capture": 4,
+          "hash": "ebc3c4b8dab36cea"
+        },
+        {
+          "capture": 5,
+          "hash": "dfb5b3142c1afef5"
+        },
+        {
+          "capture": 6,
+          "hash": "9ba37644cc3e30ca"
+        },
+        {
+          "capture": 7,
+          "hash": "b4465817c7c9ec5a"
+        },
+        {
+          "capture": 8,
+          "hash": "0e00280511ee2aad"
+        },
+        {
+          "capture": 9,
+          "hash": "17e587edbbd29f90"
+        },
+        {
+          "capture": 10,
+          "hash": "143f3293cc269ee6"
+        },
+        {
+          "capture": 11,
+          "hash": "f24bf10bd31c65d2"
+        },
+        {
+          "capture": 12,
+          "hash": "b13f557008543bfa"
+        }
+      ],
+      "digest": "dc8e808d02d0cab9"
+    },
+    "agreementSnap": {
+      "captures": [
+        {
+          "capture": 1,
+          "hash": "140bae824bb5cb06"
+        },
+        {
+          "capture": 2,
+          "hash": "e65d81660a09941c"
+        },
+        {
+          "capture": 3,
+          "hash": "a4268c3da8d2c95b"
+        },
+        {
+          "capture": 4,
+          "hash": "ebc3c4b8dab36cea"
+        },
+        {
+          "capture": 5,
+          "hash": "dfb5b3142c1afef5"
+        },
+        {
+          "capture": 6,
+          "hash": "9ba37644cc3e30ca"
+        },
+        {
+          "capture": 7,
+          "hash": "b4465817c7c9ec5a"
+        },
+        {
+          "capture": 8,
+          "hash": "0e00280511ee2aad"
+        },
+        {
+          "capture": 9,
+          "hash": "17e587edbbd29f90"
+        },
+        {
+          "capture": 10,
+          "hash": "143f3293cc269ee6"
+        },
+        {
+          "capture": 11,
+          "hash": "f24bf10bd31c65d2"
+        },
+        {
+          "capture": 12,
+          "hash": "b13f557008543bfa"
+        }
+      ],
+      "digest": "dc8e808d02d0cab9"
+    },
+    "agreementCoherent": {
+      "captures": [
+        {
+          "capture": 1,
+          "hash": "140bae824bb5cb06"
+        },
+        {
+          "capture": 2,
+          "hash": "e65d81660a09941c"
+        },
+        {
+          "capture": 3,
+          "hash": "a4268c3da8d2c95b"
+        },
+        {
+          "capture": 4,
+          "hash": "ebc3c4b8dab36cea"
+        },
+        {
+          "capture": 5,
+          "hash": "dfb5b3142c1afef5"
+        },
+        {
+          "capture": 6,
+          "hash": "9ba37644cc3e30ca"
+        },
+        {
+          "capture": 7,
+          "hash": "b4465817c7c9ec5a"
+        },
+        {
+          "capture": 8,
+          "hash": "0e00280511ee2aad"
+        },
+        {
+          "capture": 9,
+          "hash": "17e587edbbd29f90"
+        },
+        {
+          "capture": 10,
+          "hash": "143f3293cc269ee6"
+        },
+        {
+          "capture": 11,
+          "hash": "f24bf10bd31c65d2"
+        },
+        {
+          "capture": 12,
+          "hash": "b13f557008543bfa"
+        }
+      ],
+      "digest": "dc8e808d02d0cab9"
+    },
+    "agreementCoherentAdopt": {
+      "captures": [
+        {
+          "capture": 1,
+          "hash": "140bae824bb5cb06"
+        },
+        {
+          "capture": 2,
+          "hash": "e65d81660a09941c"
+        },
+        {
+          "capture": 3,
+          "hash": "a4268c3da8d2c95b"
+        },
+        {
+          "capture": 4,
+          "hash": "ebc3c4b8dab36cea"
+        },
+        {
+          "capture": 5,
+          "hash": "dfb5b3142c1afef5"
+        },
+        {
+          "capture": 6,
+          "hash": "9ba37644cc3e30ca"
+        },
+        {
+          "capture": 7,
+          "hash": "b4465817c7c9ec5a"
+        },
+        {
+          "capture": 8,
+          "hash": "0e00280511ee2aad"
+        },
+        {
+          "capture": 9,
+          "hash": "17e587edbbd29f90"
+        },
+        {
+          "capture": 10,
+          "hash": "143f3293cc269ee6"
+        },
+        {
+          "capture": 11,
+          "hash": "f24bf10bd31c65d2"
+        },
+        {
+          "capture": 12,
+          "hash": "b13f557008543bfa"
+        }
+      ],
+      "digest": "dc8e808d02d0cab9"
+    },
+    "agreementCoherentFloor": {
+      "captures": [
+        {
+          "capture": 1,
+          "hash": "140bae824bb5cb06"
+        },
+        {
+          "capture": 2,
+          "hash": "e65d81660a09941c"
+        },
+        {
+          "capture": 3,
+          "hash": "a4268c3da8d2c95b"
+        },
+        {
+          "capture": 4,
+          "hash": "ebc3c4b8dab36cea"
+        },
+        {
+          "capture": 5,
+          "hash": "dfb5b3142c1afef5"
+        },
+        {
+          "capture": 6,
+          "hash": "9ba37644cc3e30ca"
+        },
+        {
+          "capture": 7,
+          "hash": "b4465817c7c9ec5a"
+        },
+        {
+          "capture": 8,
+          "hash": "0e00280511ee2aad"
+        },
+        {
+          "capture": 9,
+          "hash": "17e587edbbd29f90"
+        },
+        {
+          "capture": 10,
+          "hash": "143f3293cc269ee6"
+        },
+        {
+          "capture": 11,
+          "hash": "f24bf10bd31c65d2"
+        },
+        {
+          "capture": 12,
+          "hash": "b13f557008543bfa"
+        }
+      ],
+      "digest": "dc8e808d02d0cab9"
+    },
+    "agreementCoherentReanchor": {
+      "captures": [
+        {
+          "capture": 1,
+          "hash": "140bae824bb5cb06"
+        },
+        {
+          "capture": 2,
+          "hash": "e65d81660a09941c"
+        },
+        {
+          "capture": 3,
+          "hash": "a4268c3da8d2c95b"
+        },
+        {
+          "capture": 4,
+          "hash": "ebc3c4b8dab36cea"
+        },
+        {
+          "capture": 5,
+          "hash": "dfb5b3142c1afef5"
+        },
+        {
+          "capture": 6,
+          "hash": "9ba37644cc3e30ca"
+        },
+        {
+          "capture": 7,
+          "hash": "b4465817c7c9ec5a"
+        },
+        {
+          "capture": 8,
+          "hash": "0e00280511ee2aad"
+        },
+        {
+          "capture": 9,
+          "hash": "17e587edbbd29f90"
+        },
+        {
+          "capture": 10,
+          "hash": "143f3293cc269ee6"
+        },
+        {
+          "capture": 11,
+          "hash": "f24bf10bd31c65d2"
+        },
+        {
+          "capture": 12,
+          "hash": "b13f557008543bfa"
+        }
+      ],
+      "digest": "dc8e808d02d0cab9"
+    },
+    "bandObserveOnly": {
+      "captures": [
+        {
+          "capture": 1,
+          "hash": "140bae824bb5cb06"
+        },
+        {
+          "capture": 2,
+          "hash": "f9d947807f5d58f0"
+        },
+        {
+          "capture": 3,
+          "hash": "8b7ef87409d2742f"
+        },
+        {
+          "capture": 4,
+          "hash": "d358c5cd55705048"
+        },
+        {
+          "capture": 5,
+          "hash": "c19078d5d893ddfd"
+        },
+        {
+          "capture": 6,
+          "hash": "0cc95fa01558a4eb"
+        },
+        {
+          "capture": 7,
+          "hash": "8110432399aca2a4"
+        },
+        {
+          "capture": 8,
+          "hash": "594206df72653b91"
+        },
+        {
+          "capture": 9,
+          "hash": "007b4689976662b5"
+        },
+        {
+          "capture": 10,
+          "hash": "9ffbfdda958b0422"
+        },
+        {
+          "capture": 11,
+          "hash": "b2321e60c5004803"
+        },
+        {
+          "capture": 12,
+          "hash": "5d9853e91f067ceb"
+        }
+      ],
+      "digest": "83467b2151e8ab0d"
+    },
+    "bandAdmit": {
+      "captures": [
+        {
+          "capture": 1,
+          "hash": "140bae824bb5cb06"
+        },
+        {
+          "capture": 2,
+          "hash": "f9d947807f5d58f0"
+        },
+        {
+          "capture": 3,
+          "hash": "8b7ef87409d2742f"
+        },
+        {
+          "capture": 4,
+          "hash": "d358c5cd55705048"
+        },
+        {
+          "capture": 5,
+          "hash": "c19078d5d893ddfd"
+        },
+        {
+          "capture": 6,
+          "hash": "0cc95fa01558a4eb"
+        },
+        {
+          "capture": 7,
+          "hash": "8110432399aca2a4"
+        },
+        {
+          "capture": 8,
+          "hash": "594206df72653b91"
+        },
+        {
+          "capture": 9,
+          "hash": "007b4689976662b5"
+        },
+        {
+          "capture": 10,
+          "hash": "9ffbfdda958b0422"
+        },
+        {
+          "capture": 11,
+          "hash": "b2321e60c5004803"
+        },
+        {
+          "capture": 12,
+          "hash": "5d9853e91f067ceb"
+        }
+      ],
+      "digest": "83467b2151e8ab0d"
+    }
+  }
+}

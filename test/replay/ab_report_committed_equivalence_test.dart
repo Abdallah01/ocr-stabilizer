@@ -34,30 +34,12 @@ import 'package:test/test.dart';
 
 import '../../tool/replay/src/ab_report.dart';
 import '../../tool/replay/src/capture_stream.dart';
+import '../../tool/replay/src/corpus.dart';
 
-/// The 17-stream #116 A/B corpus: every `.jsonl` with a committed
-/// `.ab.json` counterpart, excluding the `.grouped` pregroup variants
-/// (those replay through an extra pregroup stage `abReport` does not
-/// reproduce on its own).
-const _streams = [
-  'doc/replay/validation/2026-08-dynamic-reflow/pushdown',
-  'doc/replay/validation/2026-08-dynamic-reflow/rewrap',
-  'doc/replay/validation/2026-08-dynamic-reflow/variants/pushdown-050',
-  'doc/replay/validation/2026-08-dynamic-reflow/variants/pushdown-150',
-  'doc/replay/validation/2026-08-dynamic-reflow/variants/pushdown-300-early',
-  'doc/replay/validation/2026-08-dynamic-reflow/variants/pushdown-300-late',
-  'doc/replay/validation/2026-08-dynamic-reflow/variants/pushdown-600',
-  'doc/replay/validation/2026-08-dynamic-reflow/variants/pushup-300',
-  'doc/replay/validation/2026-08-mlkit-on-device/dwell-bk',
-  'doc/replay/validation/2026-08-mlkit-on-device/dwell',
-  'doc/replay/validation/2026-08-mlkit-on-device/scroll',
-  'doc/replay/validation/2026-08-paddleocr-matrix/ocr-jitter-dwell',
-  'doc/replay/validation/2026-08-paddleocr-matrix/scroll',
-  'doc/replay/validation/2026-08-paddleocr-matrix/stable-dwell',
-  'doc/replay/validation/2026-08-tesseract-matrix/ocr-jitter-dwell',
-  'doc/replay/validation/2026-08-tesseract-matrix/scroll',
-  'doc/replay/validation/2026-08-tesseract-matrix/stable-dwell',
-];
+/// The 17-stream #116 A/B corpus — `kCommittedStreams`, shared with the
+/// #150 differential test so the two guards can never cover different
+/// stream sets.
+const _streams = kCommittedStreams;
 
 /// The arms `abReport()` emits UNCONDITIONALLY, in its own order — the set
 /// every committed file must carry and match. The optional arms

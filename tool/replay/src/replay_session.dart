@@ -9,6 +9,16 @@ import 'capture_stream.dart';
 
 typedef ReplayBlock = DefaultTrackedBlock<Object>;
 
+/// Called by [replay] after every `stabilize()` call with the capture id,
+/// the result and the engine (its tracked state and telemetry as of that
+/// capture). The #150 differential harness reads everything from here so
+/// its arms are built by the exact code path the reports use.
+typedef CaptureCallback = void Function(
+  int captureId,
+  StabilizationResult<ReplayBlock> result,
+  StabilizationEngine<ReplayBlock, Object> engine,
+);
+
 /// JSON form of a viewport for report `input` blocks; null stays null so
 /// a report on default buckets says so.
 Map<String, double>? viewportJson(Viewport? v) =>
@@ -305,6 +315,9 @@ BucketPolicy? bucketPolicyFromArg(String arg) {
 ///   explicitly, and the shipping-default configuration is represented by
 ///   the `agreementCoherentAdopt` arm, not the base `agreementCoherent`
 ///   one, from 2.4.0 on.
+/// - [onCapture] (#150) is observation only: called after each
+///   `stabilize()` with that capture's result and the engine; it does not
+///   feed anything back, so a replay with or without it is byte-identical.
 ReplayResult replay(
   CaptureStream stream, {
   BandFallbackConfig band = const BandFallbackConfig(),
@@ -316,6 +329,7 @@ ReplayResult replay(
   Viewport? viewport,
   bool useStreamViewport = true,
   BucketPolicy bucketPolicy = BucketPolicy.auto,
+  CaptureCallback? onCapture,
 }) {
   final effectiveViewport =
       viewport ?? (useStreamViewport ? stream.viewport : null);
@@ -412,6 +426,7 @@ ReplayResult replay(
     final result = engine.stabilize(batch.blocks);
     transformEstimates.add(result.transformEstimate);
     identityTurnovers.add(result.identityTurnover);
+    onCapture?.call(batch.captureId, result, engine);
   }
 
   return ReplayResult(
