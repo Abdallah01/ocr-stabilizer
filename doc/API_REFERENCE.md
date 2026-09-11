@@ -191,6 +191,7 @@ A block's identity is a six-dimensional signature:
 | Type | Purpose |
 |------|---------|
 | `StabilizationEngine<T, P>` | SAR-merge, intra-batch dedup, contradiction detection |
+| `StabilizerConfig` | Every engine lever, grouped by stage: `MatchingConfig`, `MergeConfig`, `StepResponseConfig` (+ `CoherentShiftConfig`, `ExperimentalCoherentShiftOptions`), `RetentionConfig`, `DiagnosticsConfig` (3.0+) |
 | `DriftTracker` | Regional drift correction with submap isolation |
 | `SpatialBlockIndex` | Grid-cell spatial index for overlap queries (implements `SpatialIndexView`) |
 | `BlockClassifierService` | Classifies blocks into fixed / sticky / carousel / IC / normal |

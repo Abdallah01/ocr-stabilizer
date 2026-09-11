@@ -7,6 +7,7 @@ import 'package:ocr_stabilizer/src/band_fallback_config.dart';
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/drift_tracker.dart';
 import 'package:ocr_stabilizer/src/stabilization_engine.dart';
+import 'package:ocr_stabilizer/src/stabilizer_config.dart';
 import 'package:ocr_stabilizer/src/step_response.dart';
 import 'package:ocr_stabilizer/src/types/absolute_rect.dart';
 import 'package:ocr_stabilizer/src/types/geometry.dart' show Offset;
@@ -27,7 +28,8 @@ DefaultTrackedBlock<Object> _block(
     );
 
 void main() {
-  group('StabilizationEngine pre-pass vs. same-capture band interleaving '
+  group(
+      'StabilizationEngine pre-pass vs. same-capture band interleaving '
       '(#116, finding A)', () {
     // Band-eligible text pair reused verbatim from
     // stabilization_engine_band_admit_test.dart: fails primary (Lev 0.70 /
@@ -62,15 +64,19 @@ void main() {
       final engine = StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
         merger: (existing, fresh, m) => existing.applyMerge(m),
         driftTracker: tracker,
-        bandFallback: const BandFallbackConfig(
-          mode: BandFallbackMode.admit,
-          candidateObservationFloor: 1,
+        config: const StabilizerConfig(
+          matching: MatchingConfig(
+            bandFallback: BandFallbackConfig(
+              mode: BandFallbackMode.admit,
+              candidateObservationFloor: 1,
+            ),
+          ),
+          retention: RetentionConfig(missedFrames: 3),
+          // Isolate this from #116's own step-response machinery — the
+          // regression under test predates and is orthogonal to it (finding A
+          // says explicitly: present even under damp).
+          stepResponse: StepResponseConfig(mode: StepResponse.damp),
         ),
-        missedFrameRetention: 3,
-        // Isolate this from #116's own step-response machinery — the
-        // regression under test predates and is orthogonal to it (finding A
-        // says explicitly: present even under damp).
-        stepResponse: StepResponse.damp,
       );
 
       // Establish cand1 (top=500) and cand2 (top=950). Both sit in the
@@ -115,7 +121,8 @@ void main() {
       // weighted-average lerp lands the first merge, so a coarse split is
       // robust without hard-pinning that unrelated arithmetic.
       final sorted = result.stableBlocks.toList()
-        ..sort((a, b) => a.absoluteRect.raw.top.compareTo(b.absoluteRect.raw.top));
+        ..sort(
+            (a, b) => a.absoluteRect.raw.top.compareTo(b.absoluteRect.raw.top));
       final merged1 = sorted[0];
       final outcome2 = sorted[1];
 

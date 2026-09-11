@@ -248,7 +248,11 @@ StabilizationEngine<_TestBlock, Never> _createEngine({
           driftTracker: driftTracker,
           spatialIndex: spatialIndex,
           contextualCheck: contextualCheck,
-          positionMergeModel: positionMergeModel,
+          config: StabilizerConfig(
+            merge: MergeConfig(
+              positionModel: positionMergeModel,
+            ),
+          ),
         );
 }
 
@@ -268,7 +272,8 @@ void main() {
       expect(result.stableBlocks[0].observationCount, 1);
     });
 
-    test('fresh block matching existing merges position (legacy numerics '
+    test(
+        'fresh block matching existing merges position (legacy numerics '
         'pinned — the 1.0 changelog promises them unchanged)', () {
       final existing = _block(text: '测试文本内容', posConf: 0.5);
       final spatialIndex = SpatialBlockIndex<_TestBlock>();

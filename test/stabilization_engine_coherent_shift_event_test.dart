@@ -61,11 +61,21 @@ _Run _run({
       if (m.stepResponseApplied == StepResponse.coherentShift) applied++;
       return existing.applyMerge(m);
     },
-    stepResponse: stepResponse,
-    coherentShiftAdoptAgreeing: adopt,
-    coherentShiftFloorPx: floorPx,
-    coherentShiftReanchorMinBlocks: reanchorMinBlocks,
-    missedFrameRetention: 3,
+    config: StabilizerConfig(
+      stepResponse: StepResponseConfig(
+        mode: stepResponse,
+        coherentShift: CoherentShiftConfig(
+          adoptAgreeing: adopt,
+          experimental: ExperimentalCoherentShiftOptions(
+            floorPx: floorPx,
+            reanchorMinBlocks: reanchorMinBlocks,
+          ),
+        ),
+      ),
+      retention: RetentionConfig(
+        missedFrames: 3,
+      ),
+    ),
   );
   final texts = _short.take(shortCount).toList();
   final seed = engine.stabilize([

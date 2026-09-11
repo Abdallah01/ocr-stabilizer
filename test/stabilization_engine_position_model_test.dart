@@ -15,7 +15,11 @@ StabilizationEngine<DefaultTrackedBlock<void>, void> _engine(
 ) {
   return StabilizationEngine<DefaultTrackedBlock<void>, void>(
     merger: (existing, fresh, merge) => existing.applyMerge(merge),
-    positionMergeModel: model,
+    config: StabilizerConfig(
+      merge: MergeConfig(
+        positionModel: model,
+      ),
+    ),
   );
 }
 

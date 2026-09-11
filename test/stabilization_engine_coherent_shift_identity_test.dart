@@ -101,7 +101,8 @@ class _TextKeyedBlock implements ObservableBlock<void> {
   bool get needsReclassification => false;
 }
 
-_TextKeyedBlock _block(String text, {required double left, required double top}) =>
+_TextKeyedBlock _block(String text,
+        {required double left, required double top}) =>
     _TextKeyedBlock(
       absoluteRect: AbsoluteRect.fromLTWH(left, top, 100, 20),
       originalText: text,
@@ -137,8 +138,6 @@ void main() {
     };
 
     final engine = StabilizationEngine<_TextKeyedBlock, void>(
-      stepResponse: StepResponse.coherentShift,
-      missedFrameRetention: 3,
       merger: (existing, fresh, m) {
         final role = _roleFor(fresh.absoluteRect.left);
         driftCorrectionByRole[role] = m.driftCorrection;
@@ -146,6 +145,14 @@ void main() {
         mergedTopByRole[role] = merged.absoluteRect.top;
         return merged;
       },
+      config: StabilizerConfig(
+        stepResponse: StepResponseConfig(
+          mode: StepResponse.coherentShift,
+        ),
+        retention: RetentionConfig(
+          missedFrames: 3,
+        ),
+      ),
     );
 
     // Capture 1: seed. Brand-new blocks -- no existing match, so nothing

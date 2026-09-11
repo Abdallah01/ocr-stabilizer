@@ -68,15 +68,29 @@ import '../tool/replay/src/replay_session.dart';
   // read the default here instead of in the engine.
   final engine = stepResponse == null
       ? StabilizationEngine<ReplayBlock, Object>(
-          positionMergeModel: PositionMergeModel.agreementWeighted,
-          missedFrameRetention: retention,
           merger: merge,
+          config: StabilizerConfig(
+            merge: MergeConfig(
+              positionModel: PositionMergeModel.agreementWeighted,
+            ),
+            retention: RetentionConfig(
+              missedFrames: retention,
+            ),
+          ),
         )
       : StabilizationEngine<ReplayBlock, Object>(
-          positionMergeModel: PositionMergeModel.agreementWeighted,
-          missedFrameRetention: retention,
-          stepResponse: stepResponse,
           merger: merge,
+          config: StabilizerConfig(
+            merge: MergeConfig(
+              positionModel: PositionMergeModel.agreementWeighted,
+            ),
+            retention: RetentionConfig(
+              missedFrames: retention,
+            ),
+            stepResponse: StepResponseConfig(
+              mode: stepResponse,
+            ),
+          ),
         );
   final viewport = stream.viewport;
   if (viewport != null) {

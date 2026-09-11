@@ -25,7 +25,11 @@ StabilizationEngine<DefaultTrackedBlock<Object>, Object> _engine(
         {int retention = 3}) =>
     StabilizationEngine<DefaultTrackedBlock<Object>, Object>(
       merger: (existing, fresh, m) => existing.applyMerge(m),
-      missedFrameRetention: retention,
+      config: StabilizerConfig(
+        retention: RetentionConfig(
+          missedFrames: retention,
+        ),
+      ),
     );
 
 const _a = 'alpha block text one';

@@ -27,6 +27,7 @@ import 'package:test/test.dart';
 
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/stabilization_engine.dart';
+import 'package:ocr_stabilizer/src/stabilizer_config.dart';
 import 'package:ocr_stabilizer/src/step_response.dart';
 import 'package:ocr_stabilizer/src/types/absolute_rect.dart';
 
@@ -63,8 +64,14 @@ Map<String, StepResponse?> _runScenario(List<int> order) {
       applied[fresh.originalText] = m.stepResponseApplied;
       return existing.applyMerge(m);
     },
-    stepResponse: StepResponse.coherentShift,
-    missedFrameRetention: 3,
+    config: StabilizerConfig(
+      stepResponse: StepResponseConfig(
+        mode: StepResponse.coherentShift,
+      ),
+      retention: RetentionConfig(
+        missedFrames: 3,
+      ),
+    ),
   );
 
   // Seed 4 established blocks, well separated so text stays unambiguous.
@@ -94,7 +101,8 @@ Map<String, StepResponse?> _runScenario(List<int> order) {
 }
 
 void main() {
-  group('StabilizationEngine coherent-shift clustering is order-'
+  group(
+      'StabilizationEngine coherent-shift clustering is order-'
       'independent (#116, finding B)', () {
     // 6 permutations of 4 elements is a full sweep of arrival order —
     // exhaustive here since the scenario is small and the point is to
@@ -108,9 +116,9 @@ void main() {
       [0, 2, 3, 1],
     ];
 
-    test('the clean 3-block group (alpha/bravo/delta) forms in EVERY '
-        'arrival order; the jittered outlier (charlie) never joins it',
-        () {
+    test(
+        'the clean 3-block group (alpha/bravo/delta) forms in EVERY '
+        'arrival order; the jittered outlier (charlie) never joins it', () {
       for (final order in permutations) {
         final applied = _runScenario(order);
         expect(applied[_alphaText], StepResponse.coherentShift,

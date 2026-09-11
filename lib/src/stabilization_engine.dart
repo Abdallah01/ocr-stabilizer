@@ -20,6 +20,7 @@ import 'robust_stats.dart';
 import 'spatial_block_index.dart';
 import 'stabilization_result.dart';
 import 'step_response.dart';
+import 'stabilizer_config.dart';
 import 'submap_membership.dart';
 import 'text_dedup_utils.dart';
 import 'text_vote.dart';
@@ -170,6 +171,12 @@ const double _kDirectionEpsilonPx = 1.0;
 class StabilizationEngine<T extends ObservableBlock<P>, P> {
   final BlockMerger<T, P> _merger;
 
+  /// Every lever of this engine, grouped by stage (#149). The public
+  /// getters below (`bandFallback`, `missedFrameRetention`,
+  /// `coherentShiftMinBlocks`, …) report the EFFECTIVE values read from it
+  /// and carry each lever's measured history.
+  final StabilizerConfig config;
+
   /// Drift tracker shared with the app (the app may also feed observations).
   final DriftTracker driftTracker;
 
@@ -246,19 +253,24 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
     SpatialBlockIndex<T>? spatialIndex,
     SubmapMembership? submapMembership,
     bool Function(T fresh, T existing)? contextualCheck,
-    this.bandFallback = const BandFallbackConfig(),
-    this.missedFrameRetention = 0,
-    this.positionMergeModel = PositionMergeModel.agreementWeighted,
-    this.stepResponse = StepResponse.coherentShift,
-    this.snapThresholdMultiplier = 1.5,
-    this.coherentShiftMinBlocks = 3,
-    this.coherentShiftMinShare = 0.5,
-    this.coherentShiftTolerance = 0.5,
-    this.coherentShiftFloorPx,
-    this.coherentShiftReanchorMinBlocks,
-    this.coherentShiftAdoptAgreeing = true,
-    this.transformEstimateMinPairs = 3,
+    this.config = const StabilizerConfig(),
   })  : _merger = merger,
+        bandFallback = config.matching.bandFallback,
+        missedFrameRetention = config.retention.missedFrames,
+        positionMergeModel = config.merge.positionModel,
+        stepResponse = config.stepResponse.mode,
+        snapThresholdMultiplier = config.stepResponse.snapThresholdMultiplier,
+        coherentShiftMinBlocks = config.stepResponse.coherentShift.minBlocks,
+        coherentShiftMinShare = config.stepResponse.coherentShift.minShare,
+        coherentShiftTolerance = config.stepResponse.coherentShift.tolerance,
+        coherentShiftFloorPx =
+            config.stepResponse.coherentShift.experimental.floorPx,
+        coherentShiftReanchorMinBlocks =
+            config.stepResponse.coherentShift.experimental.reanchorMinBlocks,
+        coherentShiftAdoptAgreeing =
+            config.stepResponse.coherentShift.adoptAgreeing,
+        transformEstimateMinPairs =
+            config.diagnostics.transformEstimateMinPairs,
         driftTracker =
             driftTracker ?? DriftTracker(submapMembership: submapMembership),
         _spatialIndex = spatialIndex ?? SpatialBlockIndex<T>(),
