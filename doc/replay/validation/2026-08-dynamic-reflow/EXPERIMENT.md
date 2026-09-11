@@ -247,6 +247,19 @@ lag at move/+3/+5 ≤ half of damp's AND identity at move ≥ damp's.*
 
 #### Control streams — no real step
 
+> **#143 note (2026-09-11).** Rows regenerated after the primary
+> tie-break landed (an exact text-score tie between two cached
+> candidates now goes to the one nearer the fresh block's
+> drift-corrected centre, not to whichever the index yielded first).
+> Only the three streams with such ties moved: `pushdown-600`
+> (damp +3/+5 26.1 / 14.5 → 14.8 / 3.7; floor 20.7 / 12.4 →
+> 13.2 / 2.8; snap now 1 event and fails the half-of-damp rule only
+> because damp itself improved), `pushup-300` (damp +3/+5 92.7 / 67.3
+> → 96.7 / 70.0, coherent 19.3 / 4.2 → 22.1 / 5.9) and the
+> `paddle-scroll` control (snap step events 5 → 1; re-anchor count 1
+> total 17 → 11). Every other row is byte-identical; the tallies and
+> verdicts below are unchanged.
+
 | stream | kind | snap stepEvents | snap | coherent stepEvents | coherent |
 |---|---|---|---|---|---|
 | rewrap | rewrap — "chains should reset, no step" | 1 | **FAIL** | 0 | PASS |
@@ -255,7 +268,7 @@ lag at move/+3/+5 ≤ half of damp's AND identity at move ≥ damp's.*
 | tess-scroll | synthetic scroll | 1 | **FAIL** | 0 | PASS |
 | paddle-stable-dwell | dwell | 0 | PASS | 0 | PASS |
 | paddle-jitter-dwell | dwell | 0 | PASS | 0 | PASS |
-| paddle-scroll | synthetic scroll | 5 | **FAIL** | 0 | PASS |
+| paddle-scroll | synthetic scroll | 1 | **FAIL** | 0 | PASS |
 | mlkit-dwell | on-device (scroll-stamp lag confound) | 1 | **FAIL** | 0 | PASS |
 | mlkit-dwell-bk | on-device | 0 | PASS | 0 | PASS |
 | mlkit-scroll | on-device (scroll-stamp lag confound) | 0 | PASS | 0 | PASS |
@@ -274,8 +287,8 @@ stated.
 | pushdown-300 | 300 px @ cap 7 | 123.8 / 77.3 / 70.2 | 0.769 | 2.3 / 15.2 / 2.6 (9) | PASS | 4.5 / 17.0 / 3.5 (9) | PASS |
 | pushdown-050 | 50 px @ cap 7 | 25.9 / 25.5 / 28.9 | 0.900 | identical — 0 events | **FAIL** | identical — 0 events | **FAIL** |
 | pushdown-150 | 150 px @ cap 7 | 82.5 / 66.5 / 59.1 | 0.964 | identical — 0 events | **FAIL** | 68.3 / 54.7 / 45.2 (3) | **FAIL** |
-| pushdown-600 | 600 px @ cap 7 | 30.7 / 26.1 / 14.5 | 0.545 | 1.4 / 12.6 / 3.0 (6) | PASS | identical — 0 events | **FAIL** |
-| pushup-300 | −300 px @ cap 7 | 155.1 / 92.7 / 67.3 | 0.667 | 9.8 / 19.9 / 4.1 (12) | PASS | 9.4 / 19.3 / 4.2 (11) | PASS |
+| pushdown-600 | 600 px @ cap 7 | 30.7 / 14.8 / 3.7 | 0.545 | 1.4 / 13.2 / 2.8 (1) | **FAIL** | identical — 0 events | **FAIL** |
+| pushup-300 | −300 px @ cap 7 | 155.1 / 96.7 / 70.0 | 0.667 | 9.8 / 22.4 / 6.3 (11) | PASS | 9.4 / 22.1 / 5.9 (11) | PASS |
 | pushdown-300-early | 300 px @ cap 3 | 113.1 / 54.7 / 48.0 | 0.769 | 6.0 / 5.5 / 5.2 (10) | PASS | 7.0 / 5.9 / 5.5 (10) | PASS |
 | pushdown-300-late | 300 px @ cap 10 | 135.6 / n/a / n/a | 0.731 | 8.7 / n/a / n/a (9) | PASS | 9.9 / n/a / n/a (9) | PASS |
 | **tally** | | | | | **5/7** | | **4/7** |
@@ -547,8 +560,8 @@ Replayed at 390 px (`--coherent-floor=390`).
 | pushdown-300 | 7 | 123.8 / 77.3 / 70.2 | 4.5 / 17.0 / 3.5 | **4.5 / 17.0 / 3.5** | 9 | 0.769 / 0.769 / 0.769 | PASS |
 | pushdown-050 | 7 | 25.9 / 25.5 / 28.9 | 25.9 / 25.5 / 28.9 | **25.9 / 25.5 / 28.9** | 0 | 0.900 / 0.900 / 0.900 | FAIL |
 | pushdown-150 | 7 | 82.5 / 66.5 / 59.1 | 68.3 / 54.7 / 45.2 | **68.3 / 54.7 / 45.2** | 3 | 0.964 / 0.964 / 0.964 | FAIL |
-| pushdown-600 | 7 | 30.7 / 26.1 / 14.5 | 30.7 / 26.1 / 14.5 | **1.4 / 20.7 / 12.4** | 1 | 0.545 / 0.545 / 0.545 | FAIL |
-| pushup-300 | 7 | 155.1 / 92.7 / 67.3 | 9.4 / 19.3 / 4.2 | **9.4 / 19.3 / 4.2** | 11 | 0.667 / 0.667 / 0.667 | PASS |
+| pushdown-600 | 7 | 30.7 / 14.8 / 3.7 | 30.7 / 14.8 / 3.7 | **1.4 / 13.2 / 2.8** | 1 | 0.545 / 0.545 / 0.545 | FAIL |
+| pushup-300 | 7 | 155.1 / 96.7 / 70.0 | 9.4 / 22.1 / 5.9 | **9.4 / 22.1 / 5.9** | 11 | 0.667 / 0.667 / 0.667 | PASS |
 | pushdown-300-early | 3 | 113.1 / 54.7 / 48.0 | 7.0 / 5.9 / 5.5 | **7.0 / 5.9 / 5.5** | 10 | 0.769 / 0.769 / 0.769 | PASS |
 | pushdown-300-late | 10 | 135.6 / n/a / n/a | 9.9 / n/a / n/a | **9.9 / n/a / n/a** | 9 | 0.731 / 0.731 / 0.731 | PASS |
 | **tally** | | | | | | | **4/7** |
@@ -564,9 +577,9 @@ nothing.
 600 px stream's lag AT the move (30.7 -> 1.4 px, a 96% cut) but that
 stream still fails the section-above *step rule*, which demands lag be
 halved at move AND +3 AND +5. Damp's own +3/+5 on this stream are already
-low (26.1 / 14.5) because most blocks became new identities with fresh,
+low (14.8 / 3.7) because most blocks became new identities with fresh,
 un-lagged positions, so the mean is diluted and halving it is a bar the
-one straggler cannot move alone: the floor gets +3 to 20.7 and +5 to 12.4,
+one straggler cannot move alone: the floor gets +3 to 13.2 and +5 to 2.8,
 better than damp on every capture but short of half. A single re-anchored
 block is a real fix for the tracked box a reader sees drifting, and is
 still not enough to flip a mean-over-all-merges scoring rule.
@@ -604,9 +617,9 @@ pincer that closes from both sides:
 
 | count | control stepEvents (streams firing) | pushdown-600 lag move/+3/+5 | combined tally | verdict |
 |---|---|---|---|---|
-| 1 | **17** (rewrap 4, tess-scroll 2, paddle-scroll 9, mlkit-dwell 2) | 1.4 / 20.7 / 12.3 | 10/17 | FAIL — reaches the slab, breaks 4 controls |
-| 2 | **4** (rewrap 4) | 30.7 / 26.1 / 14.5 | 13/17 | FAIL — breaks a control AND misses the slab |
-| 3 | 0 | 30.7 / 26.1 / 14.5 | 14/17 | FAIL — clean, but identical to today |
+| 1 | **11** (rewrap 4, tess-scroll 2, paddle-scroll 3, mlkit-dwell 2) | 1.4 / 13.2 / 2.8 | 10/17 | FAIL — reaches the slab, breaks 4 controls |
+| 2 | **4** (rewrap 4) | 30.7 / 14.8 / 3.7 | 13/17 | FAIL — breaks a control AND misses the slab |
+| 3 | 0 | 30.7 / 14.8 / 3.7 | 14/17 | FAIL — clean, but identical to today |
 
 The starved-quorum case is starved all the way to ONE surviving mover, so
 only a count of 1 reaches it — and one mover is equally what ordinary
@@ -776,7 +789,7 @@ print, and every lag triple and tally of that entry.
 | s21-r1 | rewrap | 0 | 0 | 0 | 244 |
 | s21-r1 | tess-stable-dwell | 0 | 0 | 0 | < 200 |
 | s21-r1 | tess-jitter-dwell | 0 | 0 | 0 | < 200 |
-| s21-r1 | tess-scroll | 0 | 0 | 0 | 208 |
+| s21-r1 | tess-scroll | 0 | 0 | 0 | < 200 |
 | s21-r2 | rewrap | 0 | 0 | 0 | 261 |
 | s21-r2 | tess-stable-dwell | 0 | 0 | 0 | < 200 |
 | s21-r2 | tess-jitter-dwell | 0 | 0 | 0 | < 200 |
@@ -784,7 +797,7 @@ print, and every lag triple and tally of that entry.
 | s42-r1 | rewrap | 0 | 0 | 0 | < 200 |
 | s42-r1 | tess-stable-dwell | 0 | 0 | 0 | < 200 |
 | s42-r1 | tess-jitter-dwell | 0 | 0 | 0 | < 200 |
-| s42-r1 | tess-scroll | 0 | 0 | 0 | 364 |
+| s42-r1 | tess-scroll | 0 | 0 | 0 | 359 |
 | s42-r2 | rewrap | 0 | 0 | 0 | < 200 |
 | s42-r2 | tess-stable-dwell | 0 | 0 | 0 | < 200 |
 | s42-r2 | tess-jitter-dwell | 0 | 0 | 0 | < 200 |
@@ -797,15 +810,15 @@ print, and every lag triple and tally of that entry.
 | s93-r1 | pushdown-050 | 7 | 25.9 / 25.5 / 28.9 | 25.9 / 25.5 / 28.9 (0) | 25.9 / 25.5 / 28.9 (0) | 25.9 / 25.5 / 28.9 (0) | FAIL / FAIL / FAIL |
 | s93-r1 | pushdown-150 | 7 | 82.5 / 66.5 / 59.1 | 68.3 / 54.7 / 45.2 (3) | 6.0 / 19.7 / 20.5 (16) | 68.3 / 54.7 / 45.2 (3) | FAIL / PASS / FAIL |
 | s93-r1 | pushdown-300 | 7 | 123.8 / 77.3 / 70.2 | 4.5 / 17.0 / 3.5 (9) | 4.5 / 17.0 / 3.5 (9) | 4.5 / 17.0 / 3.5 (9) | PASS / PASS / PASS |
-| s93-r1 | pushdown-600 | 7 | 30.7 / 26.1 / 14.5 | 30.7 / 26.1 / 14.5 (0) | 30.7 / 26.1 / 14.5 (0) | 1.4 / 20.7 / 12.4 (1) | FAIL / FAIL / FAIL |
-| s93-r1 | pushup-300 | 7 | 155.1 / 92.7 / 67.3 | 9.4 / 19.3 / 4.2 (11) | 9.4 / 19.3 / 4.2 (11) | 9.4 / 19.3 / 4.2 (11) | PASS / PASS / PASS |
+| s93-r1 | pushdown-600 | 7 | 30.7 / 14.8 / 3.7 | 30.7 / 14.8 / 3.7 (0) | 30.7 / 14.8 / 3.7 (0) | 1.4 / 13.2 / 2.8 (1) | FAIL / FAIL / FAIL |
+| s93-r1 | pushup-300 | 7 | 155.1 / 96.7 / 70.0 | 9.4 / 22.1 / 5.9 (11) | 9.4 / 22.1 / 5.9 (11) | 9.4 / 22.1 / 5.9 (11) | PASS / PASS / PASS |
 | s93-r1 | pushdown-300-early | 3 | 113.1 / 54.7 / 48.0 | 7.0 / 5.9 / 5.5 (10) | 7.0 / 5.9 / 5.5 (10) | 7.0 / 5.9 / 5.5 (10) | PASS / PASS / PASS |
 | s93-r1 | pushdown-300-late | 10 | 135.6 / n/a / n/a | 9.9 / n/a / n/a (9) | 9.9 / n/a / n/a (9) | 9.9 / n/a / n/a (9) | PASS / PASS / PASS |
 | s93-r2 | pushdown-050 | 7 | 25.3 / 23.9 / 28.8 | 25.3 / 23.9 / 28.8 (0) | 25.3 / 23.9 / 28.8 (0) | 25.3 / 23.9 / 28.8 (0) | FAIL / FAIL / FAIL |
 | s93-r2 | pushdown-150 | 7 | 81.7 / 67.0 / 66.6 | 81.7 / 67.0 / 66.6 (0) | 81.7 / 67.0 / 66.6 (0) | 81.7 / 67.0 / 66.6 (0) | FAIL / FAIL / FAIL |
 | s93-r2 | pushdown-300 | 7 | 123.8 / 79.3 / 78.7 | 0.1 / 10.3 / 13.6 (9) | 0.1 / 10.3 / 13.6 (9) | 0.1 / 10.3 / 13.6 (9) | PASS / PASS / PASS |
-| s93-r2 | pushdown-600 | 7 | 30.1 / 15.9 / 22.8 | 30.1 / 15.9 / 22.8 (0) | 30.1 / 15.9 / 22.8 (0) | 0.1 / 11.6 / 21.4 (1) | FAIL / FAIL / FAIL |
-| s93-r2 | pushup-300 | 7 | 168.7 / 84.4 / 71.9 | 11.8 / 6.5 / 7.6 (11) | 11.8 / 6.5 / 7.6 (11) | 11.8 / 6.5 / 7.6 (11) | PASS / PASS / PASS |
+| s93-r2 | pushdown-600 | 7 | 30.1 / 3.4 / 14.0 | 30.1 / 3.4 / 14.0 (0) | 30.1 / 3.4 / 14.0 (0) | 0.1 / 2.1 / 13.3 (1) | FAIL / FAIL / FAIL |
+| s93-r2 | pushup-300 | 7 | 168.7 / 88.4 / 77.8 | 11.8 / 8.0 / 9.6 (11) | 11.8 / 8.0 / 9.6 (11) | 11.8 / 8.0 / 9.6 (11) | PASS / PASS / PASS |
 | s93-r2 | pushdown-300-early | 3 | 113.0 / 48.2 / 40.5 | 7.7 / 9.3 / 7.0 (10) | 7.7 / 9.3 / 7.0 (10) | 7.7 / 9.3 / 7.0 (10) | PASS / PASS / PASS |
 | s93-r2 | pushdown-300-late | 10 | 135.3 / n/a / n/a | 7.3 / n/a / n/a (10) | 7.3 / n/a / n/a (10) | 7.3 / n/a / n/a (10) | PASS / PASS / PASS |
 | s07-r1 | pushdown-050 | 7 | 36.8 / 34.1 / 22.3 | 36.8 / 34.1 / 22.3 (0) | 36.8 / 34.1 / 22.3 (0) | 36.8 / 34.1 / 22.3 (0) | FAIL / FAIL / FAIL |
@@ -840,14 +853,14 @@ print, and every lag triple and tally of that entry.
 | s42-r1 | pushdown-150 | 7 | 68.4 / 54.6 / 51.1 | 68.4 / 54.6 / 51.1 (0) | 68.4 / 54.6 / 51.1 (0) | 68.4 / 54.6 / 51.1 (0) | FAIL / FAIL / FAIL |
 | s42-r1 | pushdown-300 | 7 | 103.4 / 67.8 / 61.7 | 9.7 / 5.6 / 9.4 (8) | 9.7 / 5.6 / 9.4 (8) | 9.7 / 5.6 / 9.4 (8) | PASS / PASS / PASS |
 | s42-r1 | pushdown-600 | 7 | 16.0 / 9.8 / 8.5 | 16.0 / 9.8 / 8.5 (0) | 16.0 / 9.8 / 8.5 (0) | 16.0 / 9.8 / 8.5 (0) | FAIL / FAIL / FAIL |
-| s42-r1 | pushup-300 | 7 | 110.5 / 47.1 / 39.6 | 19.7 / 11.4 / 11.5 (7) | 19.7 / 11.4 / 11.5 (7) | 19.7 / 11.4 / 11.5 (7) | PASS / PASS / PASS |
+| s42-r1 | pushup-300 | 7 | 110.5 / 47.1 / 39.3 | 19.7 / 9.7 / 8.9 (7) | 19.7 / 9.7 / 8.9 (7) | 19.7 / 9.7 / 8.9 (7) | PASS / PASS / PASS |
 | s42-r1 | pushdown-300-early | 3 | 84.3 / 42.3 / 41.3 | 14.1 / 2.5 / 13.0 (8) | 14.1 / 2.5 / 13.0 (8) | 14.1 / 2.5 / 13.0 (8) | PASS / PASS / PASS |
 | s42-r1 | pushdown-300-late | 10 | 94.9 / n/a / n/a | 7.0 / n/a / n/a (7) | 7.0 / n/a / n/a (7) | 7.0 / n/a / n/a (7) | PASS / PASS / PASS |
 | s42-r2 | pushdown-050 | 7 | 36.4 / 22.7 / 21.0 | 36.4 / 22.7 / 21.0 (0) | 36.4 / 22.7 / 21.0 (0) | 36.4 / 22.7 / 21.0 (0) | FAIL / FAIL / FAIL |
 | s42-r2 | pushdown-150 | 7 | 69.4 / 68.6 / 64.2 | 69.4 / 68.6 / 64.2 (0) | 69.4 / 68.6 / 64.2 (0) | 69.4 / 68.6 / 64.2 (0) | FAIL / FAIL / FAIL |
 | s42-r2 | pushdown-300 | 7 | 104.1 / 73.7 / 61.2 | 12.6 / 12.5 / 12.4 (7) | 12.6 / 12.5 / 12.4 (7) | 12.6 / 12.5 / 12.4 (7) | PASS / PASS / PASS |
 | s42-r2 | pushdown-600 | 7 | 27.8 / 21.1 / 19.4 | 27.8 / 21.1 / 19.4 (0) | 27.8 / 21.1 / 19.4 (0) | 27.8 / 21.1 / 19.4 (0) | FAIL / FAIL / FAIL |
-| s42-r2 | pushup-300 | 7 | 122.7 / 68.0 / 53.1 | 22.1 / 9.9 / 20.0 (10) | 22.1 / 9.9 / 20.0 (10) | 22.1 / 9.9 / 20.0 (10) | PASS / PASS / PASS |
+| s42-r2 | pushup-300 | 7 | 122.7 / 68.0 / 52.8 | 22.1 / 8.1 / 17.4 (10) | 22.1 / 8.1 / 17.4 (10) | 22.1 / 8.1 / 17.4 (10) | PASS / PASS / PASS |
 | s42-r2 | pushdown-300-early | 3 | 70.5 / 40.1 / 33.7 | 13.7 / 15.4 / 14.0 (5) | 13.7 / 15.4 / 14.0 (5) | 13.7 / 15.4 / 14.0 (5) | PASS / PASS / PASS |
 | s42-r2 | pushdown-300-late | 10 | 108.0 / n/a / n/a | 10.3 / n/a / n/a (7) | 10.3 / n/a / n/a (7) | 10.3 / n/a / n/a (7) | PASS / PASS / PASS |
 
@@ -865,7 +878,7 @@ controls; the **slab bound** is `pushdown-600`'s. The window is
 | s07-r2 | < 200 | 346 | (< 200, 346] | no | 22.8 → 22.8 |
 | s21-r1 | 244 | none | empty | no | 2.3 → 2.3 |
 | s21-r2 | 261 | none | empty | no | 0.5 → 0.5 |
-| s42-r1 | 364 | 240 | empty | no | 16.0 → 16.0 |
+| s42-r1 | 359 | 240 | empty | no | 16.0 → 16.0 |
 | s42-r2 | 359 | 240 | empty | no | 27.8 → 27.8 |
 
 ### Across configurations
@@ -889,7 +902,7 @@ Four results, in decreasing order of how well they held up.
 390 px floor and for the adopt lever. The largest control mover across
 the eight configurations is the published seed's own 377 px
 (`tess-scroll`, seed 94's page); the other seven range from below 200 to
-364 px (median 261). The shipped 390 px floor therefore never fires on
+359 px (median 261). The shipped 390 px floor therefore never fires on
 ordinary scrolling or on a rewrap anywhere in this corpus — the safety
 half of the #119 ship rule generalises.
 
@@ -926,7 +939,7 @@ shifted line is re-admitted as a new identity — which is also why damp's
 lag at the move reads 2.3 / 0.5 px there: fresh identities carry no
 lag, so the metric is small for the wrong reason). On the s42 page the
 only surviving mover displaces 240 px while the scroll control's
-largest mover is 359–364 px — no floor separates them. Across the six
+largest mover is 359 px — no floor separates them. Across the six
 configurations with a slab bound at all, the bounds span 240–406 px
 while the control ceilings span 220–377 px: **no single floor is inside
 every page's window**, and the 390 px example is a safe no-op on three of
@@ -938,7 +951,7 @@ the corpus's.
 
 **On repetitions vs pages:** a fresh noise draw on the same page moves
 a bound by 0–17 px where both repetitions measure it (s93 slab 406 to
-392; s07 slab 340 to 346; s21 ceiling 244 to 261; s42 ceiling 364 to
+392; s07 slab 340 to 346; s21 ceiling 244 to 261; s42 ceiling 359 to
 359, slab 240 to 240), can push a ceiling out of the search range
 altogether (s07 ceiling 220 to below 200 — a move of unknown size),
 and, on the published page, decides whether the 150 px step gets a

@@ -29,10 +29,18 @@ polygons reduced to axis-aligned rects, confidence clamped to the same
 | stable-dwell | legacy | 0.21 | 0.24 | 0.22 | 1.0 (saturated) |
 | ocr-jitter | agreement | 0.20 | 0.11 | **0.08** | 0.929 |
 | ocr-jitter | legacy | 0.51 | 0.59 | 0.54 | 1.0 (saturated) |
-| scroll | agreement | **1.08** | — | — | 0.900 |
-| scroll | legacy | 2.70 | — | — | 1.0 (saturated) |
+| scroll | agreement | **0.62** | — | — | 0.883 |
+| scroll | legacy | 0.88 | — | — | 1.0 (saturated) |
 
 Merge rates: 330/330/322 over the three streams — no retention anomaly.
+
+> **#143 note (2026-09-11).** The two `scroll` rows regenerated after
+> the primary tie-break (an exact text-score tie now goes to the
+> candidate nearer the fresh block's drift-corrected centre): agreement
+> n3-5 displacement 1.08 → **0.62**, legacy 2.70 → 0.88, agreement
+> pconf mean 0.900 → 0.883. The scroll ladder repeats text across
+> lines, so it is the only stream here with ties; both dwell scenarios
+> are byte-identical. The 2.2.0 note below quotes the pre-#143 figures.
 
 Scroll rows regenerated 2026-08-29 with rig 2.1.0, which configures the
 engine with the corpus viewport (`meta.vp` = 1080×2200 CSS px) instead

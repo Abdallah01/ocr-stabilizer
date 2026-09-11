@@ -1,6 +1,19 @@
 ## Unreleased
 
 ### Changed
+
+- **Primary matching is now a total order (#143).** When two cached candidates score the same
+  text similarity against a fresh block (repeated headings, duplicated labels), the engine
+  no longer keeps whichever the spatial index yielded first: the candidate nearer the fresh
+  block's drift-corrected centre wins, and at equal distance the smaller rect key
+  (top, left, right, bottom) wins. The drift is a per-capture snapshot taken before any of
+  the capture's merges, so the dry pre-pass and the real loop see the same tie-break.
+  Measured on the committed corpus: 171 exact ties across 21 streams × 11 harness arms,
+  118 of them resolved differently; only the four streams with ties changed (`pushdown-600`
+  damp lag +3/+5 26.1 / 14.5 → 14.8 / 3.7 px; paddle `scroll` agreement displacement
+  1.08 → 0.62 px; the seed-21 `tess-scroll` control no longer fires a step event at any
+  floor). Committed `.ab.json` / `.diff.json` references and the experiment tables were
+  regenerated. See `doc/decisions/primary-tie-break.md`.
 - **Internal: coherent-shift detection is its own class (#150, no
   behaviour change).** `lib/src/internal/coherent_shift_detector.dart`
   (`CoherentShiftDetector.detect`, `ShiftPlan`, `ShiftCandidate`) and

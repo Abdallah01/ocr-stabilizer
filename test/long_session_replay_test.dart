@@ -82,8 +82,8 @@ void main() {
     const maxTextVotes = 5;
     final accumulatorSource =
         File('lib/src/internal/vote_accumulator.dart').readAsStringSync();
-    final capDecl = RegExp(r'this\.maxTextVotes = (\d+)')
-        .allMatches(accumulatorSource);
+    final capDecl =
+        RegExp(r'this\.maxTextVotes = (\d+)').allMatches(accumulatorSource);
     expect(capDecl, hasLength(1),
         reason: 'the maxTextVotes default moved or was renamed — re-anchor '
             'this parse AND re-derive the vote-cap fixture');
@@ -159,18 +159,28 @@ void main() {
 
     // The sharper leak detector: after the first wrap the fixture is
     // perfectly periodic with a period of TWO passes (parity — see the
-    // churn note), so the per-pass population maximum must be FLAT per
-    // phase. EVERY later full pass is held to the maximum of the
-    // same-phase pass two earlier — a transient mid-run bump (state
+    // churn note), and the engine's steady state settles into a cycle of
+    // FOUR passes on top of it (#143: the primary tie-break makes which
+    // of two equal-text identities absorbs a churned line depend on the
+    // previous pass's merged positions; measured 2026-09-11 as
+    // 120 / 115 / 119 / 114 repeating from pass 3, against 116 / 112
+    // repeating before #143). So the per-pass population maximum must be
+    // FLAT per phase: EVERY later full pass is held to the maximum of the
+    // same-phase pass four earlier — a transient mid-run bump (state
     // surviving longer than its expiry window) trips this even if it
     // recedes again before the final pass and never reaches the absolute
     // ceiling. Equality, not <=: a DROP between same-phase passes is as
     // much a lost-periodicity surprise as a rise.
+    const period = 4;
     final lastFullPass = (captures ~/ capsPerPass) - 1;
-    for (var pass = 3; pass <= lastFullPass; pass++) {
-      expect(perPassMax[pass], equals(perPassMax[pass - 2]),
+    expect(lastFullPass, greaterThanOrEqualTo(3 + 2 * period),
+        reason: 'the fixture must run at least two full cycles past the '
+            'warm-up for the flatness check to see a leak');
+    for (var pass = 3 + period; pass <= lastFullPass; pass++) {
+      expect(perPassMax[pass], equals(perPassMax[pass - period]),
           reason: 'per-pass max population changed between pass '
-              '${pass - 2} (${perPassMax[pass - 2]}) and same-phase pass '
+              '${pass - period} (${perPassMax[pass - period]}) and '
+              'same-phase pass '
               '$pass (${perPassMax[pass]}) — a slow leak, even if still '
               'under the absolute ceiling');
     }

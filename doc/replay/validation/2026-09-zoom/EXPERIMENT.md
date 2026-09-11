@@ -168,7 +168,7 @@ and how many entered as new identities.
 | s42-r1 / rewrap | 1.044 | 0.044 | 23.5 | 12 | 0.11 | 7 |
 | s42-r1 / tess-stable-dwell | 0.998 | 0.002 | 3.8 | 30 | 0.05 | 3 |
 | s42-r1 / tess-jitter-dwell | 0.999 | 0.001 | 3.1 | 30 | 0.05 | 3 |
-| s42-r1 / tess-scroll | 0.990 | 0.010 | 10.5 | 23 | 0.07 | 7 |
+| s42-r1 / tess-scroll | 0.992 | 0.008 | 4.0 | 22 | 0.09 | 7 |
 | s42-r2 / pushdown-050 | 1.033 | 0.033 | 13.4 | 29 | 0.05 | 7 |
 | s42-r2 / pushdown-150 | 1.102 | 0.102 | 41.0 | 28 | 0.05 | 7 |
 | s42-r2 / pushdown-300 | 1.207 | 0.207 | 85.9 | 21 | 0.12 | 7 |
@@ -183,7 +183,7 @@ and how many entered as new identities.
 | s93-r2 / pushdown-050 | 1.033 | 0.033 | 13.7 | 27 | 0.08 | 7 |
 | s93-r2 / pushdown-150 | 1.103 | 0.103 | 40.0 | 26 | 0.08 | 7 |
 | s93-r2 / pushdown-300 | 1.220 | 0.220 | 86.7 | 20 | 0.12 | 7 |
-| s93-r2 / pushdown-600 | 1.001 | 0.001 | 0.6 | 19 | 0.34 | 12 |
+| s93-r2 / pushdown-600 | 0.999 | 0.001 | 0.6 | 11 | 0.14 | 7 |
 | s93-r2 / pushup-300 | 0.816 | 0.184 | 74.1 | 20 | 0.15 | 7 |
 | s93-r2 / pushdown-300-early | 1.223 | 0.223 | 83.4 | 20 | 0.12 | 3 |
 | s93-r2 / pushdown-300-late | 1.223 | 0.223 | 85.5 | 21 | 0.12 | 10 |
@@ -202,14 +202,14 @@ many captures qualified. `any` = no bound on that axis.
 
 | residual under | pairs at least | gap share at most | largest control deviation | set by | control captures under all three |
 |---|---|---|---|---|---|
-| < 5 px | >= 3 | <= 0.5 | 0.059 | mlkit-scroll (cap 8, 4 pairs) | 835 |
-| < 5 px | >= 3 | any | 0.059 | mlkit-scroll (cap 8, 4 pairs) | 840 |
-| < 5 px | >= 6 | <= 0.5 | 0.010 | s42-r1 / pushdown-300-late (cap 11, 21 pairs) | 832 |
-| < 5 px | >= 6 | any | 0.010 | s42-r1 / pushdown-300-late (cap 11, 21 pairs) | 832 |
-| < 10 px | >= 3 | <= 0.5 | 0.059 | mlkit-scroll (cap 8, 4 pairs) | 850 |
-| < 10 px | >= 3 | any | 0.059 | mlkit-scroll (cap 8, 4 pairs) | 855 |
-| < 10 px | >= 6 | <= 0.5 | 0.010 | s42-r1 / pushdown-300-late (cap 11, 21 pairs) | 847 |
-| < 10 px | >= 6 | any | 0.010 | s42-r1 / pushdown-300-late (cap 11, 21 pairs) | 847 |
+| < 5 px | >= 3 | <= 0.5 | 0.059 | mlkit-scroll (cap 8, 4 pairs) | 837 |
+| < 5 px | >= 3 | any | 0.059 | mlkit-scroll (cap 8, 4 pairs) | 842 |
+| < 5 px | >= 6 | <= 0.5 | 0.010 | s42-r1 / pushdown-300-late (cap 11, 21 pairs) | 834 |
+| < 5 px | >= 6 | any | 0.010 | s42-r1 / pushdown-300-late (cap 11, 21 pairs) | 834 |
+| < 10 px | >= 3 | <= 0.5 | 0.059 | mlkit-scroll (cap 8, 4 pairs) | 851 |
+| < 10 px | >= 3 | any | 0.059 | mlkit-scroll (cap 8, 4 pairs) | 856 |
+| < 10 px | >= 6 | <= 0.5 | 0.010 | s42-r1 / pushdown-300-late (cap 11, 21 pairs) | 848 |
+| < 10 px | >= 6 | any | 0.010 | s42-r1 / pushdown-300-late (cap 11, 21 pairs) | 848 |
 | < 20 px | >= 3 | <= 0.5 | 0.059 | mlkit-scroll (cap 8, 4 pairs) | 901 |
 | < 20 px | >= 3 | any | 0.059 | mlkit-scroll (cap 8, 4 pairs) | 906 |
 | < 20 px | >= 6 | <= 0.5 | 0.034 | s07-r2 / pushdown-050 (cap 7, 29 pairs) | 898 |
@@ -283,8 +283,8 @@ over two captures on `zoom-125`) and the scale return to 1.
 
 **5. The controls stay quiet under the bounds.** No dwell or scroll
 stream of any engine exceeds a deviation of 0.010 with six or more pairs
-and a residual under 10 px (94 streams, 847 such captures; the largest
-is `tess-scroll` at 0.010 with 10.5 px on one seed's page). The 300 px
+and a residual under 10 px (94 streams, 848 such captures; the largest
+under those bounds is 0.010, `pushdown-300-late` on one seed's page). The 300 px
 step streams, up and down, in all four positions, peak at 0.18–0.22 —
 least squares spreading the step over the lines above and below it — but
 always with a 58–87 px residual; `pushdown-150` at 0.10–0.11 with
