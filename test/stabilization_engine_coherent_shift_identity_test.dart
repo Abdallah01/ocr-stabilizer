@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
 // SPDX-License-Identifier: MIT
 //
-// #116: `_detectCoherentShift` builds `memberDrift` -- a map from each
+// #116: `CoherentShiftDetector.detect` builds `memberDrift` -- a map from each
 // coherent-shift member's EXISTING block to that member's own frozen
 // per-region drift snapshot -- as a plain `Map<T, Offset>`. Every OTHER
 // `T`-keyed collection in the engine (`matchedExisting`, the classification/

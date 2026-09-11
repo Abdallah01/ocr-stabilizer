@@ -12,11 +12,12 @@ import 'drift_tracker.dart';
 import 'hierarchy_weight.dart';
 import 'identity_turnover.dart';
 import 'transform_estimate.dart';
+import 'internal/block_geometry.dart';
+import 'internal/coherent_shift_detector.dart';
 import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
 import 'track.dart';
 import 'overlap_resolver.dart';
-import 'robust_stats.dart';
 import 'spatial_block_index.dart';
 import 'stabilization_result.dart';
 import 'step_response.dart';
@@ -28,22 +29,6 @@ import 'observation.dart';
 import 'types/absolute_rect.dart';
 import 'types/confidence_types.dart';
 import 'types/space_key.dart';
-
-/// A decided coherent-shift plan (#116/#119), private to the engine.
-///
-/// `memberDrift` is the single source of truth for membership AND each
-/// member's frozen drift snapshot (#116 finding C); `adopted` is the
-/// subset of members carried along by `coherentShiftAdoptAgreeing`
-/// (#119 item 2); `source` names the path that decided the plan. Both
-/// collections are identity-keyed — `T` is the consumer's type and may
-/// define value equality. `stabilize` summarises the plan's APPLIED
-/// members into `StabilizationResult.coherentShift` (2.5.0).
-typedef _ShiftPlan<T> = ({
-  Offset translation,
-  Map<T, Offset> memberDrift,
-  Set<T> adopted,
-  CoherentShiftSource source,
-});
 
 /// How the engine merges an existing block's position with a fresh
 /// drift-corrected observation, and how merged position confidence is
@@ -90,55 +75,8 @@ enum PositionMergeModel {
 /// translation stability to the consumer.
 const int _kWellObservedThreshold = 3;
 
-/// Jitter allowance multiplier for [PositionMergeModel.agreementWeighted]:
-/// the agreement scale is this multiple of the existing (tracked) block's
-/// OWN height (#75; was the region's median block height through 1.0.x — a
-/// pooled median gets polluted by small siblings and needed a cold-region
-/// default, see `_mergedPositionConfidence`). A residual equal to the full
-/// allowance scores agreement 0; a residual well inside it scores partial
-/// agreement.
-///
-/// Why not the drift margin? `driftMarginForKey` is a *median-of-drift* —
-/// a systematic-offset measure, ~0 under symmetric jitter and sub-floor
-/// numeric residue on stable streams — so a margin-derived scale is dead
-/// or poisonous in every sampled production regime (#58, #70, #71). A
-/// spread measure (MAD of drift residuals, see `RobustStats`) is the
-/// documented option if a drift-adaptive scale is ever wanted; note #72
-/// (the `madOrFallback` floor) becomes load-bearing first.
-///
-/// Why 3? Sweep-validated on production captures (#58, 2026-07-22):
-/// at 1x, deep-chain OCR jitter is chased at 15.8 px/merge (worse than
-/// legacy's 11.8); at 3x the confidence→weight anchoring loop engages and
-/// damps it to 3.8 px/merge, while confidence stays regime-discriminating
-/// (~1.0 stable / 0.85 reflow / 0.35 heavy jitter — never saturated-blind
-/// like legacy). The 3x multiplier carried over unchanged to the per-block
-/// base (#75, 2026-07-24): on uniform streams the two bases coincide (the
-/// sweep's calibration transfers), and the six-capture validation showed
-/// per-block ~30-60% better established-chain damping under OCR jitter
-/// with every other regime within noise
-/// (`doc/replay/validation/2026-07-perblock-scale/`). Calibrated against
-/// ML-Kit-shaped noise; re-run the sweep (`tool/replay` ab-report) before
-/// trusting it for a different OCR engine's residual distribution.
-/// Cross-engine matrix (issue #94): Tesseract 5 and PaddleOCR entries
-/// (synthetic low-amplitude corpora, 2026-08) show the default TRANSFERS
-/// without retuning in the photometric-jitter regime — established-chain
-/// damping and regime-discriminating confidence replicate on both. The
-/// high-amplitude re-segmentation regime remains ML-Kit evidence, now
-/// including a committed on-device stream
-/// (`doc/replay/validation/2026-08-mlkit-on-device/`). All entries live
-/// under `doc/replay/validation/`.
-const double _kAgreementJitterAllowance = 3.0;
-
 /// Maximum text vote entries per block to prevent OOM on noisy edges.
 const int _kMaxTextVotes = 5;
-
-/// Below this many pixels, a displacement component carries no direction
-/// (#119). Used only by `StabilizationEngine.coherentShiftFloorPx`'s
-/// direction-agreement check, so a group whose members agree on the axis
-/// that actually moved is not broken up by sub-pixel disagreement on the
-/// other one — real corpus movers report dx values like `-0.0` and `0.1`
-/// on a purely vertical slab.
-const double _kDirectionEpsilonPx = 1.0;
 
 /// Core stabilization engine: answers "is this block the same as that block,
 /// and what are its corrected coordinates?"
@@ -181,6 +119,16 @@ class StabilizationEngine<T extends Track<P>, P> {
 
   /// Drift tracker shared with the app (the app may also feed observations).
   final DriftTracker driftTracker;
+
+  /// The coherent-shift detector (#116/#119; its own class since #150).
+  /// One per engine, over [config]'s coherent-shift levers and
+  /// [driftTracker]; `stabilize` asks it for a plan only under
+  /// [StepResponse.coherentShift] with the agreement-weighted model.
+  late final CoherentShiftDetector<T> _coherentShiftDetector =
+      CoherentShiftDetector<T>(
+    config: config.stepResponse.coherentShift,
+    driftTracker: driftTracker,
+  );
 
   /// Spatial index rebuilt by the engine on each [stabilize] call; the app
   /// may query it between calls for rendering lookups.
@@ -402,7 +350,7 @@ class StabilizationEngine<T extends Track<P>, P> {
   /// the two blocks' heights" comparison — the algorithm has always
   /// compared a candidate against a GROUP, never against one other pair,
   /// so this now says what the code does). Default `0.5`. See
-  /// `_detectCoherentShift` for the exact clustering algorithm.
+  /// `CoherentShiftDetector.detect` for the exact clustering algorithm.
   final double coherentShiftTolerance;
 
   /// #119 — the ABSOLUTE-PIXEL floor that admits a large-slab mover the
@@ -416,7 +364,7 @@ class StabilizationEngine<T extends Track<P>, P> {
   /// that starves it: the lines that truly moved are admitted as NEW
   /// identities (no match, so no residual to vote with), and the one or
   /// two stragglers that do still match cannot reach
-  /// [coherentShiftMinBlocks]. `_detectCoherentShift` then returns before
+  /// [coherentShiftMinBlocks]. `CoherentShiftDetector.detect` then returns before
   /// it ever clusters, and the whole capture falls through to
   /// [StepResponse.damp] — measured, not inferred: on the validation
   /// corpus's 600px-slab stream the reflow capture leaves exactly ONE
@@ -444,7 +392,7 @@ class StabilizationEngine<T extends Track<P>, P> {
   /// paragraph above is the whole story.
   ///
   /// **Why an absolute floor and not another height-relative multiplier.**
-  /// A multiple of the block's own agreement scale ([_agreementScale], 3x
+  /// A multiple of the block's own agreement scale ([agreementScale], 3x
   /// its height) cannot separate these two populations, because a SHORT
   /// block has a small scale and therefore reaches a high ratio at a
   /// modest absolute displacement. On the validation corpus the slab's
@@ -499,7 +447,7 @@ class StabilizationEngine<T extends Track<P>, P> {
   /// reproduce 2.3.x numerics bit-for-bit.
   ///
   /// The "moved" gate is a multiple of each block's OWN height
-  /// ([_agreementScale], 3x): a 150 px slab step carries a 36 px line past
+  /// ([agreementScale], 3x): a 150 px slab step carries a 36 px line past
   /// its gate (108 px) but not a 60 px line past its gate (180 px). On the
   /// measured 150 px pushdown capture three short movers therefore form a
   /// valid group while 13 taller pairs that made the SAME step stay under
@@ -544,27 +492,6 @@ class StabilizationEngine<T extends Track<P>, P> {
     }
   }
 
-  /// The block's own jitter-allowance scale — [_kAgreementJitterAllowance]
-  /// (3x) times its own height ([_blockHeight], which floors a degenerate
-  /// 0/negative/non-finite rect at 16px). Shared by
-  /// [_mergedPositionConfidence]'s agreement computation and
-  /// [StepResponse.snap]'s threshold check (both must reference literally
-  /// the same scale, per #116's spec) so the two can never drift apart.
-  double _agreementScale(T existing) =>
-      _blockHeight(existing) * _kAgreementJitterAllowance;
-
-  /// THE definition of a block's height for the coherent-shift machinery:
-  /// the "moved" gate (through [_agreementScale]), the movers' median
-  /// height the clustering tolerance scales with, and the adoption
-  /// tolerance (#119 item 2) all read this one function, so they cannot
-  /// drift apart (PR #132 review C3 — the 16 px fallback used to be
-  /// written out at each site). A non-finite or non-positive rect counts
-  /// as 16 px.
-  double _blockHeight(T block) {
-    final h = block.absoluteRect.raw.height;
-    return (!h.isFinite || h <= 0) ? 16.0 : h;
-  }
-
   /// Merged position confidence for the current [positionMergeModel].
   ///
   /// [baselineRect] is the position the residual is measured FROM —
@@ -594,7 +521,7 @@ class StabilizationEngine<T extends Track<P>, P> {
         // Confidence is a running mean of positional AGREEMENT: how
         // close the corrected fresh observation landed to the tracked
         // position, scaled by the block's OWN jitter allowance
-        // ([_kAgreementJitterAllowance] x the existing block's height,
+        // ([kAgreementJitterAllowance] x the existing block's height,
         // #75): tolerance proportional to the block's own text size. A
         // region-median scale gets polluted by small siblings (a caption's
         // height says nothing about how much a paragraph may jitter — F2)
@@ -606,7 +533,7 @@ class StabilizationEngine<T extends Track<P>, P> {
             (correctedRect.topLeft -
                     (baselineRect ?? existing.absoluteRect.raw).topLeft)
                 .distance;
-        final scale = _agreementScale(existing);
+        final scale = agreementScale(existing);
         final agreement =
             scale > 0 ? (1.0 - residual / scale).clamp(0.0, 1.0) : 0.0;
         // Clamped for the same reason as the merge weight: n <= -1
@@ -1000,7 +927,7 @@ class StabilizationEngine<T extends Track<P>, P> {
     // [StepResponse.snap] this block does not run at all, so the match+
     // merge loop below is structurally identical to the pre-#116
     // interleaved design (byte-identical to main, not merely argued to
-    // be). `_detectCoherentShift` needs every match of this capture
+    // be). `CoherentShiftDetector.detect` needs every match of this capture
     // decided BEFORE any of this capture's merges (and their
     // `driftTracker.addObservation` side effects) — but it only ever
     // votes on ordinary PRIMARY matches (band admissions and nested
@@ -1014,8 +941,12 @@ class StabilizationEngine<T extends Track<P>, P> {
     // read same-capture-mutable state (band) or would recompute work the
     // real loop does anyway for a result this vote discards either way
     // (nested).
-    final coherentShiftPlan = stepResponse == StepResponse.coherentShift
-        ? _detectCoherentShift([
+    // The model gate sits here, not in the detector: legacy has no
+    // agreement scale to detect "moved" against (documented no-op, see
+    // [StepResponse]); the detector itself is model-agnostic.
+    final coherentShiftPlan = stepResponse == StepResponse.coherentShift &&
+            positionMergeModel == PositionMergeModel.agreementWeighted
+        ? _coherentShiftDetector.detect([
             for (final fresh in deduped)
               (
                 fresh: fresh,
@@ -1083,7 +1014,7 @@ class StabilizationEngine<T extends Track<P>, P> {
             (existing.absoluteRect.raw.center, fresh.absoluteRect.raw.center));
       }
       // #116 finding C: `frozenRegionDrift` threads the SAME drift
-      // snapshot `_detectCoherentShift`'s dry pre-pass used for this
+      // snapshot `CoherentShiftDetector.detect`'s dry pre-pass used for this
       // member's displacement into its real merge — see that method's
       // "Frozen drift snapshot" doc for why a live re-read here would be
       // order-dependent.
@@ -1223,445 +1154,6 @@ class StabilizationEngine<T extends Track<P>, P> {
       transformEstimate: TransformEstimate.fit(transformPairs,
           minPairs: transformEstimateMinPairs),
     );
-  }
-
-  // ┌─── Coherent-shift detection (#116, StepResponse.coherentShift) ────
-  // A per-batch translation vote: among this capture's ordinary text
-  // matches, find the ones whose drift-corrected displacement exceeds
-  // their own agreement scale ("moved"), cluster the moved displacements,
-  // and — if a big-enough, big-enough-a-share group agrees — return its
-  // median displacement as the batch shift every member's merge applies.
-  // Where that quorum declines, the two #119 opt-in fallbacks (the
-  // absolute-pixel floor, then the batch-level re-anchor; both off by
-  // default) get a turn, each re-anchoring its own members only. Whatever
-  // plan is decided, `coherentShiftAdoptAgreeing` (#119 item 2, ON by
-  // default since 2.4.0) then carries along the eligible under-gate pairs
-  // that agree with it — membership widens, the translation never changes.
-  // └──────────────────────────────────────────────────────────────────
-
-  /// Detect a per-batch coherent shift among [matchResults] (a DRY,
-  /// primary-match-only pre-pass `stabilize` computes just for this call
-  /// — see its doc for why that pre-pass is safe to run ahead of this
-  /// capture's merges).
-  ///
-  /// Returns `null` when [positionMergeModel] is not
-  /// [PositionMergeModel.agreementWeighted] (legacy has no residual/scale
-  /// concept to detect "moved" against — documented no-op, see
-  /// [StepResponse]), when fewer than [coherentShiftMinBlocks] pairs moved
-  /// at all, or when the largest valid window fails either
-  /// [coherentShiftMinBlocks] or [coherentShiftMinShare] — unless one of
-  /// the #119 opt-in fallbacks ([coherentShiftFloorPx], then
-  /// [coherentShiftReanchorMinBlocks]) admits a group at one of those three
-  /// decline points. Both are `null` by default, so the plain statement
-  /// holds for the 2.3.0 configuration.
-  ///
-  /// **Eligible pairs** — ordinary text matches only: excludes band
-  /// admissions and nested fragments (never in `matchResults` as a
-  /// primary/band match to begin with is fine, but a match's own
-  /// `wasBandFallback`/`wasNestedFragment` flag is checked explicitly for
-  /// clarity), provisional existing blocks (their merge freezes
-  /// regardless), viewport-relative blocks (a different coordinate
-  /// contract — see [Observation.isViewportRelative]), and
-  /// horizontal-scroll children (carousel motion is not page-scroll
-  /// motion).
-  ///
-  /// **"Moved"** — the pair's drift-corrected displacement
-  /// (`correctedRect.topLeft - existing.absoluteRect.raw.topLeft`, exactly
-  /// what `_mergeImpl` computes) exceeds the existing block's own
-  /// agreement scale ([_agreementScale]).
-  ///
-  /// **Frozen drift snapshot** (#116 finding C): each accepted member's
-  /// `driftTracker.medianDriftForKey(spaceKey)` — the SAME value used
-  /// above to compute its "moved" displacement and, transitively, the
-  /// group's translation — is captured into the returned map alongside
-  /// membership. `stabilize` threads it back into that member's real
-  /// merge as `frozenRegionDrift`, so the translation this method votes
-  /// on and the residual/`driftCorrection` that merge reports are always
-  /// read from ONE snapshot. Without this, `_mergeImpl`'s own step 2
-  /// recomputes `driftTracker.medianDriftForKey` LIVE against a tracker
-  /// already mutated by any earlier same-capture merge in the real
-  /// interleaved loop — which member merges first (and therefore whether
-  /// the space key has crossed the tracker's 3-observation floor by the
-  /// time a given member's merge runs) depends on arrival order, so the
-  /// reported residual/confidence could silently diverge across
-  /// otherwise-identical orderings even though the vote itself (fixed by
-  /// finding B) does not.
-  ///
-  /// **Adoption** (#119 item 2, [coherentShiftAdoptAgreeing]): once a plan
-  /// is decided — by the quorum or either fallback — the eligible pairs
-  /// that sat UNDER the "moved" gate but whose displacement is within the
-  /// quorum's tolerance of the decided translation are added to the
-  /// returned map too. They are members of the MERGE, not of the vote:
-  /// their displacement never entered the translation's median. The
-  /// snapshot rule above is the same for them — the drift their
-  /// displacement was computed with is the one frozen for their merge.
-  ///
-  /// **Clustering** (#116 finding B, 2026-08-29 rewrite — the original
-  /// dy-only sort plus a single greedy incremental-median pass was
-  /// caller-arrival-order dependent: two pairs with equal or near-equal
-  /// dy have no secondary sort key, so which one a greedy scan visited
-  /// first — and therefore which running-median state a later candidate
-  /// was compared against — depended on the order fresh blocks arrived
-  /// in, not on their values) — sort moved pairs by a deterministic total
-  /// order over their VALUES: `(dy, dx, existing.top, existing.left,
-  /// height)`, original index last as an always-harmless final tiebreak
-  /// (two value-identical pairs always land in the same window
-  /// regardless of their relative order). Then search every contiguous
-  /// window of that order, LARGEST size first, for one whose members are
-  /// all within `coherentShiftTolerance x min(member's own height, the
-  /// window's OWN median height)` of the window's OWN median displacement
-  /// (both axes, Euclidean) — validated against the window's FINAL
-  /// membership, never an incremental running state. The first (largest,
-  /// then leftmost-start) valid window wins; ties within a size resolve
-  /// to the same window every time because the search itself is a fixed,
-  /// deterministic sweep. This is one reasonable instantiation of the
-  /// spec's pairwise "smaller block height" tolerance for a
-  /// group-vs-candidate comparison; see the #116 PR description for the
-  /// alternative (per-pair, not per-group) reading.
-  _ShiftPlan<T>? _detectCoherentShift(
-    List<
-            ({
-              T fresh,
-              ({T? match, bool wasBandFallback, bool wasNestedFragment}) result
-            })>
-        matchResults,
-  ) {
-    if (positionMergeModel != PositionMergeModel.agreementWeighted) {
-      return null;
-    }
-
-    final movedExisting = <T>[];
-    final movedDx = <double>[];
-    final movedDy = <double>[];
-    final movedHeight = <double>[];
-    final movedRegionDrift = <Offset>[];
-    // #119 item 2: eligible pairs that sat under the "moved" gate, kept only
-    // when [coherentShiftAdoptAgreeing] is on (see `adoptAgreeing` below).
-    final agreeingExisting = <T>[];
-    final agreeingDisplacement = <Offset>[];
-    final agreeingHeight = <double>[];
-    final agreeingRegionDrift = <Offset>[];
-    for (final entry in matchResults) {
-      final fresh = entry.fresh;
-      final r = entry.result;
-      final existing = r.match;
-      if (existing == null) continue;
-      if (r.wasNestedFragment || r.wasBandFallback) continue;
-      if (existing.isProvisional) continue;
-      if (fresh.isViewportRelative) continue;
-      if (fresh.isHorizontalScrollChild || existing.isHorizontalScrollChild) {
-        continue;
-      }
-
-      final spaceKey = driftTracker.spaceKeyFor(fresh);
-      final regionDrift = driftTracker.medianDriftForKey(spaceKey);
-      final correctedRect = DriftTracker.applyCorrectedPosition(
-        fresh.absoluteRect.raw,
-        regionDrift,
-      );
-      final displacement =
-          correctedRect.topLeft - existing.absoluteRect.raw.topLeft;
-      if (displacement.distance <= _agreementScale(existing)) {
-        // #119 item 2: remember the under-gate pair — `adoptAgreeing`
-        // below may carry it along once a translation has been decided.
-        // Same frozen drift snapshot as a voter (#116 finding C).
-        if (coherentShiftAdoptAgreeing) {
-          agreeingExisting.add(existing);
-          agreeingDisplacement.add(displacement);
-          agreeingHeight.add(_blockHeight(existing));
-          agreeingRegionDrift.add(regionDrift);
-        }
-        continue;
-      }
-
-      movedExisting.add(existing);
-      movedDx.add(displacement.dx);
-      movedDy.add(displacement.dy);
-      movedHeight.add(_blockHeight(existing));
-      // #116 finding C: the SAME snapshot that produced this member's
-      // displacement above, frozen for its real merge later this capture.
-      movedRegionDrift.add(regionDrift);
-    }
-
-    // The #119 absolute-pixel floor fallback is defined below
-    // `searchWindow`, whose clustering it reuses (PR #129 review C1).
-
-    // Deterministic total order (#116, finding B fix): (dy, dx,
-    // existing.top, existing.left, height), original index last as an
-    // always-harmless final tiebreak. The OLD algorithm sorted by dy
-    // ALONE, so two pairs with equal (or near-equal) dy had no defined
-    // relative order — the greedy scan below then compared a later
-    // candidate against whichever running state that undefined order
-    // produced, making the result depend on caller arrival order. This
-    // order depends only on the pairs' own VALUES: two value-identical
-    // pairs always land in the same window regardless of their relative
-    // order between themselves, so the index tiebreak never actually
-    // changes which window search below finds.
-    final order = List<int>.generate(movedExisting.length, (i) => i)
-      ..sort((a, b) {
-        var c = movedDy[a].compareTo(movedDy[b]);
-        if (c != 0) return c;
-        c = movedDx[a].compareTo(movedDx[b]);
-        if (c != 0) return c;
-        c = movedExisting[a]
-            .absoluteRect
-            .raw
-            .top
-            .compareTo(movedExisting[b].absoluteRect.raw.top);
-        if (c != 0) return c;
-        c = movedExisting[a]
-            .absoluteRect
-            .raw
-            .left
-            .compareTo(movedExisting[b].absoluteRect.raw.left);
-        if (c != 0) return c;
-        c = movedHeight[a].compareTo(movedHeight[b]);
-        if (c != 0) return c;
-        return a.compareTo(b);
-      });
-
-    // Find the LARGEST contiguous (in the deterministic order above)
-    // window of at least [minSize] whose members all sit within
-    // `coherentShiftTolerance x min(member's own height, the window's OWN
-    // median height)` of the window's OWN median displacement — validated
-    // against the window's FINAL membership, never an incremental running
-    // state a scan order could bias (the old bug). Search sizes
-    // largest-first so the first valid window found is the largest; ties
-    // within a size break toward the leftmost (smallest start index)
-    // window in the deterministic order, so the search is fully
-    // reproducible.
-    //
-    // Parameterised on [minSize] (#119) purely so the re-anchor fallback
-    // below can reuse the identical clustering at its own count — the
-    // quorum path passes [coherentShiftMinBlocks] and is unchanged. The
-    // optional [among] (PR #129 review C1) restricts the scan to a subset
-    // of `order` — the floor fallback clusters only its floor-qualified
-    // movers — and MUST already be in `order`'s sequence.
-    List<int>? searchWindow(int minSize, {List<int>? among}) {
-      final scan = among ?? order;
-      for (var size = scan.length; size >= minSize; size--) {
-        for (var start = 0; start + size <= scan.length; start++) {
-          final window = scan.sublist(start, start + size);
-          final wDx = RobustStats.median([for (final j in window) movedDx[j]]);
-          final wDy = RobustStats.median([for (final j in window) movedDy[j]]);
-          final wHeight =
-              RobustStats.median([for (final j in window) movedHeight[j]]);
-          // Only reachable if `window` were empty — `size` never goes
-          // below `minSize`, which the constructor already enforces to be
-          // >= 1 for both callers (finding E: explicit non-null handling
-          // instead of a force-unwrap that would crash on this case).
-          if (wDx == null || wDy == null || wHeight == null) continue;
-          final valid = window.every((j) {
-            final tol = coherentShiftTolerance * min(movedHeight[j], wHeight);
-            final diff = Offset(movedDx[j] - wDx, movedDy[j] - wDy).distance;
-            return diff <= tol;
-          });
-          if (valid) return window;
-        }
-      }
-      return null;
-    }
-
-    // ┌─── #119: the absolute-pixel floor fallback ────────────────────
-    // Tried ONLY where the ordinary quorum below declines (all three of
-    // its `return null` sites route here instead). Ordering matters: when
-    // a real group DOES qualify, the well-validated majority vote wins
-    // untouched, so enabling the floor cannot perturb any capture the
-    // quorum already handles — the floor is reachable only on captures
-    // that were falling through to damp anyway. See
-    // [coherentShiftFloorPx]'s doc for why the discriminating axis has to
-    // be absolute pixels rather than another multiple of the block's own
-    // height.
-    _ShiftPlan<T>? floorFallback() {
-      final floor = coherentShiftFloorPx;
-      if (floor == null) return null;
-
-      final qualified = <int>{};
-      for (var i = 0; i < movedExisting.length; i++) {
-        if (Offset(movedDx[i], movedDy[i]).distance >= floor) {
-          qualified.add(i);
-        }
-      }
-      if (qualified.isEmpty) return null;
-
-      // Direction agreement. A slab translates its content ONE way; two
-      // floor-qualified movers heading opposite ways are not a shift, and
-      // their median is a translation neither of them made. Checked per
-      // axis, ignoring components small enough to be jitter rather than
-      // travel, so a pair agreeing on dy but disagreeing on a sub-pixel
-      // dx is still a group. A single member is vacuously in agreement —
-      // which is the whole point of this path, since the starved-quorum
-      // case is precisely "only one mover survived the match".
-      var sawPos = false, sawNeg = false;
-      for (final j in qualified) {
-        if (movedDy[j] > _kDirectionEpsilonPx) sawPos = true;
-        if (movedDy[j] < -_kDirectionEpsilonPx) sawNeg = true;
-      }
-      if (sawPos && sawNeg) return null;
-      sawPos = false;
-      sawNeg = false;
-      for (final j in qualified) {
-        if (movedDx[j] > _kDirectionEpsilonPx) sawPos = true;
-        if (movedDx[j] < -_kDirectionEpsilonPx) sawNeg = true;
-      }
-      if (sawPos && sawNeg) return null;
-
-      // Magnitude agreement (PR #129 review C1 / C5). Direction alone let
-      // a +35 mover be re-anchored by a +110 group median — 37.5 px PAST
-      // its own observation, worse than damp — and let a purely
-      // horizontal and a purely vertical mover "agree" and drag each other
-      // diagonally. So the floor-qualified movers are clustered with the
-      // SAME tolerance rule the quorum uses, at a minimum size of ONE (a
-      // lone mover is its own cluster — the starved-quorum case this path
-      // exists for), and only the winning cluster is re-anchored; every
-      // other qualified mover stays on damp. A size-1 window always
-      // validates (its member IS its median), so for a non-empty set the
-      // search cannot come back empty — the null check is belt and braces.
-      final group = searchWindow(1, among: [
-        for (final j in order)
-          if (qualified.contains(j)) j
-      ]);
-      if (group == null) return null;
-
-      // Non-null by construction: `group` is non-empty, and
-      // `RobustStats.median` returns null only on an empty list — the
-      // same argument the quorum path's own force-unwraps rest on.
-      final tx = RobustStats.median([for (final j in group) movedDx[j]])!;
-      final ty = RobustStats.median([for (final j in group) movedDy[j]])!;
-      // Identity-keyed for the same reason the quorum path's map is: `T`
-      // is the CONSUMER's type and may define VALUE equality, and two
-      // members in different drift regions must each keep their own
-      // frozen snapshot.
-      final memberDrift = Map<T, Offset>.identity();
-      for (final j in group) {
-        memberDrift[movedExisting[j]] = movedRegionDrift[j];
-      }
-      return (
-        translation: Offset(tx, ty),
-        memberDrift: memberDrift,
-        adopted: Set<T>.identity(),
-        source: CoherentShiftSource.floor,
-      );
-    }
-
-    // ┌─── #119 candidate 2: the batch-level re-anchor ────────────────
-    // The other axis the starved quorum could be relaxed on: keep the
-    // tolerance clustering exactly as it is, drop the SHARE gate outright,
-    // and lower only the COUNT required to act — then apply the winning
-    // cluster's median displacement to its own members alone, leaving
-    // every other pair in the batch on damp. No magnitude axis at all,
-    // which is precisely what distinguishes it from
-    // [coherentShiftFloorPx]. Tried after the floor, so a consumer that
-    // sets both gets the magnitude-gated answer first.
-    _ShiftPlan<T>? reanchorFallback() {
-      final minN = coherentShiftReanchorMinBlocks;
-      if (minN == null) return null;
-      final group = searchWindow(minN);
-      if (group == null) return null;
-      // Non-null by construction, same argument as the quorum path's own
-      // force-unwraps: `group` is a non-empty window (`minN >= 1` is
-      // enforced at construction) and `RobustStats.median` returns null
-      // only on an empty list.
-      final tx = RobustStats.median([for (final j in group) movedDx[j]])!;
-      final ty = RobustStats.median([for (final j in group) movedDy[j]])!;
-      final memberDrift = Map<T, Offset>.identity();
-      for (final j in group) {
-        memberDrift[movedExisting[j]] = movedRegionDrift[j];
-      }
-      return (
-        translation: Offset(tx, ty),
-        memberDrift: memberDrift,
-        adopted: Set<T>.identity(),
-        source: CoherentShiftSource.reanchor,
-      );
-    }
-
-    // ┌─── #119 item 2: adopt the agreeing under-gate pairs ─────────────
-    // Runs on whatever plan the quorum or a fallback decided; a null plan
-    // stays null. Membership only widens — no translation changes, and no
-    // pair that could not vote gets a vote. The tolerance is the quorum's
-    // own rule (`coherentShiftTolerance x min(own height, the group's
-    // median height)`), measured against the DECIDED translation, so an
-    // under-gate pair that merely moved a little (ordinary jitter) is left
-    // on damp and is never pushed past its own observation. The adopted
-    // pair's frozen drift snapshot is the one its displacement was computed
-    // with (#116 finding C), like every voting member's.
-    _ShiftPlan<T>? adoptAgreeing(_ShiftPlan<T>? plan) {
-      if (plan == null || !coherentShiftAdoptAgreeing) return plan;
-      if (agreeingExisting.isEmpty) return plan;
-      final groupHeight = RobustStats.median(
-          [for (final member in plan.memberDrift.keys) _blockHeight(member)]);
-      // Null only for an empty group, which no path above produces.
-      if (groupHeight == null) return plan;
-      final t = plan.translation;
-      for (var i = 0; i < agreeingExisting.length; i++) {
-        final tol =
-            coherentShiftTolerance * min(agreeingHeight[i], groupHeight);
-        final diff = (agreeingDisplacement[i] - t).distance;
-        if (diff > tol) continue;
-        plan.memberDrift[agreeingExisting[i]] = agreeingRegionDrift[i];
-        plan.adopted.add(agreeingExisting[i]);
-      }
-      return plan;
-    }
-
-    // Too few movers for the quorum to have anything to cluster. Kept
-    // here (rather than before the deterministic ordering above, where it
-    // sat pre-#119) so both fallbacks and `adoptAgreeing` — local closures
-    // defined above — are in scope, and because `adoptAgreeing` must run
-    // AFTER the match loop that fills the under-gate list it reads; the
-    // ordering computation it now runs after is pure, so the quorum path's
-    // behaviour is unchanged.
-    if (movedExisting.length < coherentShiftMinBlocks) {
-      return adoptAgreeing(floorFallback() ?? reanchorFallback());
-    }
-
-    final bestGroup = searchWindow(coherentShiftMinBlocks);
-
-    if (bestGroup == null) {
-      return adoptAgreeing(floorFallback() ?? reanchorFallback());
-    }
-    if (bestGroup.length / movedExisting.length < coherentShiftMinShare) {
-      return adoptAgreeing(floorFallback() ?? reanchorFallback());
-    }
-
-    // #116 finding E: these two force-unwraps are safe by construction,
-    // not merely by argument — `bestGroup` is non-null (checked above)
-    // and non-empty: every window searched has `size >= coherentShiftMinBlocks`,
-    // and the constructor rejects `coherentShiftMinBlocks < 1` (see
-    // `StepResponse`'s validation), so `bestGroup.length >= 1` always.
-    // `RobustStats.median` returns null ONLY on an empty list — never on
-    // a non-empty one — so these two calls can never actually return
-    // null here.
-    final tx = RobustStats.median([for (final j in bestGroup) movedDx[j]])!;
-    final ty = RobustStats.median([for (final j in bestGroup) movedDy[j]])!;
-    // #116 finding C: one map carries both membership AND each member's
-    // frozen drift snapshot -- a single source of truth `stabilize` reads
-    // for both membership (`containsKey`) and `frozenRegionDrift` (the
-    // value itself). Two parallel collections built from the same loop
-    // could fall out of sync under a later edit; a missing key here
-    // would silently fall back to a live tracker read in `_mergeImpl`
-    // with nothing red.
-    //
-    // Identity-keyed like every other `T` collection in this engine
-    // (`matchedExisting`, the classification/carousel vote maps, the
-    // contradicted-hosts set, ...) -- `T` is the CONSUMER's type and may
-    // define VALUE equality (an Equatable-style block keyed on
-    // `originalText` only). Two coherent-shift members that are
-    // `==`-equal but sit in DIFFERENT drift regions must each keep their
-    // OWN frozen snapshot; a value-keyed map collapses them onto one
-    // entry and silently overwrites one member's snapshot with the
-    // other's.
-    final memberDrift = Map<T, Offset>.identity();
-    for (final j in bestGroup) {
-      memberDrift[movedExisting[j]] = movedRegionDrift[j];
-    }
-    return adoptAgreeing((
-      translation: Offset(tx, ty),
-      memberDrift: memberDrift,
-      adopted: Set<T>.identity(),
-      source: CoherentShiftSource.quorum,
-    ));
   }
 
   // ── Drift propagation ────────────────────────────────────────────────
@@ -2042,14 +1534,14 @@ class StabilizationEngine<T extends Track<P>, P> {
   ///
   /// [recordStats] / [allowBandFallback] / [allowNestedFallback] (#116,
   /// finding A fix): the DRY pre-pass `stabilize` runs to feed
-  /// `_detectCoherentShift` a full-capture snapshot calls this with all
+  /// `CoherentShiftDetector.detect` a full-capture snapshot calls this with all
   /// three `false`. That pre-pass must never mutate [_internalStats] (the
   /// REAL, interleaved call below ticks every counter exactly once per
   /// fresh block) and must never evaluate the band branch (which reads
   /// `driftTracker` — see `stabilize`'s own doc for why only the PRIMARY
   /// check, which touches neither, is safe to run ahead of this capture's
   /// merges). Skipping the nested-fragment lookup too is a pure perf
-  /// saving: `_detectCoherentShift` already discards `wasNestedFragment`
+  /// saving: `CoherentShiftDetector.detect` already discards `wasNestedFragment`
   /// matches, so computing one in the dry pass is wasted work, never a
   /// correctness difference. Every default reproduces today's single-mode
   /// behavior exactly.
@@ -2243,10 +1735,10 @@ class StabilizationEngine<T extends Track<P>, P> {
   /// [coherentShiftTranslation] — non-null only when [stepResponse] is
   /// [StepResponse.coherentShift] AND [existing] is a member of this
   /// batch's qualifying shift group (see `stabilize`'s
-  /// `_detectCoherentShift` call). Threaded straight to `_mergeImpl`.
+  /// `CoherentShiftDetector.detect` call). Threaded straight to `_mergeImpl`.
   ///
   /// [frozenRegionDrift] — (#116 finding C) non-null in lockstep with
-  /// [coherentShiftTranslation]: the drift snapshot `_detectCoherentShift`
+  /// [coherentShiftTranslation]: the drift snapshot `CoherentShiftDetector.detect`
   /// used to compute THIS member's displacement, threaded through so
   /// `_mergeImpl` reads the same snapshot instead of re-reading (and
   /// potentially getting a different answer from) the live tracker.
@@ -2302,9 +1794,9 @@ class StabilizationEngine<T extends Track<P>, P> {
   /// [coherentShiftTranslation]. When set, step 2 below uses this value
   /// in place of a live `driftTracker.medianDriftForKey` read, so the
   /// residual/`driftCorrection` this merge reports is computed from the
-  /// SAME snapshot `_detectCoherentShift` used to vote the translation —
+  /// SAME snapshot `CoherentShiftDetector.detect` used to vote the translation —
   /// never a tracker already mutated by an earlier same-capture merge in
-  /// this capture's interleaved loop (see `_detectCoherentShift`'s
+  /// this capture's interleaved loop (see `CoherentShiftDetector.detect`'s
   /// "Frozen drift snapshot" doc for why a live re-read would be
   /// arrival-order dependent).
   MergeOutput<T> _mergeImpl(
@@ -2410,7 +1902,7 @@ class StabilizationEngine<T extends Track<P>, P> {
     // 2. Correct fresh observation for known regional drift.
     //
     // #116 finding C: a coherent-shift member reads its FROZEN snapshot
-    // (the one `_detectCoherentShift` used to vote the translation) here
+    // (the one `CoherentShiftDetector.detect` used to vote the translation) here
     // instead of re-reading the live tracker — see this method's
     // `frozenRegionDrift` doc.
     final spaceKey = driftTracker.spaceKeyFor(fresh);
@@ -2435,12 +1927,12 @@ class StabilizationEngine<T extends Track<P>, P> {
     double? residualOverride;
     StepResponse? appliedStepResponse;
     // #116 finding D: the VR/carousel-child exclusion mirrors
-    // `_detectCoherentShift`'s own eligible-pairs filter exactly (see that
+    // `CoherentShiftDetector.detect`'s own eligible-pairs filter exactly (see that
     // method's doc). Gating the SHARED flag rather than only the
     // coherentShift branch below also closes snap's exclusion — snap had
     // none before this fix, while coherentShift was already effectively
     // covered (a VR/carousel `existing` never enters
-    // `_detectCoherentShift`'s `memberDrift` map in the first place, so
+    // `CoherentShiftDetector.detect`'s `memberDrift` map in the first place, so
     // `coherentShiftTranslation` is already null for it regardless).
     final stepResponseEligible = !wasBandFallback &&
         positionMergeModel == PositionMergeModel.agreementWeighted &&
@@ -2450,7 +1942,7 @@ class StabilizationEngine<T extends Track<P>, P> {
 
     if (stepResponseEligible && stepResponse == StepResponse.snap) {
       final residual = (correctedRect.topLeft - baselineRect.topLeft).distance;
-      final scale = _agreementScale(existing);
+      final scale = agreementScale(existing);
       if (residual > snapThresholdMultiplier * scale) {
         w = 1.0;
         residualOverride = 0.0;

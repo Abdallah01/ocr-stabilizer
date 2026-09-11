@@ -479,7 +479,7 @@ void main() {
       // .dart's identical reasoning). Each steps DOWN by exactly 60px
       // between capture 1 and capture 2: past both snap's default
       // threshold (1.5 x scale, scale = 3 x height=10 -> 45px) and
-      // _detectCoherentShift's own "moved" floor (scale=30px), and well
+      // CoherentShiftDetector.detect's own "moved" floor (scale=30px), and well
       // within its clustering tolerance (0.5 x height=10 -> 5px; all 3
       // move by the IDENTICAL (0, 60), so their pairwise diff is 0).
       // pconf=tconf=0.5 on every block, matching this file's other

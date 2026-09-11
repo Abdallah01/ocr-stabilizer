@@ -1,5 +1,16 @@
 ## Unreleased
 
+### Changed
+- **Internal: coherent-shift detection is its own class (#150, no
+  behaviour change).** `lib/src/internal/coherent_shift_detector.dart`
+  (`CoherentShiftDetector.detect`, `ShiftPlan`, `ShiftCandidate`) and
+  `lib/src/internal/block_geometry.dart` (`blockHeight`,
+  `agreementScale`, `kAgreementJitterAllowance`) moved out of
+  `StabilizationEngine` (2,787 → 2,280 lines). Not exported; the public
+  API is unchanged. Every capture of every committed replay stream is
+  byte-identical under all eleven differential arms. The design history
+  that sat above the code now lives in `doc/decisions/`.
+
 ### Added
 - **Differential replay harness (#150, tooling only — no engine
   change).** `tool/replay/differential.dart` serialises every capture's

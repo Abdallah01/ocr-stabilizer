@@ -659,6 +659,71 @@
         }
       ],
       "digest": "cf82dc391ca3e47d"
+    },
+    "legacyCoherent": {
+      "captures": [
+        {
+          "capture": 0,
+          "hash": "9ca4510809d7f331"
+        },
+        {
+          "capture": 6,
+          "hash": "b9f5f9a6ca1157f5"
+        },
+        {
+          "capture": 7,
+          "hash": "52194bb37b222486"
+        },
+        {
+          "capture": 8,
+          "hash": "0134eb5f2a20e4c6"
+        },
+        {
+          "capture": 9,
+          "hash": "ed99361f2b4f49bf"
+        },
+        {
+          "capture": 10,
+          "hash": "b3fb270ae13b4bbf"
+        },
+        {
+          "capture": 11,
+          "hash": "20b480763442683b"
+        },
+        {
+          "capture": 12,
+          "hash": "867ece1f1557607a"
+        },
+        {
+          "capture": 13,
+          "hash": "f9d97ce7fd71d0ed"
+        },
+        {
+          "capture": 14,
+          "hash": "8f6d387cebd4fe67"
+        },
+        {
+          "capture": 15,
+          "hash": "41830ad87ed24e64"
+        },
+        {
+          "capture": 16,
+          "hash": "bec5edb7def8681f"
+        },
+        {
+          "capture": 17,
+          "hash": "906c8dd20a927346"
+        },
+        {
+          "capture": 18,
+          "hash": "447a0e006edd6cae"
+        },
+        {
+          "capture": 19,
+          "hash": "1ccb89244a4f9456"
+        }
+      ],
+      "digest": "974b32c709989a30"
     }
   }
 }
