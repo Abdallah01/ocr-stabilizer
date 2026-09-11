@@ -19,6 +19,12 @@
   `BandFallbackConfig.spatialConfirm`, with the `BandPredicateException`
   rewrap scoped to it). Engine 2,280 → 1,989 lines. Not exported. The
   #143 primary tie-break is the next behaviour change at this seam.
+- **Internal: position merging is its own class (#150, no behaviour
+  change).** `lib/src/internal/position_merger.dart` —
+  `PositionMerger.mergeWeight` / `resolve` (the step response and the
+  lerp) / `mergedConfidence`, pure over the two blocks and the corrected
+  rect. `_mergeImpl` keeps its order of operations (resolve at step 3,
+  confidence after the votes). Engine 1,989 → 1,891 lines. Not exported.
 
 ### Added
 - **Differential replay harness (#150, tooling only — no engine
