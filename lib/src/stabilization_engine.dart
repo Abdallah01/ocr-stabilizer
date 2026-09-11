@@ -16,7 +16,9 @@ import 'internal/coherent_shift_detector.dart';
 import 'internal/position_merger.dart';
 import 'internal/retention_manager.dart';
 import 'internal/transform_estimator.dart';
+import 'internal/batch_dedup.dart';
 import 'internal/block_matcher.dart';
+import 'internal/contradiction_detector.dart';
 import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
 import 'track.dart';
@@ -190,6 +192,21 @@ class StabilizationEngine<T extends Track<P>, P> {
   /// Missed-frame retention + cross-frame supersession (its own class
   /// since #150) over [missedFrameRetention], the spatial index and the
   /// resolver; also the region query the matcher's nested path uses.
+  /// The batch dedup pipeline (noise filter, key dedup, intra-batch NMS;
+  /// its own class since #150). Its per-batch grid feeds the grouping
+  /// contradiction scan (#55).
+  late final BatchDedup<T> _batchDedup = BatchDedup<T>(
+    index: _spatialIndex,
+    resolver: _resolver,
+    driftTracker: driftTracker,
+  );
+
+  /// Grouping / splitting contradiction detection (#49; its own class
+  /// since #150) over the spatial index. [detectGroupingContradictions]
+  /// and [detectSplittingContradictions] stay public and delegate.
+  late final ContradictionDetector<T> _contradictions =
+      ContradictionDetector<T>(index: _spatialIndex);
+
   late final RetentionManager<T> _retention = RetentionManager<T>(
     missedFrames: missedFrameRetention,
     index: _spatialIndex,
@@ -815,13 +832,18 @@ class StabilizationEngine<T extends Track<P>, P> {
     // 1. Dedup pipeline (also yields the per-batch spatial grid, reused
     //    below so grouping detection doesn't build a second throwaway
     //    index every capture, #55)
-    final dedupResult = _dedup(freshBlocks);
+    final dedupResult = _batchDedup.run(
+      freshBlocks,
+      bucketWidth: bucketWidth,
+      bucketHeight: bucketHeight,
+      scale: scale,
+    );
     final deduped = dedupResult.blocks;
 
     // 2. Contradiction detection (before merge so contradicted blocks
     //    can be signaled for eviction before fresh blocks enter)
     final contradictions = <ContradictionEvent<T>>[
-      ..._detectGroupingContradictions(deduped, dedupResult.batchIndex),
+      ..._contradictions.grouping(deduped, dedupResult.batchIndex),
       ...detectSplittingContradictions(deduped),
     ];
     // #112 × #49: a cached block the grouping detector just flagged as
@@ -1095,136 +1117,6 @@ class StabilizationEngine<T extends Track<P>, P> {
   /// window.
   void resetDriftPropagation() {
     _lastRegionalDrift.clear();
-  }
-
-  // ── Dedup pipeline ──────────────────────────────────────────────────
-
-  /// Filter noise and remove intra-batch duplicates.
-  ///
-  /// Pipeline:
-  /// 1. Noise filter — skip empty/whitespace-only text
-  /// 2. Key-based intra-batch dedup — same OCR frame producing identical
-  ///    position+text twice
-  /// 3. Spatial overlap NMS — when two batch blocks overlap, higher quality
-  ///    or higher hierarchy weight wins
-  ({List<T> blocks, SpatialBlockIndex<T> batchIndex}) _dedup(List<T> blocks) {
-    final out = <T>[];
-    final seenKeys = <String>{};
-    // Key each *kept* block was registered under, so an evicted block's
-    // key can be retired with it. Identity-keyed: consumer blocks may
-    // implement value equality (#50).
-    final keptKeys = Map<T, String>.identity();
-    // Per-batch spatial grid mirroring `out` (#55): overlap lookup was a
-    // linear scan of the whole output per fresh block — O(n²) with a
-    // drift-margin computation per pair. The grid makes it O(cells).
-    // Bucket sizes adopt the main index's so quantization stays uniform.
-    // Note the grid's 3×3-neighborhood semantics: a pair whose centers
-    // sit more than one cell apart is not considered overlapping — the
-    // same locality contract the inter-capture matching path already
-    // uses via [SpatialBlockIndex.candidates].
-    final batchIndex = SpatialBlockIndex<T>()..adoptBucketSizes(_spatialIndex);
-
-    for (final b in blocks) {
-      // 1. Noise filter: skip blocks with empty/whitespace-only text
-      if (b.originalText.trim().isEmpty) continue;
-
-      // 2. Key-based intra-batch dedup
-      final key = BlockKeyGenerator.keyFor(
-        b,
-        bucketWidth: bucketWidth,
-        bucketHeight: bucketHeight,
-        scale: scale,
-      );
-      if (seenKeys.contains(key)) continue;
-
-      // Also check ±1 neighbor buckets for boundary-straddling duplicates
-      if (_isKeySeenFuzzy(key, seenKeys, b)) continue;
-
-      // 3. Spatial overlap NMS within the batch. Keys are registered
-      // only for blocks that survive NMS — a dropped block's key must
-      // not suppress later same-bucket blocks, and an evicted block's
-      // key retires with it (#50).
-      final overlapping = _findBatchOverlap(b, batchIndex);
-      if (overlapping != null) {
-        final result = _resolver.resolveOverlap(
-          incoming: b,
-          existing: overlapping,
-          driftMargin: driftTracker.driftMarginForKey(
-            driftTracker.spaceKeyFor(b),
-          ),
-          confidenceMad: 0.1,
-        );
-        switch (result) {
-          case OverlapResult.evict:
-            // Identity-based lookup: indexOf uses ==, which for
-            // value-equal consumer blocks can hit a different element
-            // than the one NMS resolved against (#50).
-            final idx = _identityIndexOf(out, overlapping);
-            out[idx] = b;
-            batchIndex.remove(overlapping);
-            batchIndex.add(b);
-            final evictedKey = keptKeys.remove(overlapping);
-            if (evictedKey != null) seenKeys.remove(evictedKey);
-            seenKeys.add(key);
-            keptKeys[b] = key;
-          case OverlapResult.keep:
-            out.add(b);
-            batchIndex.add(b);
-            seenKeys.add(key);
-            keptKeys[b] = key;
-          case OverlapResult.drop:
-            // Discard incoming — key intentionally not registered.
-            break;
-        }
-      } else {
-        out.add(b);
-        batchIndex.add(b);
-        seenKeys.add(key);
-        keptKeys[b] = key;
-      }
-    }
-    return (blocks: out, batchIndex: batchIndex);
-  }
-
-  /// Index of [target] in [list] by object identity (never `==`).
-  static int _identityIndexOf<E>(List<E> list, E target) {
-    for (var i = 0; i < list.length; i++) {
-      if (identical(list[i], target)) return i;
-    }
-    throw StateError(
-      'NMS invariant: resolved overlap target not found in batch output — '
-      'the existing block returned by _findBatchOverlap must be present '
-      'in `out` by identity.',
-    );
-  }
-
-  /// Check if [block] has a fuzzy key match (±1 bucket) in [seenKeys].
-  bool _isKeySeenFuzzy(String key, Set<String> seenKeys, T block) {
-    final neighbors = BlockKeyGenerator.neighborKeys(
-      block,
-      bucketWidth: bucketWidth,
-      bucketHeight: bucketHeight,
-      scale: scale,
-    );
-    return neighbors.any(seenKeys.contains);
-  }
-
-  /// Find an overlapping block among [batchIndex]'s grid-neighborhood
-  /// candidates for [block] (#55 — replaces the O(n²) full-batch scan).
-  T? _findBatchOverlap(T block, SpatialBlockIndex<T> batchIndex) {
-    final threshold = _resolver.overlapThresholdFor(block);
-    final dm = driftTracker.driftMarginForKey(driftTracker.spaceKeyFor(block));
-    for (final existing in batchIndex.candidates(block)) {
-      final match = _resolver.checkOverlap(
-        block,
-        block.absoluteRect,
-        existing,
-        threshold,
-        dm,
-      );
-      if (match != null) return match;
-    }
-    return null;
   }
 
   /// Perform SAR (Scan-Accumulate-Replace) merge of [fresh] into [existing].
@@ -1609,10 +1501,6 @@ class StabilizationEngine<T extends Track<P>, P> {
 
   // ── Contradiction detection ───────────────────────────────────────
 
-  /// Minimum observation count for a cached block to be considered
-  /// well-observed (eligible for contradiction detection).
-  static const int _kMinObsForContradiction = 3;
-
   /// Detect grouping contradictions in [freshBlocks] against the spatial
   /// index: ≥2 fresh blocks spatially subdivide a well-observed cached
   /// block.
@@ -1628,75 +1516,12 @@ class StabilizationEngine<T extends Track<P>, P> {
     List<T> freshBlocks,
   ) {
     // Public entry point: build the fresh-block index here. The internal
-    // [stabilize] path passes the batch grid `_dedup` already built for
+    // [stabilize] path passes the batch grid `BatchDedup.run` already built for
     // NMS instead of constructing a second one per capture (#55).
     if (freshBlocks.length < 2) return const [];
     final freshIndex = SpatialBlockIndex<T>()..adoptBucketSizes(_spatialIndex);
     freshIndex.rebuild(freshBlocks);
-    return _detectGroupingContradictions(freshBlocks, freshIndex);
-  }
-
-  List<ContradictionEvent<T>> _detectGroupingContradictions(
-    List<T> freshBlocks,
-    SpatialBlockIndex<T> freshIndex,
-  ) {
-    if (freshBlocks.length < 2) return const [];
-
-    final events = <ContradictionEvent<T>>[];
-
-    // Scan all cached blocks via the engine's spatial index
-    for (final cached in _spatialIndex.allBlocks) {
-      if (cached.observationCount < _kMinObsForContradiction) continue;
-
-      // VR blocks live in a different coordinate contract (viewport-
-      // relative, not page-absolute) and blocksInRegion never returns VR
-      // fresh blocks — so any "subdividers" found for a VR cached block
-      // are numeric coincidences (e.g. near scroll offset 0, where the
-      // two spaces coincide), not evidence. Same guard the matching path
-      // and OverlapResolver.checkOverlap already apply (#49).
-      if (cached.isViewportRelative) continue;
-
-      final cRect = cached.absoluteRect.raw;
-      if (cRect.width <= 0 || cRect.height <= 0) continue;
-
-      // O(cells) spatial query against fresh index
-      final nearby = freshIndex.blocksInRegion(cRect);
-
-      // Height pre-filter: only blocks shorter than 70% of cached (subdivisions)
-      // and overlap ≥30%.
-      final cArea = cRect.width * cRect.height;
-      final subdividers = <T>[];
-      for (final fresh in nearby) {
-        final fRect = fresh.absoluteRect.raw;
-        if (fRect.height >= cRect.height * 0.7) continue;
-        final intersection = cRect.intersect(fRect);
-        if (intersection.isEmpty) continue;
-        if ((intersection.width * intersection.height) / cArea < 0.3) continue;
-        subdividers.add(fresh);
-      }
-      if (subdividers.length < 2) continue;
-
-      // Sort by reading order before text comparison
-      subdividers.sort(
-        (a, b) => a.absoluteRect.raw.top.compareTo(b.absoluteRect.raw.top),
-      );
-      final sortedText = subdividers.map((b) => b.originalText).join(' ');
-
-      final textSim = TextDedupUtils.normalizedLevenshtein(
-        cached.originalText,
-        sortedText,
-      );
-      if (textSim < 0.60) continue;
-
-      events.add(
-        ContradictionEvent<T>(
-          type: ContradictionType.grouping,
-          target: cached,
-          evidence: subdividers,
-        ),
-      );
-    }
-    return events;
+    return _contradictions.grouping(freshBlocks, freshIndex);
   }
 
   /// Detect splitting contradictions in [freshBlocks] against the spatial
@@ -1712,66 +1537,6 @@ class StabilizationEngine<T extends Track<P>, P> {
   List<ContradictionEvent<T>> detectSplittingContradictions(
     List<T> freshBlocks,
   ) {
-    if (freshBlocks.isEmpty) return const [];
-
-    final events = <ContradictionEvent<T>>[];
-    final alreadyTargeted = <T>{};
-
-    for (final fresh in freshBlocks) {
-      // VR fresh blocks carry viewport-relative coordinates; the cached
-      // blocks returned by blocksInRegion are page-absolute (VR cached
-      // blocks live in a separate cell namespace and are never returned).
-      // Comparing across the two contracts can only produce false
-      // "subsumed" evidence near scroll offset 0 (#49).
-      if (fresh.isViewportRelative) continue;
-
-      final fRect = fresh.absoluteRect.raw;
-      if (fRect.width <= 0 || fRect.height <= 0) continue;
-
-      // O(cells) query against existing cached spatial index
-      final nearby = _spatialIndex.blocksInRegion(fRect);
-
-      final subsumed = <T>[];
-      for (final cached in nearby) {
-        if (cached.observationCount < _kMinObsForContradiction) continue;
-        if (alreadyTargeted.contains(cached)) continue;
-
-        final cRect = cached.absoluteRect.raw;
-        if (cRect.height >= fRect.height * 0.7) continue;
-        final cArea = cRect.width * cRect.height;
-        if (cArea <= 0) continue;
-
-        final intersection = fRect.intersect(cRect);
-        if (intersection.isEmpty) continue;
-
-        final containment = (intersection.width * intersection.height) / cArea;
-        if (containment >= 0.80) {
-          subsumed.add(cached);
-        }
-      }
-      if (subsumed.length < 2) continue;
-
-      // Sort by reading order before text comparison
-      subsumed.sort(
-        (a, b) => a.absoluteRect.raw.top.compareTo(b.absoluteRect.raw.top),
-      );
-      final sortedText = subsumed.map((b) => b.originalText).join(' ');
-
-      final textSim = TextDedupUtils.normalizedLevenshtein(
-        fresh.originalText,
-        sortedText,
-      );
-      if (textSim < 0.60) continue;
-
-      alreadyTargeted.addAll(subsumed);
-      events.add(
-        ContradictionEvent<T>(
-          type: ContradictionType.splitting,
-          target: fresh,
-          evidence: subsumed,
-        ),
-      );
-    }
-    return events;
+    return _contradictions.splitting(freshBlocks);
   }
 }

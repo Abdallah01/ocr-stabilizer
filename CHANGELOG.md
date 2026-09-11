@@ -33,6 +33,14 @@
   per-capture `TransformEstimator` (pair eligibility + `fit`). Engine
   1,891 → 1,778 lines, from 2,787 before the decomposition began. Not
   exported.
+- **Internal: the batch dedup pipeline and contradiction detection are
+  their own classes (#150, no behaviour change).**
+  `lib/src/internal/batch_dedup.dart` — `BatchDedup.run` (noise filter,
+  key dedup, intra-batch NMS, the per-batch grid);
+  `lib/src/internal/contradiction_detector.dart` —
+  `ContradictionDetector.grouping` / `splitting`. The engine's public
+  `detectGroupingContradictions` / `detectSplittingContradictions` stay
+  and delegate. Engine 1,778 → 1,542 lines. Not exported.
 
 ### Added
 - **Differential replay harness (#150, tooling only — no engine
