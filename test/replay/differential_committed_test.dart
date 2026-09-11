@@ -28,7 +28,7 @@ import '../../tool/replay/src/differential.dart';
 
 void main() {
   group('committed *.diff.json equivalence (#150)', () {
-    for (final base in kCommittedStreams) {
+    for (final base in kDifferentialStreams) {
       test(base, () {
         final stream =
             CaptureStream.parse(File('$base.jsonl').readAsLinesSync());

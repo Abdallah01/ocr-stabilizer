@@ -109,5 +109,47 @@ void main() {
       expect(r.blocks, hasLength(1));
       expect(r.batchIndex.allBlocks.single, same(r.blocks.single));
     });
+
+    test(
+        'a same-text duplicate straddling a bucket boundary (no overlap) is '
+        'dropped by the fuzzy neighbour-key check', () {
+      // Bucket 200, keyed on round(left / bucket): left 50 → 0, left 110
+      // → 1, adjacent buckets; the rects (width 20) do not overlap, so
+      // NMS alone would keep both.
+      final a = _block('boundary text', left: 50, width: 20);
+      final b = _block('boundary text', left: 110, width: 20);
+      final r =
+          dedup().run([a, b], bucketWidth: 200, bucketHeight: 200, scale: 1.0);
+      expect(r.blocks, [a]);
+    });
+
+    test(
+        'after an NMS eviction the batch grid mirrors the output exactly '
+        '(the evicted block is gone from the grid)', () {
+      // Three DIFFERENT texts on one rect (same text would be caught by
+      // the key dedup before NMS). b out-scores a → a is evicted; c then
+      // overlaps the same region and must resolve against b, never a
+      // stale a left in the grid.
+      DefaultTrackedBlock<Object> at(String text, double conf) =>
+          DefaultTrackedBlock<Object>(
+            absoluteRect: AbsoluteRect.fromLTWH(10, 100, 300, 30),
+            originalText: text,
+            positionConfidence: PositionConfidence(conf),
+            textConfidence: const TextConfidence(0.9),
+            payload: const Object(),
+          );
+      final a = at('alpha beta gamma', 0.1);
+      final b = at('delta epsilon zeta', 0.9);
+      final c = at('eta theta iota', 0.5);
+      final r = dedup()
+          .run([a, b, c], bucketWidth: 200, bucketHeight: 200, scale: 1.0);
+      expect(r.blocks, isNot(contains(same(a))),
+          reason: 'a is evicted by the higher-quality b');
+      expect(r.blocks, contains(same(b)));
+      // The invariant the NMS relies on: the grid holds exactly the
+      // output, by identity — an evicted block must leave the grid.
+      expect(r.batchIndex.allBlocks.map((x) => identityHashCode(x)).toList(),
+          r.blocks.map((x) => identityHashCode(x)).toList());
+    });
   });
 }

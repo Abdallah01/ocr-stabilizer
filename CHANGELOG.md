@@ -40,7 +40,10 @@
   `lib/src/internal/contradiction_detector.dart` —
   `ContradictionDetector.grouping` / `splitting`. The engine's public
   `detectGroupingContradictions` / `detectSplittingContradictions` stay
-  and delegate. Engine 1,778 → 1,542 lines. Not exported.
+  and delegate. Engine 1,778 → 1,542 lines. Not exported. The
+  differential harness now also digests the four 2.6.0 zoom streams
+  (`kDifferentialStreams`, 21 streams × 11 arms): a dedup mutant survived
+  the 17 A/B streams and was caught only by the zoom corpus.
 
 ### Added
 - **Differential replay harness (#150, tooling only — no engine
