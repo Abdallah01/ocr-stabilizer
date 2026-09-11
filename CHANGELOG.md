@@ -44,6 +44,11 @@
   differential harness now also digests the four 2.6.0 zoom streams
   (`kDifferentialStreams`, 21 streams × 11 arms): a dedup mutant survived
   the 17 A/B streams and was caught only by the zoom corpus.
+- **Internal: the vote half of a merge is its own class (#150, no
+  behaviour change).** `lib/src/internal/vote_accumulator.dart` —
+  `VoteAccumulator.accumulate` (classification, carousel and text votes,
+  text confidence, source quality; steps 4a–4d of `_mergeImpl` in that
+  order). Engine 1,542 → 1,474 lines. Not exported.
 
 ### Added
 - **Differential replay harness (#150, tooling only — no engine
