@@ -4,13 +4,13 @@
 import 'carousel_votes.dart';
 import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
-import 'observable_block.dart';
+import 'track.dart';
 import 'text_vote.dart';
 import 'types/absolute_rect.dart';
 import 'types/confidence_types.dart';
 import 'types/coordinate_context.dart';
 
-/// Concrete reference implementation of [ObservableBlock] with documented
+/// Concrete reference implementation of [Track] with documented
 /// defaults for every required field.
 ///
 /// New integrators can use this directly for the simplest case (text-only,
@@ -40,7 +40,7 @@ import 'types/coordinate_context.dart';
 ///   [PositionConfidence.groundTruth] / [TextConfidence.groundTruth] —
 ///   appropriate for deterministic origins (DOM extraction). OCR producers
 ///   should override with [PositionConfidence.from] / [TextConfidence.from].
-class DefaultTrackedBlock<T> implements ObservableBlock<T> {
+class DefaultTrackedBlock<T> implements Track<T> {
   @override
   final AbsoluteRect absoluteRect;
 

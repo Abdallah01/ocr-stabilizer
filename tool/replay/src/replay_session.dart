@@ -46,7 +46,7 @@ const int kMedianWarmUpBlocks = 4;
 /// Median = the upper-middle element of the sorted heights (the
 /// consumer's `heights[n ~/ 2]`), doubled, clamped to the consumer's
 /// 80–220 px range.
-Buckets? medianHeightBuckets(Iterable<TrackedBlock> tracked) {
+Buckets? medianHeightBuckets(Iterable<Observation> tracked) {
   final heights = [for (final b in tracked) b.absoluteRect.raw.height]..sort();
   if (heights.length < kMedianWarmUpBlocks) return null;
   final size = (heights[heights.length ~/ 2] * 2).clamp(80.0, 220.0);

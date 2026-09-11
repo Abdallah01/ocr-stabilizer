@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'text_dedup_utils.dart';
-import 'tracked_block.dart';
+import 'observation.dart';
 
 /// Generates dedup keys from block position, text, and classification.
 ///
@@ -19,7 +19,7 @@ class BlockKeyGenerator {
   /// [bucketWidth] and [bucketHeight] control position quantization.
   /// [scale] is the current visual viewport scale (quantized to tenths).
   static String keyFor(
-    TrackedBlock block, {
+    Observation block, {
     double bucketWidth = kDefaultBucketSize,
     double bucketHeight = kDefaultBucketSize,
     double scale = 1.0,
@@ -36,7 +36,7 @@ class BlockKeyGenerator {
   /// Used by cross-prefix cold-tier lookup to find blocks cached under a
   /// stale classification prefix.
   static String keyWithPrefix(
-    TrackedBlock block,
+    Observation block,
     String prefix, {
     double bucketWidth = kDefaultBucketSize,
     double bucketHeight = kDefaultBucketSize,
@@ -49,11 +49,11 @@ class BlockKeyGenerator {
   }
 
   /// Compute the classification-derived prefix for [block].
-  static String prefixFor(TrackedBlock block) => _prefixFor(block);
+  static String prefixFor(Observation block) => _prefixFor(block);
 
   // ── Private ────────────────────────────────────────────────────────
 
-  static String _prefixFor(TrackedBlock block) {
+  static String _prefixFor(Observation block) {
     final icPrefix = block.isInnerScrollerChild ? 'ic:' : '';
     final hzPrefix = block.isHorizontalScrollChild
         ? 'hz${block.scrollContext.hzScrollerIndex}:'
@@ -61,7 +61,7 @@ class BlockKeyGenerator {
     return '$icPrefix$hzPrefix';
   }
 
-  static String _vrKey(TrackedBlock block) {
+  static String _vrKey(Observation block) {
     final cjk = TextDedupUtils.cjkOnly(block.originalText);
     if (cjk.length >= 3) {
       return 'vr:${TextDedupUtils.shortHead(cjk, 20)}';
@@ -74,7 +74,7 @@ class BlockKeyGenerator {
   }
 
   static String _positionKey(
-    TrackedBlock block,
+    Observation block,
     String prefix,
     double bucketWidth,
     double bucketHeight,
@@ -100,7 +100,7 @@ class BlockKeyGenerator {
   /// Returns up to 8 keys (3x3 grid minus the center). VR blocks have
   /// text-only keys with no position component, so no neighbors are generated.
   static List<String> neighborKeys(
-    TrackedBlock block, {
+    Observation block, {
     double bucketWidth = kDefaultBucketSize,
     double bucketHeight = kDefaultBucketSize,
     double scale = 1.0,

@@ -8,9 +8,16 @@ import 'types/coordinate_context.dart';
 import 'types/scroll_context.dart';
 import 'types/sticky_fallback.dart';
 
-/// A block the stabilization engine is tracking across captures.
+/// What a consumer supplies per capture: one recognised block — its rect,
+/// the frame that rect is in, its text, the two confidences, a source
+/// quality tier, and an opaque payload.
 ///
-/// Consumers implement this interface with their domain-specific block type.
+/// This is the whole input contract (7 getters). The engine's accumulated
+/// state — observation count, votes, provisional status — lives on [Track],
+/// which the engine reads and writes through the consumer's merger. A
+/// consumer that does not want to hold that state itself feeds
+/// `DefaultTrackedBlock` instances, which carry it with sane defaults.
+///
 /// The generic [T] carries an opaque payload the engine passes through without
 /// reading — use it for translation data, styling, or any app-specific fields.
 ///
@@ -19,9 +26,9 @@ import 'types/sticky_fallback.dart';
 /// eight 2.x flag getters (`isViewportRelative`, `isInnerScrollerChild`,
 /// `innerScrollerTop`, `isHorizontalScrollChild`, `containerId`,
 /// `scrollContext`, `isFromStickyElement`, `stickyFallback`) are derived
-/// views, available on every block through [TrackedBlockCoordinateViews];
+/// views, available on every block through [ObservationCoordinateViews];
 /// implement the one getter, read whichever view is convenient.
-abstract interface class TrackedBlock<T> {
+abstract interface class Observation<T> {
   /// World-space bounding box in absolute coordinates.
   AbsoluteRect get absoluteRect;
 
@@ -51,12 +58,12 @@ abstract interface class TrackedBlock<T> {
   int get sourceQuality;
 }
 
-/// The 2.x coordinate getters, derived from [TrackedBlock.coordinates].
+/// The 2.x coordinate getters, derived from [Observation.coordinates].
 ///
 /// The engine reads these; a consumer may too. A block type that declares
 /// members of the same names shadows them for its own static type, which is
-/// harmless as long as they agree with its [TrackedBlock.coordinates].
-extension TrackedBlockCoordinateViews<T> on TrackedBlock<T> {
+/// harmless as long as they agree with its [Observation.coordinates].
+extension ObservationCoordinateViews<T> on Observation<T> {
   /// Whether this block uses viewport-relative coordinates (fixed/sticky).
   bool get isViewportRelative => coordinates.isViewportRelative;
 

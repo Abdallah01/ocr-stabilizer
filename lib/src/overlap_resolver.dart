@@ -17,7 +17,7 @@ import 'dart:math' show max, min;
 
 import 'hierarchy_weight.dart';
 import 'text_dedup_utils.dart';
-import 'tracked_block.dart';
+import 'observation.dart';
 import 'types/absolute_rect.dart';
 
 /// Result of resolving a spatial overlap between two blocks.
@@ -61,7 +61,7 @@ class OverlapResolver {
   // ── Threshold selection ────────────────────────────────────────────
 
   /// Select overlap threshold based on block script composition.
-  double overlapThresholdFor(TrackedBlock block) {
+  double overlapThresholdFor(Observation block) {
     final fraction = TextDedupUtils.cjkFraction(block.originalText);
     if (fraction >= 0.6) return kCjkOverlapThreshold;
     if (fraction < 0.3 && block.originalText.runes.length <= 8) {
@@ -76,7 +76,7 @@ class OverlapResolver {
   /// accounting for drift margin [dm].
   ///
   /// Returns [existing] on match, null otherwise.
-  T? checkOverlap<T extends TrackedBlock>(
+  T? checkOverlap<T extends Observation>(
     T newBlock,
     AbsoluteRect nr,
     T existing,
@@ -146,7 +146,7 @@ class OverlapResolver {
   /// Compute overlap ratio between two blocks (0.0–1.0) relative to the
   /// smaller block's area.  Uses drift margin [dm] for consistency with
   /// [checkOverlap].
-  double overlapRatio(TrackedBlock a, TrackedBlock b, double dm) {
+  double overlapRatio(Observation a, Observation b, double dm) {
     final ar = a.absoluteRect;
     final br = b.absoluteRect;
     final double aTop, aBottom, bTop, bBottom;
@@ -182,7 +182,7 @@ class OverlapResolver {
   /// [StabilizationEngine.stabilize]'s entry validation (#27).
   /// This assert is the developer-facing safety net in debug builds;
   /// release builds strip it for zero overhead.
-  static double qualityScore(TrackedBlock block) {
+  static double qualityScore(Observation block) {
     final pos = block.positionConfidence.raw;
     final txt = block.textConfidence.raw;
     assert(
@@ -207,8 +207,8 @@ class OverlapResolver {
   /// B. **David and Goliath** — smaller focused block evicts giant squatter.
   /// C. **Quality + overlap ratio** — standard tiered NMS comparison.
   OverlapResult resolveOverlap({
-    required TrackedBlock incoming,
-    required TrackedBlock existing,
+    required Observation incoming,
+    required Observation existing,
     required double driftMargin,
     required double confidenceMad,
     double? giantAreaFence,

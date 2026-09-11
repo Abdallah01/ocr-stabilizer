@@ -5,7 +5,7 @@
 // COORDINATE CONTEXT (#147, 3.0)
 // =============================================================================
 // Which frame a block's `absoluteRect` is expressed in, as one sealed type.
-// Before 3.0 `TrackedBlock` carried eight separate getters for this —
+// Before 3.0 `Observation` carried eight separate getters for this —
 // `isViewportRelative`, `isInnerScrollerChild`, `innerScrollerTop`,
 // `isHorizontalScrollChild`, `containerId`, `scrollContext`,
 // `isFromStickyElement`, `stickyFallback` — and the combinations the engine
@@ -13,7 +13,7 @@
 // without a carousel index, an inner-scroller top on a page block) were only
 // rejected by scattered invariants. The three variants here make those
 // combinations unrepresentable; the eight legacy names survive as derived
-// views (on this type and, through `TrackedBlockCoordinateViews`, on every
+// views (on this type and, through `ObservationCoordinateViews`, on every
 // block) so the engine's read sites and a consumer's existing code keep
 // reading the same values.
 // =============================================================================

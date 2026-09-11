@@ -4,7 +4,7 @@
 import 'hierarchy_tiers.dart';
 import 'hierarchy_weight.dart';
 import 'submap_membership.dart';
-import 'tracked_block.dart';
+import 'observation.dart';
 import 'types/space_key.dart';
 
 /// CSS-topology submap membership for WebView-based OCR.
@@ -32,7 +32,7 @@ class CssSubmapMembership implements SubmapMembership {
       : assert(regionSize > 0, 'regionSize must be positive');
 
   @override
-  SpaceKey spaceKeyFor(TrackedBlock block) {
+  SpaceKey spaceKeyFor(Observation block) {
     // VR (40) and nested IC+carousel (30): these tiers are excluded from
     // drift observation, and before 0.6.0 they still fell through to
     // SpaceKey.normal — so a position:fixed header could *receive* the
@@ -58,7 +58,7 @@ class CssSubmapMembership implements SubmapMembership {
   }
 
   @override
-  bool shouldExcludeFromObservation(TrackedBlock block) {
+  bool shouldExcludeFromObservation(Observation block) {
     // VR blocks (weight 40): viewport-fixed, no scroll drift
     if (block.hierarchyWeight >= HierarchyTiers.viewport) return true;
     // Nested IC+carousel: compound coordinate space

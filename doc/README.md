@@ -10,7 +10,7 @@ or provenance.
 |---|---|
 | [`CONTRACT.md`](CONTRACT.md) | **The 2.x contract** — guarantees, intentionally-unsupported cases, consumer-configurable behaviors; each claim cites its enforcing test, validation entry, or tracking issue. |
 | [`TIMING_MODEL.md`](TIMING_MODEL.md) | Render at first sight, refine on re-sight — what observation counts mean and what never gates availability. |
-| [`API_REFERENCE.md`](API_REFERENCE.md) | Core components (`TrackedBlock`, `DriftTracker`, `SpatialBlockIndex`, `ParagraphGrouper`, extension types), the six-dimension identity model, every public type in tables. |
+| [`API_REFERENCE.md`](API_REFERENCE.md) | Core components (`Observation`, `DriftTracker`, `SpatialBlockIndex`, `ParagraphGrouper`, extension types), the six-dimension identity model, every public type in tables. |
 | [`OBSERVING_DECISIONS.md`](OBSERVING_DECISIONS.md) | Reading `result.coherentShift`, `result.identityTurnover` and `result.transformEstimate` from a layout layer, with the reading rules. |
 | [`BAND_FALLBACK.md`](BAND_FALLBACK.md) | The band-relaxed second matching pass: counters, adoption flow (`off` → `observeOnly` → `admit`). |
 | [`COHERENT_SHIFT_CALIBRATION.md`](COHERENT_SHIFT_CALIBRATION.md) | The recipe for `coherentShiftFloorPx` — a property of the consumer's capture geometry, not a constant. |

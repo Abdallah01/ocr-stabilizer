@@ -5,12 +5,16 @@
 
 ## Core components
 
-### TrackedBlock\<T\>
+### Observation\<T\> and Track\<T\>
 
-The engine's central interface. Every block the engine processes implements this.
+`Observation<T>` is what a consumer supplies per capture; `Track<T>` is an
+observation plus the state the engine accumulates (observation count, vote
+histograms, provisional status). The engine stores and returns tracks; a
+fresh block enters as a track at its first observation, and the engine
+only ever reads the observation half of a fresh block.
 
 ```dart
-class MyBlock implements TrackedBlock<MyPayload> {
+class MyBlock implements Observation<MyPayload> {
   @override final AbsoluteRect absoluteRect;
   @override final String originalText;
   @override final CoordinateContext coordinates;  // page / innerScroller / viewport
@@ -31,10 +35,11 @@ are derived views readable on every block; a consumer that still stores
 them flat builds the frame with `CoordinateContext.fromFlags(...)`, which
 rejects the combinations the engine never expected.
 
-For the stabilization pipeline (vote accumulation, provisional state,
-SAR-merge history), implement `ObservableBlock<T>` instead — it extends
-`TrackedBlock<T>` with 8 more getters. Most integrators want
-`DefaultTrackedBlock<T>` rather than rolling their own.
+To feed the stabilization engine, implement `Track<T>` — it extends
+`Observation<T>` with 8 state getters the engine writes through your
+merger (`MergeResult` → `copyWith`). Most integrators want
+`DefaultTrackedBlock<T>` rather than rolling their own: construct it with
+the observation fields and let its defaults carry the state.
 
 The generic `T` carries app-specific data (translations, styles) without
 coupling the engine to your domain types.
@@ -91,7 +96,7 @@ index.remove(block);
 
 ### HierarchyWeightX
 
-Extension on `TrackedBlock` computing hierarchy weight from coordinate-space
+Extension on `Observation` computing hierarchy weight from coordinate-space
 flags. Higher weight means more constrained coordinate space:
 
 | Tier | Weight | Meaning |
@@ -167,11 +172,11 @@ A block's identity is a six-dimensional signature:
 
 | Dimension | What It Answers | Package Support |
 |-----------|----------------|-----------------|
-| **Textual** | What does this text say? | `originalText` on TrackedBlock |
+| **Textual** | What does this text say? | `originalText` on Observation |
 | **Spatial** | Where is it in the page? | `absoluteRect`, confidence scores |
 | **Relative** | Which coordinate space? | `SpaceKey`, `ContainerId` |
 | **Semantic** | What kind of element? | `hierarchyWeight` (extension) |
-| **Temporal** | How much evidence? | `observationCount` (ObservableBlock) |
+| **Temporal** | How much evidence? | `observationCount` (Track) |
 | **Contextual** | What context was it in? | `ContextualInvalidationCheck` (callback) |
 
 ## Types
@@ -180,8 +185,8 @@ A block's identity is a six-dimensional signature:
 
 | Type | Purpose |
 |------|---------|
-| `TrackedBlock<T>` | Core block contract (7 getters including the opaque `payload`; the 2.x coordinate flags are derived views) |
-| `ObservableBlock<T>` | Extends `TrackedBlock`; adds observation history (8 getters: counts, votes, provisional state) |
+| `Observation<T>` | Core block contract (7 getters including the opaque `payload`; the 2.x coordinate flags are derived views) |
+| `Track<T>` | Extends `Observation`; adds observation history (8 getters: counts, votes, provisional state) |
 | `ClassificationInput` | Platform-agnostic viewport geometry |
 | `CarouselInput` | Carousel-specific geometry |
 | `SubmapMembership` | Strategy for coordinate-space partitioning |
@@ -214,14 +219,14 @@ A block's identity is a six-dimensional signature:
 | `BandFallbackConfig` | Configures the band-relaxed matching path. Default `mode: off`. |
 | `BandFallbackMode` | `off` (no band loop) / `observeOnly` (counters only) / `admit` (production). |
 | `BandFallbackStats` | Read-only per-capture telemetry exposed via `engine.bandStats`. |
-| `BandSpatialPredicate` | Optional `bool Function(TrackedBlock fresh, TrackedBlock candidate)` injection. `null` → engine substitutes a drift-aware `overlapRatio >= 0.80` closure. |
+| `BandSpatialPredicate` | Optional `bool Function(Observation fresh, Observation candidate)` injection. `null` → engine substitutes a drift-aware `overlapRatio >= 0.80` closure. |
 | `BandPredicateException` | Typed wrapper for consumer-predicate throws (v0.5.0+) — caught and rewrapped by the engine so failures surface with a typed shape, never swallowed. Original predicate stack lives on `predicateStackTrace`. |
 
 ### Reference Implementations
 
 | Type | Purpose |
 |------|---------|
-| `DefaultTrackedBlock<T>` | Concrete `ObservableBlock<T>` with documented defaults, `copyWith`, and `applyMerge(MergeResult)` — the fastest path for new integrators |
+| `DefaultTrackedBlock<T>` | Concrete `Track<T>` with documented defaults, `copyWith`, and `applyMerge(MergeResult)` — the fastest path for new integrators |
 
 ### Result Types
 

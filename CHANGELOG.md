@@ -89,6 +89,30 @@ pick up in an hour. Breaking; each entry carries its migration.
   | `BlockMeta(isViewportRelative:, isInnerScrollerChild:, innerScrollerTop:, containerId:, captureContext:, isFromStickyElement:, stickyFallback:, ...)` | `BlockMeta(coordinates: ..., positionConfidence:, textConfidence:)` |
   | reading `block.isViewportRelative` etc. | unchanged (derived views) |
 
+- **`Observation` and `Track` name the two halves of a block (#146).**
+  `TrackedBlock<T>` is now `Observation<T>` — the 7 getters a consumer
+  supplies per capture — and `ObservableBlock<T>` is `Track<T>` — an
+  observation plus the 8 state getters the engine accumulates. Member
+  sets, `DefaultTrackedBlock`, `BlockMerger` and the engine's generics are
+  unchanged apart from the names (`StabilizationEngine<T extends Track<P>,
+  P>`); the coordinate-views extension is `ObservationCoordinateViews`.
+  The library files moved with them (`src/observation.dart`,
+  `src/track.dart`). The engine-owned track wrapper the issue sketched
+  (`Track<O>` holding the consumer's observation) was evaluated and not
+  adopted: the engine never reads state from a fresh block, so there is no
+  compile-time gain to buy, and it would have re-homed every consumer read
+  of `observationCount` / `isProvisional` for no adoption gain now that
+  `DefaultTrackedBlock` + `StabilizerConfig` make the quick start four
+  arguments. Migration:
+
+  | 2.6.x | 3.0 |
+  |---|---|
+  | `implements TrackedBlock<P>` | `implements Observation<P>` |
+  | `implements ObservableBlock<P>` | `implements Track<P>` |
+  | `import 'package:ocr_stabilizer/src/tracked_block.dart'` | `.../src/observation.dart` (or the barrel) |
+  | `import 'package:ocr_stabilizer/src/observable_block.dart'` | `.../src/track.dart` (or the barrel) |
+  | `TrackedBlockCoordinateViews` | `ObservationCoordinateViews` |
+
 ## 2.6.1 - 2026-09-11
 
 ### Changed

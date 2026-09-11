@@ -55,8 +55,9 @@ for (final block in result.stableBlocks) {
 ```
 
 Runnable version: [`example/example.dart`](example/example.dart). Your own
-block type: implement `TrackedBlock<T>` (or `ObservableBlock<T>` for the
-full pipeline) — see the [API reference](doc/API_REFERENCE.md).
+block type: implement `Track<T>` — an `Observation<T>` (rect, frame, text,
+confidences, payload: 7 getters) plus the engine-owned state (count, votes,
+provisional status: 8 getters) — see the [API reference](doc/API_REFERENCE.md).
 
 Every `stabilize()` result also reports what the engine decided this
 capture — a coherent shift, the identity turnover, a similarity-transform
@@ -110,7 +111,7 @@ is withheld while evidence accrues ([timing model](doc/TIMING_MODEL.md)).
 | Type | Purpose |
 |------|---------|
 | `StabilizationEngine<T, P>` | The pipeline above; `stabilize(blocks)` per capture, or `merge(fresh, existing)` when you run your own matching |
-| `TrackedBlock<T>` / `ObservableBlock<T>` | The block contracts (identity + geometry; plus observation history) |
+| `Observation<T>` / `Track<T>` | What you supply per capture / what the engine keeps and returns |
 | `DefaultTrackedBlock<T>` | Reference block with defaults, `copyWith`, `applyMerge` |
 | `StabilizationResult<T>` | `stableBlocks` + `coherentShift`, `identityTurnover`, `transformEstimate`, contradictions |
 | `DriftTracker` | Per-region drift correction (bounded to a line height, rolling window, submap isolation) |

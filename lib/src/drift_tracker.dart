@@ -18,7 +18,7 @@ import 'css_submap_membership.dart';
 import 'internal/debug.dart';
 import 'robust_stats.dart';
 import 'submap_membership.dart';
-import 'tracked_block.dart';
+import 'observation.dart';
 import 'types/geometry.dart' show Offset, Rect;
 import 'types/space_key.dart';
 
@@ -82,7 +82,7 @@ class DriftTracker {
   ///
   /// Delegates to the [submapMembership] strategy. See [CssSubmapMembership]
   /// for the default WebView implementation.
-  SpaceKey spaceKeyFor(TrackedBlock block) =>
+  SpaceKey spaceKeyFor(Observation block) =>
       submapMembership.spaceKeyFor(block);
 
   /// Record a drift observation for a block.
@@ -96,7 +96,7 @@ class DriftTracker {
   /// - Nested IC+carousel: compound coordinate space
   /// - Carousel-only: horizontal motion confounds vertical-drift signal
   /// - IC without containerId: indeterminate coordinate space
-  void addObservation(TrackedBlock block, Offset drift, {double? blockHeight}) {
+  void addObservation(Observation block, Offset drift, {double? blockHeight}) {
     // Check exclusion rules from membership strategy
     if (submapMembership.shouldExcludeFromObservation(block)) {
       if (kDebugMode) {
