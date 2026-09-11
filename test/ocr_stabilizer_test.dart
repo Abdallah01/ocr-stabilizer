@@ -43,15 +43,45 @@ List<List<DefaultTrackedBlock<int>>> _stream() {
   return captures;
 }
 
+/// Every field of every stable block a merger could move, plus every
+/// result-level field (PR #174 fan-out: an earlier draft omitted
+/// invalidatedTexts / wellObservedTexts / contradiction content — exactly
+/// the fields contextualCheck and the vote path write).
 String _fingerprint(StabilizationResult<DefaultTrackedBlock<int>> r) {
-  final blocks = r.stableBlocks
-      .map((b) => '${b.originalText}|${b.absoluteRect.left.toStringAsFixed(3)}'
-          ',${b.absoluteRect.top.toStringAsFixed(3)}|${b.observationCount}'
-          '|${b.payload}|${b.textVotes.keys.join('+')}|${b.isProvisional}')
-      .join('\n');
+  String block(DefaultTrackedBlock<int> b) =>
+      '${b.originalText}|${b.absoluteRect.left.toStringAsFixed(3)}'
+      ',${b.absoluteRect.top.toStringAsFixed(3)}'
+      ',${b.absoluteRect.width.toStringAsFixed(3)}'
+      ',${b.absoluteRect.height.toStringAsFixed(3)}'
+      '|n=${b.observationCount}|p=${b.payload}'
+      '|tv=${b.textVotes.entries.map((e) => '${e.key}:${e.value}').join('+')}'
+      '|cv=${b.classificationVotes}|car=${b.carouselVotes}'
+      '|pc=${b.positionConfidence}|tc=${b.textConfidence}'
+      '|sq=${b.sourceQuality}|prov=${b.isProvisional}'
+      ':${b.provisionalCapturesRemaining}|g=${b.groupSignature}'
+      '|recl=${b.needsReclassification}|co=${b.coordinates}';
+  final blocks = r.stableBlocks.map(block).join('\n');
+  final contradictions = r.contradictions
+      .map((c) => '${c.type.name}:${c.target.originalText}'
+          '<-${c.evidence.map((e) => e.originalText).join(',')}')
+      .join(';');
   return '$blocks\n${r.identityTurnover}\n${r.coherentShift}\n'
-      '${r.transformEstimate}\n${r.contradictions.length}';
+      '${r.transformEstimate}\ninv=${r.invalidatedTexts}'
+      '\nwell=${r.wellObservedTexts}\ncontra=$contradictions';
 }
+
+/// Field-by-field: BandFallbackStats has no toString, so a string compare
+/// is a tautology (PR #174 fan-out).
+List<int> _bandCounters(BandFallbackStats s) => [
+      s.primaryMatchesAdmitted,
+      s.primaryMatchesRejected,
+      s.candidatesConsidered,
+      s.rejectedCandidateFloor,
+      s.rejectedSpatial,
+      s.rejectedTextBand,
+      s.bandMatchesIdentified,
+      s.matchesAdmitted,
+    ];
 
 void main() {
   group('OcrStabilizer', () {
@@ -90,7 +120,9 @@ void main() {
         expect(_fingerprint(a.stabilize(capture)),
             _fingerprint(b.stabilize(capture)));
       }
-      expect(a.bandStats.toString(), b.bandStats.toString());
+      expect(_bandCounters(a.bandStats), _bandCounters(b.bandStats));
+      expect(a.bandStats.candidatesConsidered, greaterThan(0),
+          reason: 'control: the observeOnly pass actually ran');
     });
 
     test('forwards the config: the levers the engine reports come from it',
@@ -115,13 +147,79 @@ void main() {
       expect(identical(s.spatialIndex, index), isTrue);
     });
 
-    test('the differential stream really exercises retention and voting '
-        '(control: the fingerprint is not trivially constant)', () {
-      final s = OcrStabilizer<int>();
-      final prints = _stream().map((c) => _fingerprint(s.stabilize(c))).toSet();
+    test('forwards submapMembership into the drift tracker it builds '
+        '(PR #174 fan-out P1: was declared, not pinned)', () {
+      final membership = CssSubmapMembership(regionSize: 640);
+      final s = OcrStabilizer<int>(submapMembership: membership);
+      expect(identical(s.driftTracker.submapMembership, membership), isTrue);
+      expect(s.driftTracker.regionSize, 640);
+    });
+
+    test('forwards contextualCheck: a check that fires invalidates the '
+        'text (PR #174 fan-out P1; mirrors the engine test)', () {
+      final s = OcrStabilizer<int>(
+        contextualCheck: (fresh, existing) =>
+            fresh.groupSignature != existing.groupSignature,
+      );
+      s.stabilize([_block('same text', 100, 1).copyWith(groupSignature: 7)]);
+      final r = s.stabilize(
+          [_block('same text', 100, 1).copyWith(groupSignature: 9)]);
+      expect(r.invalidatedTexts, contains('same text'));
+      // And without the check, the same pair is a plain re-observation.
+      final plain = OcrStabilizer<int>();
+      plain.stabilize([_block('same text', 100, 1).copyWith(groupSignature: 7)]);
+      expect(
+          plain
+              .stabilize(
+                  [_block('same text', 100, 1).copyWith(groupSignature: 9)])
+              .invalidatedTexts,
+          isEmpty);
+    });
+
+    test('the differential stream really exercises misses, text flips and '
+        're-observation (control: each named branch is observed)', () {
+      final captures = _stream();
+      expect(captures.where((c) => c.length == 11), isNotEmpty,
+          reason: 'the miss branch drops one line every 5th capture');
+      expect(
+          captures.any((c) => c.any((b) => b.originalText.contains('fl1p'))),
+          isTrue,
+          reason: 'the text-flip branch fires every 7th capture');
+
+      final s = OcrStabilizer<int>(
+          config: const StabilizerConfig(
+              retention: RetentionConfig(missedFrames: 2)));
+      var sawTwoVotes = false;
+      var sawDropThenReturn = false;
+      int? missedPayload; // the line the previous capture dropped
+      final prints = <String>{};
+      for (var i = 0; i < captures.length; i++) {
+        final r = s.stabilize(captures[i]);
+        prints.add(_fingerprint(r));
+        if (r.stableBlocks.any((b) => b.textVotes.length >= 2)) {
+          sawTwoVotes = true;
+        }
+        // stableBlocks holds this capture's observations; a RETAINED line
+        // shows up when it returns: its identity survived the miss, so its
+        // observation count continues instead of restarting at 1.
+        if (missedPayload != null) {
+          final back = r.stableBlocks
+              .where((b) => b.payload == missedPayload)
+              .toList();
+          if (back.isNotEmpty && back.first.observationCount > 1) {
+            sawDropThenReturn = true;
+          }
+        }
+        missedPayload = captures[i].length == 11 ? i % 12 : null;
+      }
       expect(prints.length, greaterThan(30));
-      final last = s.stabilize(_stream().last);
-      expect(last.stableBlocks.any((b) => b.observationCount > 1), isTrue);
+      expect(sawTwoVotes, isTrue,
+          reason: 'the flip must reach the vote table (voting exercised)');
+      expect(sawDropThenReturn, isTrue,
+          reason: 'a missed line must be retained (retention exercised)');
+      expect(s.stabilize(captures.last).stableBlocks
+              .any((b) => b.observationCount > 1),
+          isTrue);
     });
   });
 }

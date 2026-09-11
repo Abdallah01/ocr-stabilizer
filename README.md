@@ -33,11 +33,12 @@ documented defaults for every field the engine reads.
 ```dart
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
-final engine = StabilizationEngine<DefaultTrackedBlock<MyPayload>, MyPayload>(
-  merger: (existing, fresh, merge) => existing.applyMerge(merge),
+final engine = OcrStabilizer<MyPayload>(
   // Every lever has a documented default; group overrides by stage:
   // config: StabilizerConfig(retention: RetentionConfig(missedFrames: 2)),
 );
+// Spelled out, this is StabilizationEngine<DefaultTrackedBlock<MyPayload>,
+// MyPayload>(merger: (existing, fresh, merge) => existing.applyMerge(merge)).
 
 // Each capture (e.g. a screenshot on scroll-settle, 1–2 Hz):
 final blocks = ocrResults.map((ocr) => DefaultTrackedBlock<MyPayload>(
