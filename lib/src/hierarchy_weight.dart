@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'hierarchy_tiers.dart';
-import 'tracked_block.dart';
+import 'observation.dart';
 
 /// Hierarchy weight tiers for block classification.
 ///
@@ -11,7 +11,7 @@ import 'tracked_block.dart';
 /// spatial conflicts are resolved.
 ///
 /// Tiers: VR (40) > Nested IC+carousel (30) > IC or carousel (20) > Normal (10).
-extension HierarchyWeightX on TrackedBlock {
+extension HierarchyWeightX on Observation {
   /// Compute hierarchy weight from coordinate-space flags.
   int get hierarchyWeight {
     if (isViewportRelative) return HierarchyTiers.viewport;

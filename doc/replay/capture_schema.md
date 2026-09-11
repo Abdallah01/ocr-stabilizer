@@ -90,7 +90,7 @@ Two families of records coexist in one file:
 
 ## `<block>` (obs entries)
 
-Serialized via this package's `TrackedBlock`/`ObservableBlock` interfaces —
+Serialized via this package's `Observation`/`Track` interfaces —
 exactly the surface the engine can read — plus consumer extras.
 
 | Field | Type | Interface member |

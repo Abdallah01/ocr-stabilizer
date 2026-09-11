@@ -4,7 +4,7 @@
 // #147 (3.0) — `CoordinateContext` replaces the eight coordinate getters
 // (`isViewportRelative`, `isInnerScrollerChild`, `innerScrollerTop`,
 // `isHorizontalScrollChild`, `containerId`, `scrollContext`,
-// `isFromStickyElement`, `stickyFallback`) on `TrackedBlock`. Pins:
+// `isFromStickyElement`, `stickyFallback`) on `Observation`. Pins:
 //   (a) each variant derives the eight legacy views exactly as the
 //       classifier used to populate them;
 //   (b) the combinations the old flags allowed but the engine never
@@ -115,7 +115,7 @@ void main() {
     });
 
     test('rejects the combinations the sealed type cannot express', () {
-      // containerId without an inner scroller (the old TrackedBlock invariant)
+      // containerId without an inner scroller (the old Observation invariant)
       expect(
         () => CoordinateContext.fromFlags(containerId: const ContainerId('x')),
         throwsArgumentError,
@@ -196,7 +196,7 @@ void main() {
       expect(BlockKeyGenerator.prefixFor(b), 'ic:');
     });
 
-    test('the legacy views are readable on any TrackedBlock', () {
+    test('the legacy views are readable on any Observation', () {
       final b = block(
           'x',
           const CoordinateContext.page(

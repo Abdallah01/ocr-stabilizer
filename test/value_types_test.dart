@@ -13,7 +13,7 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 // =============================================================================
 
 /// Minimal test block for package-level hierarchy weight tests.
-class _TestBlock implements TrackedBlock<Never> {
+class _TestBlock implements Observation<Never> {
   // 3.0 (#147): the engine reads the frame through this one getter; the
   // flat fields below stay as this fixture's construction convenience.
   @override

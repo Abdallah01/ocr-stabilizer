@@ -17,7 +17,7 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
 /// Block with VALUE equality on [originalText] only — models Equatable-style
 /// consumer blocks, which the spatial index explicitly supports.
-class _EquatableBlock implements ObservableBlock<void> {
+class _EquatableBlock implements Track<void> {
   // 3.0 (#147): the engine reads the frame through this one getter; the
   // flat fields below stay as this fixture's construction convenience.
   @override

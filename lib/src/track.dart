@@ -3,17 +3,24 @@
 
 import 'carousel_votes.dart';
 import 'text_vote.dart';
-import 'tracked_block.dart';
+import 'observation.dart';
 
-/// Observation history accumulated across SAR (Scan-Accumulate-Replace) merges.
+/// An [Observation] plus what the engine has learned about it across
+/// captures: the observation count, the vote histograms, the provisional
+/// state.
 ///
-/// These fields grow as the engine re-observes the block. Implementations
-/// provide updated values via immutable replacement (e.g. `copyWith`);
-/// the interface itself is read-only.
+/// The engine stores tracks and returns tracks; a fresh block enters as a
+/// track at its first observation (every state field at its initial value,
+/// which is what `DefaultTrackedBlock`'s defaults give). The engine never
+/// reads these fields from a fresh block — only from the matched existing
+/// one — and writes them only through `MergeResult`, applied by the
+/// consumer's merger via immutable replacement (e.g. `copyWith`). The
+/// interface itself is read-only.
 ///
-/// Separated from [TrackedBlock] because not all consumers need observation
-/// tracking (e.g. a one-shot OCR pipeline with no stabilization).
-abstract interface class ObservableBlock<T> implements TrackedBlock<T> {
+/// Separated from [Observation] because not every component needs the
+/// history (the classifier, the paragraph grouper and the spatial index
+/// work on observations alone).
+abstract interface class Track<T> implements Observation<T> {
   /// Number of times this block has been observed across captures.
   int get observationCount;
 

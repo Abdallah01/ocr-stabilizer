@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 ocr-stabilizer authors
 // SPDX-License-Identifier: MIT
 
-import 'tracked_block.dart';
+import 'observation.dart';
 
 /// Callback that determines if a block's contextual neighborhood has changed
 /// enough to require re-processing (e.g., re-translation).
@@ -20,7 +20,7 @@ import 'tracked_block.dart';
 ///
 /// ```dart
 /// // Example: group signature comparison (app-specific field)
-/// bool llmContextChanged(TrackedBlock fresh, TrackedBlock existing) {
+/// bool llmContextChanged(Observation fresh, Observation existing) {
 ///   if (fresh is MyBlock && existing is MyBlock) {
 ///     return fresh.groupSignature != existing.groupSignature;
 ///   }
@@ -28,4 +28,4 @@ import 'tracked_block.dart';
 /// }
 /// ```
 typedef ContextualInvalidationCheck = bool Function(
-    TrackedBlock fresh, TrackedBlock existing);
+    Observation fresh, Observation existing);

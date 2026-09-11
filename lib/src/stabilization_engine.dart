@@ -14,7 +14,7 @@ import 'identity_turnover.dart';
 import 'transform_estimate.dart';
 import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
-import 'observable_block.dart';
+import 'track.dart';
 import 'overlap_resolver.dart';
 import 'robust_stats.dart';
 import 'spatial_block_index.dart';
@@ -24,7 +24,7 @@ import 'stabilizer_config.dart';
 import 'submap_membership.dart';
 import 'text_dedup_utils.dart';
 import 'text_vote.dart';
-import 'tracked_block.dart';
+import 'observation.dart';
 import 'types/absolute_rect.dart';
 import 'types/confidence_types.dart';
 import 'types/space_key.dart';
@@ -161,14 +161,16 @@ const double _kDirectionEpsilonPx = 1.0;
 /// retention and drift-propagation state carry the previous document
 /// forward, and only [resetDriftPropagation] is individually resettable
 /// today. Discard consumer-owned state at the same boundary — text votes
-/// and observation history live on the consumer's [TrackedBlock]s, and
+/// and observation history live on the consumer's [Observation]s, and
 /// the shared [driftTracker] is the consumer's to reset or keep. Whether
 /// an engine-wide reset() should exist instead is issue #95.
 ///
 /// Generic parameters:
-/// - [T] — concrete block type (must implement [ObservableBlock<P>])
+/// - [T] — the track type (must implement [Track<P>]); a fresh block is a
+///   track at its first observation, and the engine only ever reads the
+///   [Observation] half of a fresh one
 /// - [P] — opaque payload type carried by the block
-class StabilizationEngine<T extends ObservableBlock<P>, P> {
+class StabilizationEngine<T extends Track<P>, P> {
   final BlockMerger<T, P> _merger;
 
   /// Every lever of this engine, grouped by stage (#149). The public
@@ -230,7 +232,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   // Engine-owned default predicate. Lives as a separate method so the
   // _findMatch try/catch can scope itself to consumer code only (engine
   // bugs in this default closure must surface with their real type).
-  bool _defaultSpatialConfirm(TrackedBlock fresh, TrackedBlock candidate) =>
+  bool _defaultSpatialConfirm(Observation fresh, Observation candidate) =>
       _resolver.overlapRatio(
         fresh,
         candidate,
@@ -890,7 +892,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// When both are null, no prefix is prepended.
   ///
   /// Throws [ArgumentError.value] naming the offending field on the first
-  /// violation. Catches any [ObservableBlock] implementor — `DefaultTrackedBlock`
+  /// violation. Catches any [Track] implementor — `DefaultTrackedBlock`
   /// already early-fails at construction, but a hand-rolled implementor can
   /// still slip past the unchecked-`const` `PositionConfidence(double)` /
   /// `TextConfidence(double)` primary constructors documented at
@@ -944,7 +946,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// Throws [ArgumentError] if any observation carries an invalid (NaN or
   /// out-of-range) [PositionConfidence] or [TextConfidence] value (#27).
   StabilizationResult<T> stabilize(List<T> freshBlocks) {
-    // Engine-entry Confidence validation (#27). Catches any ObservableBlock
+    // Engine-entry Confidence validation (#27). Catches any Track
     // implementor at one seam, complementing MergeResult's engine-output guard.
     for (var i = 0; i < freshBlocks.length; i++) {
       _assertValidConfidence(freshBlocks[i], index: i);
@@ -1259,7 +1261,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
   /// `wasBandFallback`/`wasNestedFragment` flag is checked explicitly for
   /// clarity), provisional existing blocks (their merge freezes
   /// regardless), viewport-relative blocks (a different coordinate
-  /// contract — see [TrackedBlock.isViewportRelative]), and
+  /// contract — see [Observation.isViewportRelative]), and
   /// horizontal-scroll children (carousel motion is not page-scroll
   /// motion).
   ///

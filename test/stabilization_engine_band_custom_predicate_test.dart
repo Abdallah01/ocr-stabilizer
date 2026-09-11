@@ -7,7 +7,7 @@ import 'package:ocr_stabilizer/src/band_fallback_config.dart';
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/stabilization_engine.dart';
 import 'package:ocr_stabilizer/src/stabilizer_config.dart';
-import 'package:ocr_stabilizer/src/tracked_block.dart';
+import 'package:ocr_stabilizer/src/observation.dart';
 import 'package:ocr_stabilizer/src/types/absolute_rect.dart';
 
 DefaultTrackedBlock<Object> _block(String text,
@@ -36,7 +36,7 @@ void main() {
             bandFallback: BandFallbackConfig(
               mode: BandFallbackMode.admit,
               candidateObservationFloor: 1,
-              spatialConfirm: (TrackedBlock fresh, TrackedBlock candidate) {
+              spatialConfirm: (Observation fresh, Observation candidate) {
                 calls.add((fresh.originalText, candidate.originalText));
                 return true; // accept all
               },
@@ -115,7 +115,7 @@ void main() {
             bandFallback: BandFallbackConfig(
               mode: BandFallbackMode.admit,
               candidateObservationFloor: 1,
-              spatialConfirm: (TrackedBlock fresh, TrackedBlock candidate) {
+              spatialConfirm: (Observation fresh, Observation candidate) {
                 throw StateError('consumer-supplied predicate failed');
               },
             ),
@@ -152,7 +152,7 @@ void main() {
             bandFallback: BandFallbackConfig(
               mode: BandFallbackMode.observeOnly,
               candidateObservationFloor: 1,
-              spatialConfirm: (TrackedBlock fresh, TrackedBlock candidate) {
+              spatialConfirm: (Observation fresh, Observation candidate) {
                 throw const FormatException('predicate boom (observeOnly)');
               },
             ),

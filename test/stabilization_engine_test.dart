@@ -10,7 +10,7 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 // TEST BLOCK STUB
 // =============================================================================
 
-class _TestBlock implements ObservableBlock<Never> {
+class _TestBlock implements Track<Never> {
   // 3.0 (#147): the engine reads the frame through this one getter; the
   // flat fields below stay as this fixture's construction convenience.
   @override

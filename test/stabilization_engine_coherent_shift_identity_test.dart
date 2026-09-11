@@ -29,7 +29,7 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 /// position back in as the next capture's tracked baseline (mirroring
 /// `DefaultTrackedBlock.applyMerge`, used the same way by
 /// `stabilization_engine_coherent_shift_frozen_drift_test.dart`).
-class _TextKeyedBlock implements ObservableBlock<void> {
+class _TextKeyedBlock implements Track<void> {
   // 3.0 (#147): the engine reads the frame through this one getter; the
   // flat fields below stay as this fixture's construction convenience.
   @override

@@ -3,7 +3,7 @@
 
 import 'package:meta/meta.dart' show immutable;
 
-import 'tracked_block.dart';
+import 'observation.dart';
 
 /// Operating mode for the band-relaxed fallback path inside
 /// `StabilizationEngine._findMatch`.
@@ -36,7 +36,7 @@ enum BandFallbackMode {
 /// Spatial confirmation predicate for a band-relaxed candidate.
 ///
 /// Signature mirrors `ContextualInvalidationCheck` for consistency with
-/// the engine's existing predicate-injection seam — two [TrackedBlock]
+/// the engine's existing predicate-injection seam — two [Observation]
 /// arguments, no engine-internal types (`SpaceKey`, `DriftTracker`)
 /// leaked into public signatures.
 ///
@@ -46,16 +46,16 @@ enum BandFallbackMode {
 /// (`overlapRatio >= 0.80` against the candidate's space-keyed drift
 /// margin). A non-null value is used as-is.
 ///
-/// **Type-vs-capability note**: the parameters are typed [TrackedBlock]
+/// **Type-vs-capability note**: the parameters are typed [Observation]
 /// for symmetry with the engine's other public predicates, but consumers
-/// who need `observationCount` (or other [ObservableBlock] fields) can
+/// who need `observationCount` (or other [Track] fields) can
 /// downcast safely — every block reaching this predicate flows through
-/// the engine's typed pipeline and is an `ObservableBlock<P>` at runtime.
+/// the engine's typed pipeline and is an `Track<P>` at runtime.
 /// The downcast idiom:
 /// ```dart
 /// (fresh, candidate) {
-///   final freshObs = fresh as ObservableBlock<MyPos>;
-///   final candObs = candidate as ObservableBlock<MyPos>;
+///   final freshObs = fresh as Track<MyPos>;
+///   final candObs = candidate as Track<MyPos>;
 ///   return candObs.observationCount > 5 && myOverlap(freshObs, candObs);
 /// }
 /// ```
@@ -68,7 +68,7 @@ enum BandFallbackMode {
 /// call-site stack lives on the exception's [BandPredicateException.predicateStackTrace]
 /// field, not on the catch's `StackTrace` parameter.
 typedef BandSpatialPredicate = bool Function(
-    TrackedBlock fresh, TrackedBlock candidate);
+    Observation fresh, Observation candidate);
 
 /// Thrown when a consumer-supplied [BandSpatialPredicate] raises an
 /// exception during band-relaxed candidate evaluation inside

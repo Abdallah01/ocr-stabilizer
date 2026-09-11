@@ -18,7 +18,7 @@ import 'package:test/test.dart';
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
 /// Minimal test block for package-level DriftTracker tests.
-class _TestBlock implements TrackedBlock<Never> {
+class _TestBlock implements Observation<Never> {
   // 3.0 (#147): the engine reads the frame through this one getter; the
   // flat fields below stay as this fixture's construction convenience.
   @override
@@ -96,7 +96,7 @@ class _TestBlock implements TrackedBlock<Never> {
 }
 
 /// Test block with a typed payload for generic contract testing.
-class _PayloadBlock implements TrackedBlock<String> {
+class _PayloadBlock implements Observation<String> {
   // 3.0 (#147): the engine reads the frame through this one getter; the
   // flat fields below stay as this fixture's construction convenience.
   @override
@@ -1132,9 +1132,9 @@ void main() {
     });
 
     // ┌─────────────────────────────────────────────────────────────────────┐
-    // │ TrackedBlock<T> Generic Payload Contract                            │
+    // │ Observation<T> Generic Payload Contract                            │
     // └─────────────────────────────────────────────────────────────────────┘
-    test('TrackedBlock with typed payload works with DriftTracker', () {
+    test('Observation with typed payload works with DriftTracker', () {
       final tracker = DriftTracker();
       final block = _PayloadBlock(
         absoluteRect: AbsoluteRect.fromLTWH(100, 200, 150, 30),
@@ -1144,7 +1144,7 @@ void main() {
       expect(tracker.totalObservations, equals(1));
     });
 
-    test('TrackedBlock with typed payload works with SpatialBlockIndex', () {
+    test('Observation with typed payload works with SpatialBlockIndex', () {
       final index = SpatialBlockIndex<_PayloadBlock>();
       final block = _PayloadBlock(
         absoluteRect: AbsoluteRect.fromLTWH(100, 200, 150, 30),
@@ -1155,7 +1155,7 @@ void main() {
       expect(block.payload, equals('hello'));
     });
 
-    test('TrackedBlock<Never> payload throws UnsupportedError', () {
+    test('Observation<Never> payload throws UnsupportedError', () {
       final block = _makeBlock(top: 100);
       expect(() => block.payload, throwsUnsupportedError);
     });

@@ -5,7 +5,7 @@ import 'coherent_shift_event.dart';
 import 'identity_turnover.dart';
 import 'transform_estimate.dart';
 import 'merge_result.dart';
-import 'observable_block.dart';
+import 'track.dart';
 import 'step_response.dart';
 
 /// How a consumer constructs an updated block from engine-computed merge data.
@@ -39,7 +39,7 @@ import 'step_response.dart';
 /// - `sourceQuality` → consumer-specific (e.g. map to enum)
 ///
 /// Omitting fields causes state drift between engine and consumer.
-typedef BlockMerger<T extends ObservableBlock<P>, P> = T Function(
+typedef BlockMerger<T extends Track<P>, P> = T Function(
     T existing, T fresh, MergeResult merge);
 
 /// Type of contradiction detected between fresh and cached blocks.
