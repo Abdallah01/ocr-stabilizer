@@ -27,6 +27,8 @@ import '../overlap_resolver.dart';
 import '../spatial_block_index.dart';
 import '../text_dedup_utils.dart';
 import '../track.dart';
+import '../types/geometry.dart';
+import '../types/space_key.dart';
 
 /// The outcome of [BlockMatcher.find] for one fresh block: the cached block it
 /// re-observes (null = a new block), and which path found it.
@@ -114,7 +116,9 @@ class BlockMatcher<T extends Track<Object?>> {
     required this.stats,
     required this.spatialEvidence,
     required Iterable<T> Function(T fresh) regionCandidates,
-  }) : _regionCandidates = regionCandidates;
+    required DriftTracker driftTracker,
+  })  : _regionCandidates = regionCandidates,
+        _driftTracker = driftTracker;
 
   /// Band-fallback configuration (`StabilizerConfig.matching.bandFallback`).
   final BandFallbackConfig band;
@@ -130,6 +134,56 @@ class BlockMatcher<T extends Track<Object?>> {
   final SpatialEvidence spatialEvidence;
 
   final Iterable<T> Function(T fresh) _regionCandidates;
+
+  /// #143: the drift tracker the primary tie-break reads — through
+  /// [_driftSnapshot] only, never live (see [beginCapture]).
+  final DriftTracker _driftTracker;
+
+  /// #143: per-capture snapshot of the median drift per space key, taken
+  /// by [beginCapture] BEFORE any of the capture's merges. The dry
+  /// pre-pass (#116) and the real loop both read this map, so the primary
+  /// check stays a function of this-capture-immutable state even though
+  /// the tie-break is drift-aware.
+  final Map<SpaceKey, Offset> _driftSnapshot = {};
+
+  /// #143: snapshot the region drift for every fresh block's space key at
+  /// the start of a capture, before any merge of this capture can move it.
+  void beginCapture(Iterable<T> freshBlocks) {
+    _driftSnapshot.clear();
+    for (final fresh in freshBlocks) {
+      final key = _driftTracker.spaceKeyFor(fresh);
+      _driftSnapshot[key] ??= _driftTracker.medianDriftForKey(key);
+    }
+  }
+
+  /// #143 tie-break, a strict total order over candidates with an equal
+  /// text score: the candidate nearer the DRIFT-CORRECTED centre of the
+  /// fresh block wins (the fresh rect expressed in the cached frame, the
+  /// same correction the merge applies); at equal distance the smaller
+  /// rect key (top, left, right, bottom) wins. Two cached blocks with the
+  /// same text AND the same rect cannot coexist (batch dedup), so the
+  /// order is total in practice. Returns true when [challenger] should
+  /// replace [incumbent].
+  bool _prefersOnTie(T fresh, T challenger, T incumbent) {
+    final drift =
+        _driftSnapshot[_driftTracker.spaceKeyFor(fresh)] ?? Offset.zero;
+    final target = fresh.absoluteRect.center - drift;
+    final dc = (challenger.absoluteRect.center - target).distance;
+    final di = (incumbent.absoluteRect.center - target).distance;
+    if (dc != di) return dc < di;
+    return _rectOrder(challenger.absoluteRect.raw, incumbent.absoluteRect.raw) <
+        0;
+  }
+
+  static int _rectOrder(Rect a, Rect b) {
+    var c = a.top.compareTo(b.top);
+    if (c != 0) return c;
+    c = a.left.compareTo(b.left);
+    if (c != 0) return c;
+    c = a.right.compareTo(b.right);
+    if (c != 0) return c;
+    return a.bottom.compareTo(b.bottom);
+  }
 
   // ┌─── Nested re-observation (#112, 2.2.0) ───────────────────────────
   // An OCR engine's grouping can flip between frames: the same paragraph
@@ -292,12 +346,16 @@ class BlockMatcher<T extends Track<Object?>> {
       // ── Primary check ──
       if (scores.match) {
         // Pick the highest Lev-scoring candidate (Jaccard is a parallel
-        // metric for admission, not a primary ordering signal). Strict
-        // `>`: equal scores keep the first candidate the index yielded
-        // (#143 — the tie-break comparator goes here).
-        if (scores.levenshtein > bestPrimarySim) {
+        // metric for admission, not a primary ordering signal).
+        if (primaryMatch == null || scores.levenshtein > bestPrimarySim) {
           bestPrimarySim = scores.levenshtein;
           primaryMatch = candidate;
+        } else if (scores.levenshtein == bestPrimarySim) {
+          // #143: an exact tie is broken by [_prefersOnTie], never by
+          // the order the index happened to yield the candidates.
+          if (_prefersOnTie(fresh, candidate, primaryMatch)) {
+            primaryMatch = candidate;
+          }
         }
         // Primary hit — this candidate is not a band candidate.
         continue;

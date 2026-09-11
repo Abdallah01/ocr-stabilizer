@@ -179,6 +179,7 @@ class StabilizationEngine<T extends Track<P>, P> {
       final predicate => ConsumerSpatialEvidence(predicate),
     },
     regionCandidates: _retention.regionCandidates,
+    driftTracker: driftTracker,
   );
 
   /// The position merger (weight, step response, lerp, confidence; its
@@ -838,6 +839,9 @@ class StabilizationEngine<T extends Track<P>, P> {
       scale: scale,
     );
     final deduped = dedupResult.blocks;
+    // #143: freeze the region drift the primary tie-break reads for this
+    // capture, before the dry pre-pass and before any merge moves it.
+    _matcher.beginCapture(deduped);
 
     // 2. Contradiction detection (before merge so contradicted blocks
     //    can be signaled for eviction before fresh blocks enter)

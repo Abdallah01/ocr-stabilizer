@@ -47,6 +47,7 @@ BlockMatcher<DefaultTrackedBlock<Object>> _matcher(
       stats: stats ?? BandFallbackStatsInternal(),
       spatialEvidence: evidence,
       regionCandidates: (fresh) => index.allBlocks,
+      driftTracker: DriftTracker(),
     );
 
 void main() {
@@ -80,7 +81,8 @@ void main() {
         'band admit: a weaker text match on an established, spatially '
         'confirmed candidate is admitted', () {
       final index = SpatialBlockIndex<DefaultTrackedBlock<Object>>()
-        ..add(_block('paragraph one of the story text here', observationCount: 5));
+        ..add(_block('paragraph one of the story text here',
+            observationCount: 5));
       final stats = BandFallbackStatsInternal();
       final out = _matcher(
         index,
@@ -98,7 +100,8 @@ void main() {
         'band: a consumer predicate that throws surfaces as '
         'BandPredicateException', () {
       final index = SpatialBlockIndex<DefaultTrackedBlock<Object>>()
-        ..add(_block('paragraph one of the story text here', observationCount: 5));
+        ..add(_block('paragraph one of the story text here',
+            observationCount: 5));
       final matcher = _matcher(
         index,
         band: const BandFallbackConfig(mode: BandFallbackMode.admit),
@@ -122,8 +125,8 @@ void main() {
       );
       final index = SpatialBlockIndex<DefaultTrackedBlock<Object>>()
         ..add(paragraph);
-      final line = _block('epsilon zeta eta theta',
-          top: 130, width: 280, height: 28);
+      final line =
+          _block('epsilon zeta eta theta', top: 130, width: 280, height: 28);
       final out = _matcher(index).find(line);
       expect(out.match, same(paragraph));
       expect(out.wasNestedFragment, isTrue);
@@ -140,6 +143,120 @@ void main() {
           recordStats: false, allowBandFallback: false);
       expect(stats.primaryMatchesAdmitted, 0);
       expect(stats.primaryMatchesRejected, 0);
+    });
+  });
+  group('#143 primary tie-break', () {
+    // Default 200 px buckets (cell = round(centre / 200)): far centre
+    // y = 490 → row 2, fresh y = 690 → row 3, near y = 710 → row 4. Both
+    // candidates sit in the fresh block's 3×3 neighbourhood; identical
+    // text makes their Levenshtein scores tie exactly.
+    DefaultTrackedBlock<Object> far() =>
+        _block('Chapter 4', left: 100, top: 480, height: 20);
+    DefaultTrackedBlock<Object> near() =>
+        _block('Chapter 4', left: 100, top: 700, height: 20);
+    DefaultTrackedBlock<Object> fresh() =>
+        _block('Chapter 4', left: 100, top: 680, height: 20);
+
+    test(
+        'an exact tie goes to the nearer candidate, whichever the index '
+        'yields first', () {
+      for (final order in [
+        [far(), near()],
+        [near(), far()],
+      ]) {
+        final index = SpatialBlockIndex<DefaultTrackedBlock<Object>>();
+        for (final b in order) {
+          index.add(b);
+        }
+        final m = _matcher(index)..beginCapture([fresh()]);
+        final out = m.find(fresh());
+        expect(
+            out.match, same(order.firstWhere((b) => b.absoluteRect.top == 700)),
+            reason: 'insertion order ${order.map((b) => b.absoluteRect.top)}');
+      }
+    });
+
+    test('a higher text score still beats a nearer candidate', () {
+      final index = SpatialBlockIndex<DefaultTrackedBlock<Object>>();
+      final exact =
+          _block('Chapter 4 - The River', left: 100, top: 480, height: 20);
+      final off =
+          _block('Chapter 4 - The Rivet', left: 100, top: 700, height: 20);
+      index
+        ..add(off)
+        ..add(exact);
+      final m = _matcher(index)..beginCapture([fresh()]);
+      expect(
+          m
+              .find(_block('Chapter 4 - The River',
+                  left: 100, top: 680, height: 20))
+              .match,
+          same(exact));
+    });
+
+    test(
+        'the tie is measured against the DRIFT-CORRECTED fresh centre, '
+        'from the snapshot beginCapture took', () {
+      // A at y = 480, B at y = 700, fresh at y = 592: raw centre distances
+      // 112 (A) vs 108 (B) → B. A learned drift of +15 px (fresh sits 15 px
+      // below where its cached identity lies) corrects the fresh centre to
+      // y = 587: 97 (A) vs 123 (B) → A. Three observations are needed
+      // before the tracker reports a median, and 15 px stays under the
+      // median-block-height clamp (20 px).
+      final a = _block('Chapter 4', left: 100, top: 480, height: 20);
+      final b = _block('Chapter 4', left: 100, top: 700, height: 20);
+      final f = _block('Chapter 4', left: 100, top: 592, height: 20);
+      final index = SpatialBlockIndex<DefaultTrackedBlock<Object>>()
+        ..add(b)
+        ..add(a);
+      final tracker = DriftTracker();
+      final m = BlockMatcher<DefaultTrackedBlock<Object>>(
+        band: const BandFallbackConfig(),
+        index: index,
+        stats: BandFallbackStatsInternal(),
+        spatialEvidence: const _AlwaysConfirms(),
+        regionCandidates: (fresh) => index.allBlocks,
+        driftTracker: tracker,
+      );
+      m.beginCapture([f]);
+      expect(m.find(f).match, same(b),
+          reason: 'no drift learned yet: raw nearest');
+
+      for (var i = 0; i < 3; i++) {
+        tracker.addObservation(f, const Offset(0, 15), blockHeight: 20);
+      }
+      expect(m.find(f).match, same(b),
+          reason: 'drift learned AFTER beginCapture must not change this '
+              "capture's tie-break (the dry pre-pass and the real loop "
+              'read one snapshot)');
+
+      m.beginCapture([f]);
+      expect(m.find(f).match, same(a),
+          reason: 'next capture: drift-corrected nearest');
+    });
+
+    test(
+        'at equal distance the smaller rect key wins, whichever the index '
+        'yields first', () {
+      // Fresh centre y = 690; `above` (top 660, centre 670) and `below`
+      // (top 700, centre 710) are both 20 px away, so only the rect key
+      // separates them.
+      DefaultTrackedBlock<Object> above() =>
+          _block('Chapter 4', left: 100, top: 660, height: 20);
+      DefaultTrackedBlock<Object> below() =>
+          _block('Chapter 4', left: 100, top: 700, height: 20);
+      for (final order in [
+        [above(), below()],
+        [below(), above()],
+      ]) {
+        final index = SpatialBlockIndex<DefaultTrackedBlock<Object>>();
+        for (final b in order) {
+          index.add(b);
+        }
+        final m = _matcher(index)..beginCapture([fresh()]);
+        expect(m.find(fresh()).match!.absoluteRect.top, 660,
+            reason: 'insertion order ${order.map((b) => b.absoluteRect.top)}');
+      }
     });
   });
 }
