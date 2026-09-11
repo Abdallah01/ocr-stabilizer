@@ -4,7 +4,7 @@
 // Test backfill for #34 — covers gaps the v0.4.0 fan-out review identified:
 //
 // - T2: primary always beats band, even when band candidate is locked first
-//       in the single-pass _findMatch scan.
+//       in the single-pass BlockMatcher.find scan.
 // - T3: a second band-admit on a block already in its provisional window is
 //       absorbed by the freeze-path early-return; no double-wrap, no
 //       captures-counter reset.
@@ -35,7 +35,7 @@ DefaultTrackedBlock<Object> _block(
     );
 
 void main() {
-  group('#34 T2 — primary-beats-band resolution in single-pass _findMatch', () {
+  group('#34 T2 — primary-beats-band resolution in single-pass BlockMatcher.find', () {
     test(
         'a band candidate locked first is superseded by a later primary match in the same scan; matchesAdmitted stays 0',
         () {

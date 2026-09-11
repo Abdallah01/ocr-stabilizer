@@ -71,7 +71,7 @@ void main() {
       expect(engine.bandStats.candidatesConsidered, 1);
       expect(engine.bandStats.bandMatchesIdentified, 1);
       expect(engine.bandStats.matchesAdmitted, 1);
-      // Both calls reached _findMatch; both produced no primary match
+      // Both calls reached BlockMatcher.find; both produced no primary match
       // (seed call has empty index, second call's text doesn't pass primary).
       // So primaryMatchesRejected should be 2.
       expect(engine.bandStats.primaryMatchesRejected, 2);

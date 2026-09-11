@@ -14,6 +14,7 @@ import 'identity_turnover.dart';
 import 'transform_estimate.dart';
 import 'internal/block_geometry.dart';
 import 'internal/coherent_shift_detector.dart';
+import 'internal/block_matcher.dart';
 import 'internal/confidence_validation.dart';
 import 'merge_result.dart';
 import 'track.dart';
@@ -162,31 +163,24 @@ class StabilizationEngine<T extends Track<P>, P> {
   /// for the per-counter semantics.
   BandFallbackStats get bandStats => _internalStats;
 
-  /// Effective spatial confirmation predicate. Resolved at construction time:
-  /// the consumer's [BandFallbackConfig.spatialConfirm] if non-null, otherwise
-  /// a drift-aware closure that uses [_resolver] and [driftTracker] to compute
-  /// `overlapRatio >= 0.80` against the candidate's space-keyed drift margin.
-  late final BandSpatialPredicate _effectiveSpatialConfirm =
-      bandFallback.spatialConfirm ?? _defaultSpatialConfirm;
-
-  /// True iff the engine is running the consumer-supplied
-  /// [BandFallbackConfig.spatialConfirm]. Captured at construction so the
-  /// _findMatch loop can scope its predicate try/catch to consumer code only —
-  /// engine-internal default-closure errors must propagate with their real
-  /// type instead of being misattributed as [BandPredicateException].
-  late final bool _consumerSpatialConfirmInUse =
-      bandFallback.spatialConfirm != null;
-
-  // Engine-owned default predicate. Lives as a separate method so the
-  // _findMatch try/catch can scope itself to consumer code only (engine
-  // bugs in this default closure must surface with their real type).
-  bool _defaultSpatialConfirm(Observation fresh, Observation candidate) =>
-      _resolver.overlapRatio(
-        fresh,
-        candidate,
-        driftTracker.driftMarginForKey(driftTracker.spaceKeyFor(candidate)),
-      ) >=
-      0.80;
+  /// The matcher (primary / band / nested; its own class since #150). One
+  /// per engine, over [bandFallback], the spatial index, the band counters
+  /// and — for the band branch's spatial confirmation — either the
+  /// consumer's [BandFallbackConfig.spatialConfirm] (wrapped so a throw
+  /// surfaces as [BandPredicateException]) or the engine's drift-aware
+  /// default (`overlapRatio >= 0.80` against the candidate's space-keyed
+  /// drift margin, whose own errors propagate with their real type).
+  late final BlockMatcher<T> _matcher = BlockMatcher<T>(
+    band: bandFallback,
+    index: _spatialIndex,
+    stats: _internalStats,
+    spatialEvidence: switch (bandFallback.spatialConfirm) {
+      null => DriftAwareSpatialEvidence(
+          resolver: _resolver, driftTracker: driftTracker),
+      final predicate => ConsumerSpatialEvidence(predicate),
+    },
+    regionCandidates: _supersessionCandidates,
+  );
 
   /// Creates a stabilization engine. The [merger] callback constructs an
   /// updated block from engine-computed merge data.
@@ -950,7 +944,7 @@ class StabilizationEngine<T extends Track<P>, P> {
             for (final fresh in deduped)
               (
                 fresh: fresh,
-                result: _findMatch(
+                result: _matcher.find(
                   fresh,
                   recordStats: false,
                   allowBandFallback: false,
@@ -967,7 +961,7 @@ class StabilizationEngine<T extends Track<P>, P> {
     // matched. A same-capture band spatial-confirm therefore sees
     // `driftTracker` as mutated by every earlier same-capture merge in
     // THIS loop — not a pre-capture snapshot — matching cross-capture
-    // behavior exactly (see `_findMatch`'s band branch and
+    // behavior exactly (see `BlockMatcher.find`'s band branch and
     // `DriftTracker.addObservation`).
     // 2.5.0 — the per-capture identity census and the coherent-shift
     // summary (`StabilizationResult.identityTurnover` / `.coherentShift`)
@@ -992,7 +986,7 @@ class StabilizationEngine<T extends Track<P>, P> {
     // same-capture mutations (finding C's hazard does not arise).
     final transformPairs = <(Offset, Offset)>[];
     for (final fresh in deduped) {
-      final matchResult = _findMatch(fresh);
+      final matchResult = _matcher.find(fresh);
       final existing = matchResult.match;
       if (existing == null) {
         stableBlocks.add(fresh);
@@ -1414,290 +1408,6 @@ class StabilizationEngine<T extends Track<P>, P> {
     return covered / cachedArea >= threshold;
   }
 
-  // ┌─── Nested re-observation (#112, 2.2.0) ───────────────────────────
-  // An OCR engine's grouping can flip between frames: the same paragraph
-  // comes back as one paragraph box in one capture and as one of its own
-  // lines in the next. The line's text is a fragment of the paragraph's,
-  // so the whole-string primary match fails and the line used to be
-  // admitted as a NEW block — the same text tracked twice, drawn as a box
-  // inside a box. When a fresh block sits inside an ESTABLISHED block and
-  // its text is a fragment of that block's text, it is a re-observation of
-  // the block: count up, geometry and text untouched.
-  // One-directional on purpose: a fresh paragraph over an established
-  // line is the whole-string path's case (from the other side) and is not
-  // touched here — see the issue for the symmetric variant's open
-  // questions.
-  // └────────────────────────────────────────────────────────────────────
-
-  /// Share of the FRESH block's own area that must lie inside the host.
-  /// 0.8, measured: an engine's line box is not perfectly nested in its
-  /// paragraph box — on the committed on-device ML Kit stream a second
-  /// line hangs 3 px below the paragraph's bottom edge (14 of 17 px
-  /// inside, 0.82) and a bar of 0.9 left it a separate block. The text
-  /// condition is the guard; geometry only has to say "inside, not beside".
-  static const double _kNestedContainment = 0.8;
-
-  /// Fragments with fewer significant characters than this never nest —
-  /// three characters match inside almost anything.
-  static const int _kNestedMinSignificantChars = 4;
-
-  /// Windowed-Levenshtein floor for the fragment against the host's text;
-  /// the primary whole-string Levenshtein floor, reused deliberately.
-  static const double _kNestedWindowSimilarity = 0.70;
-
-  /// A host must be a cached, non-provisional block seen at least this
-  /// many times. ONE on purpose, measured: on the committed on-device
-  /// ML Kit dwell stream the grouping flips on consecutive frames, so a
-  /// paragraph is re-observed as its own line before it can reach two
-  /// observations — a bar of two never fired on the eight pairs the rule
-  /// was written for. The geometry (≥ 80 % inside) and text (≥ 0.70
-  /// windowed, ≥ 4 significant characters) conditions carry the guard;
-  /// provisional hosts are excluded because they are frozen.
-  static const int _kNestedEstablishedObservations = 1;
-
-  /// Is [fresh] a nested fragment re-observation of [cached]?
-  ///
-  /// Geometry first (cheap): [cached] strictly larger, at least
-  /// [_kNestedContainment] of the fresh block's area inside it, same
-  /// coordinate contract (viewport-relative flag, carousel). Then text:
-  /// [TextDedupUtils.bestWindowSimilarity] of the fresh text against the
-  /// cached text at or above [_kNestedWindowSimilarity].
-  bool _isNestedFragmentOf(T fresh, T cached) {
-    if (cached.isProvisional) return false;
-    if (cached.observationCount < _kNestedEstablishedObservations) {
-      return false;
-    }
-    if (fresh.isViewportRelative != cached.isViewportRelative) return false;
-    if (fresh.isHorizontalScrollChild &&
-        cached.isHorizontalScrollChild &&
-        fresh.scrollContext.hzScrollerIndex !=
-            cached.scrollContext.hzScrollerIndex) {
-      return false;
-    }
-    final f = fresh.absoluteRect.raw;
-    final c = cached.absoluteRect.raw;
-    final freshArea = f.width * f.height;
-    final cachedArea = c.width * c.height;
-    if (!(freshArea > 0) || !(cachedArea > freshArea)) return false;
-    final inter = f.intersect(c);
-    if (inter.isEmpty) return false;
-    if ((inter.width * inter.height) / freshArea < _kNestedContainment) {
-      return false;
-    }
-    return TextDedupUtils.bestWindowSimilarity(
-          fresh.originalText,
-          cached.originalText,
-          minFragmentChars: _kNestedMinSignificantChars,
-        ) >=
-        _kNestedWindowSimilarity;
-  }
-
-  /// The established block [fresh] is a nested fragment of, or null. When
-  /// several qualify (a page-wide block whose text repeats the paragraph,
-  /// and the paragraph itself), the TIGHTEST host — smallest area — wins.
-  /// Candidates span the fresh block's whole rect plus the
-  /// viewport-relative namespace, as for supersession.
-  T? _findNestedHost(T fresh) {
-    T? best;
-    var bestArea = double.infinity;
-    for (final cached in _supersessionCandidates(fresh)) {
-      if (!_isNestedFragmentOf(fresh, cached)) continue;
-      final r = cached.absoluteRect.raw;
-      final area = r.width * r.height;
-      if (area < bestArea) {
-        bestArea = area;
-        best = cached;
-      }
-    }
-    return best;
-  }
-
-  /// Find a matching existing block for [fresh] in the spatial index.
-  ///
-  /// Single-pass over candidates: scores are computed ONCE per candidate and
-  /// evaluated against both primary thresholds (Lev 0.70 / Jaccard 0.80) and
-  /// band thresholds ([BandFallbackConfig.bandLevenshteinFloor] /
-  /// [BandFallbackConfig.bandJaccardFloor]) in the same iteration. This
-  /// eliminates the double `isTextSimilarWithScores` call that the old
-  /// two-loop design incurred on primary misses.
-  ///
-  /// Primary path: highest-Levenshtein candidate that clears primary thresholds
-  /// wins. Band path (only when [bandFallback.mode] != [BandFallbackMode.off]):
-  /// first candidate that clears the observation-count floor, spatial confirm,
-  /// AND band text floors is admitted ([BandFallbackMode.admit]) or tallied
-  /// ([BandFallbackMode.observeOnly]).
-  ///
-  /// Nested re-observation (#112): only when BOTH the primary and the band
-  /// path miss, a fresh block that is a nested fragment of an established
-  /// block ([_findNestedHost]) matches that block with `wasNestedFragment`
-  /// set, so the merge is a confirming observation only.
-  ///
-  /// [recordStats] / [allowBandFallback] / [allowNestedFallback] (#116,
-  /// finding A fix): the DRY pre-pass `stabilize` runs to feed
-  /// `CoherentShiftDetector.detect` a full-capture snapshot calls this with all
-  /// three `false`. That pre-pass must never mutate [_internalStats] (the
-  /// REAL, interleaved call below ticks every counter exactly once per
-  /// fresh block) and must never evaluate the band branch (which reads
-  /// `driftTracker` — see `stabilize`'s own doc for why only the PRIMARY
-  /// check, which touches neither, is safe to run ahead of this capture's
-  /// merges). Skipping the nested-fragment lookup too is a pure perf
-  /// saving: `CoherentShiftDetector.detect` already discards `wasNestedFragment`
-  /// matches, so computing one in the dry pass is wasted work, never a
-  /// correctness difference. Every default reproduces today's single-mode
-  /// behavior exactly.
-  ({T? match, bool wasBandFallback, bool wasNestedFragment}) _findMatch(
-    T fresh, {
-    bool recordStats = true,
-    bool allowBandFallback = true,
-    bool allowNestedFallback = true,
-  }) {
-    final candidates = _spatialIndex.candidates(fresh);
-    final shouldRunBand =
-        allowBandFallback && bandFallback.mode != BandFallbackMode.off;
-
-    T? primaryMatch;
-    // Seeded below any reachable score so a candidate admitted purely via
-    // the Jaccard arm with Levenshtein 0.0 (e.g. short reordered CJK,
-    // "北京" vs "京北") still registers as the primary match instead of
-    // being silently dropped by the strict `>` comparison.
-    double bestPrimarySim = -1.0;
-    T? bandAdmitted;
-
-    for (final candidate in candidates) {
-      if (candidate.isViewportRelative != fresh.isViewportRelative) continue;
-
-      // Compute scores ONCE per candidate — used by both the primary check
-      // (Lev 0.70 OR Jaccard 0.80, engine-owned defaults) and the band check
-      // (band floors from config, tested directly against the same scores).
-      final scores = TextDedupUtils.isTextSimilarWithScores(
-        fresh.originalText,
-        candidate.originalText,
-        // primary floors (Lev 0.70, Jacc 0.80) — engine-owned defaults,
-        // matching the existing TextDedupUtils.isTextSimilar defaults.
-      );
-
-      // ── Primary check ──
-      if (scores.match) {
-        // Pick the highest Lev-scoring candidate (Jaccard is a parallel
-        // metric for admission, not a primary ordering signal).
-        if (scores.levenshtein > bestPrimarySim) {
-          bestPrimarySim = scores.levenshtein;
-          primaryMatch = candidate;
-        }
-        // Primary hit — this candidate is not a band candidate.
-        continue;
-      }
-
-      // ── Band check (primary missed for this candidate) ──
-      if (!shouldRunBand) continue;
-      // admit mode: once a band candidate is locked, later candidates still
-      // need their primary check (done above via continue), but we skip
-      // redundant band evaluation — the first qualifying admit wins.
-      if (bandFallback.mode == BandFallbackMode.admit && bandAdmitted != null) {
-        continue;
-      }
-
-      _internalStats.recordCandidateConsidered();
-
-      if (candidate.observationCount < bandFallback.candidateObservationFloor) {
-        _internalStats.recordRejectedCandidateFloor();
-        continue;
-      }
-      bool spatialOk;
-      if (_consumerSpatialConfirmInUse) {
-        try {
-          spatialOk = _effectiveSpatialConfirm(fresh, candidate);
-        } catch (error, stack) {
-          // Consumer-supplied predicate threw. Per BandSpatialPredicate's
-          // documented contract, predicates must not throw — but if one
-          // does, surface it as a typed BandPredicateException so the
-          // consumer can distinguish predicate failures from
-          // engine-internal errors. No silent swallow.
-          //
-          // The catch is intentionally scoped to consumer code only: any
-          // throw from _defaultSpatialConfirm (engine-internal default
-          // closure that calls _resolver.overlapRatio + driftTracker
-          // helpers) must propagate with its real type so engine
-          // regressions are not misattributed as predicate failures.
-          throw BandPredicateException(error, stack);
-        }
-      } else {
-        spatialOk = _effectiveSpatialConfirm(fresh, candidate);
-      }
-      if (!spatialOk) {
-        _internalStats.recordRejectedSpatial();
-        continue;
-      }
-      // Test the same scores against the band thresholds directly — avoids a
-      // second isTextSimilarWithScores call. Semantically equivalent to
-      // calling isTextSimilarWithScores with levenshteinThreshold: bandLev,
-      // jaccardThreshold: bandJacc (OR logic mirrors the primary check).
-      final bandMatches =
-          scores.levenshtein >= bandFallback.bandLevenshteinFloor ||
-              scores.jaccard >= bandFallback.bandJaccardFloor;
-      if (!bandMatches) {
-        _internalStats.recordRejectedTextBand();
-        continue;
-      }
-      _internalStats.recordBandMatchIdentified();
-      if (bandFallback.mode == BandFallbackMode.admit) {
-        bandAdmitted = candidate;
-        // recordMatchAdmitted() is deferred to the resolution block below
-        // so it reflects "match actually returned" rather than
-        // "candidate locked for band admission". This matters when a
-        // later primary candidate in the same scan supersedes a band
-        // candidate locked earlier (#34 T2): without the deferral,
-        // matchesAdmitted would overcount and disagree with the
-        // function's return value.
-      }
-      // observeOnly: keep scanning so all candidates contribute to counters.
-    }
-
-    // ── Tally primary outcome ──
-    if (primaryMatch != null) {
-      if (recordStats) _internalStats.recordPrimaryMatchAdmitted();
-      return (
-        match: primaryMatch,
-        wasBandFallback: false,
-        wasNestedFragment: false,
-      );
-    }
-    // Tick on every primary miss, including empty-candidate-set cases.
-    // Holds the spec invariant:
-    //   primaryMatchesAdmitted + primaryMatchesRejected
-    //     == total fresh observations that reached _findMatch.
-    // Consumers compute "band fires as % of primary misses" as
-    // `bandMatchesIdentified / primaryMatchesRejected` — undercounting
-    // here would skew that ratio. (Gated on [recordStats] — the dry
-    // pre-pass calls this with `recordStats: false` and must not tick it;
-    // the real, interleaved call always passes the default `true`.)
-    if (recordStats) _internalStats.recordPrimaryMatchRejected();
-
-    // ── Return band outcome ──
-    if (shouldRunBand && bandAdmitted != null) {
-      _internalStats.recordMatchAdmitted();
-      return (
-        match: bandAdmitted,
-        wasBandFallback: true,
-        wasNestedFragment: false,
-      );
-    }
-
-    if (!allowNestedFallback) {
-      return (match: null, wasBandFallback: false, wasNestedFragment: false);
-    }
-
-    // ── Nested re-observation (#112): primary AND band missed ──
-    // Counted as a primary rejection above on purpose: the band ratio
-    // consumers compute (`bandMatchesIdentified / primaryMatchesRejected`)
-    // keeps its denominator; this is a separate, later rule.
-    final host = _findNestedHost(fresh);
-    if (host != null) {
-      return (match: host, wasBandFallback: false, wasNestedFragment: true);
-    }
-    return (match: null, wasBandFallback: false, wasNestedFragment: false);
-  }
-
   /// Perform SAR (Scan-Accumulate-Replace) merge of [fresh] into [existing].
   ///
   /// Public entry point for consumers that do their own block matching but
@@ -1726,7 +1436,7 @@ class StabilizationEngine<T extends Track<P>, P> {
 
   /// Internal merge used by [stabilize] — accumulates signals into lists.
   ///
-  /// [wasBandFallback] flows through from `_findMatch`'s record return —
+  /// [wasBandFallback] flows through from `BlockMatcher.find`'s record return —
   /// `true` when the match came via the band-relaxed fallback path. When set,
   /// `_mergeImpl` marks the merged result as provisional with
   /// `bandFallback.provisionalCaptures` remaining (see `_mergeImpl` for the
@@ -1814,7 +1524,7 @@ class StabilizationEngine<T extends Track<P>, P> {
     // would otherwise outscore the paragraph text), pulls NO position (its
     // rect is a sub-box, not a jittered observation of the same box), and
     // feeds NO drift or classification vote for the same reason. The host
-    // is never provisional (`_isNestedFragmentOf` requires an established
+    // is never provisional (`BlockMatcher.isNestedFragmentOf` requires an established
     // block), so this sits above the freeze path without interacting.
     if (nestedFragment) {
       final result = MergeResult(

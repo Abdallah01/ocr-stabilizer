@@ -10,6 +10,15 @@
   API is unchanged. Every capture of every committed replay stream is
   byte-identical under all eleven differential arms. The design history
   that sat above the code now lives in `doc/decisions/`.
+- **Internal: matching is its own class (#150, no behaviour change).**
+  `lib/src/internal/block_matcher.dart` — `BlockMatcher.find` (primary /
+  band-relaxed / nested re-observation, the band counters, the dry
+  pre-pass flags) and `SpatialEvidence`, the band branch's only view of
+  space: `DriftAwareSpatialEvidence` (the engine's `overlapRatio >= 0.80`
+  default) or `ConsumerSpatialEvidence` (a consumer's
+  `BandFallbackConfig.spatialConfirm`, with the `BandPredicateException`
+  rewrap scoped to it). Engine 2,280 → 1,989 lines. Not exported. The
+  #143 primary tie-break is the next behaviour change at this seam.
 
 ### Added
 - **Differential replay harness (#150, tooling only — no engine
