@@ -232,12 +232,12 @@ void main() {
           absoluteRect: AbsoluteRect(const Rect.fromLTWH(10, 100, 200, 30)),
           payload: null,
           originalText: text,
-          isHorizontalScrollChild: true,
-          scrollContext: ScrollContext(
+          coordinates: CoordinateContext.page(
+              scroll: ScrollContext(
             scrollY: 0,
             scrollX: 0,
             hzScrollerIndex: index,
-          ),
+          )),
         );
 
     test('a block from another carousel never evicts a retained one', () {

@@ -31,7 +31,8 @@ DefaultTrackedBlock<Object> _block(
       payload: const Object(),
       originalText: text,
       observationCount: 3,
-      isHorizontalScrollChild: carousel,
+      coordinates: CoordinateContext.page(
+          scroll: ScrollContext(hzScrollerIndex: carousel ? 0 : -1)),
     );
 
 const _texts = [

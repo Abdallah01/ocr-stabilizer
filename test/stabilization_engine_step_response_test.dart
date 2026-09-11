@@ -94,7 +94,9 @@ _Block _at(
     originalText: text,
     positionConfidence: PositionConfidence.from(confidence),
     textConfidence: TextConfidence.from(confidence),
-    isViewportRelative: isViewportRelative,
+    coordinates: isViewportRelative
+        ? const CoordinateContext.viewport()
+        : const CoordinateContext.page(),
   );
 }
 
@@ -720,8 +722,7 @@ void main() {
             absoluteRect: AbsoluteRect(Rect.fromLTWH(0, top, 200, 30)),
             payload: null,
             originalText: text,
-            isHorizontalScrollChild: true,
-            scrollContext: carousel,
+            coordinates: const CoordinateContext.page(scroll: carousel),
           );
       List<_Block> batch1() => [
             _at(50, text: 'one block text'),
@@ -802,15 +803,13 @@ void main() {
         absoluteRect: const AbsoluteRect(Rect.fromLTWH(0, 100, 200, 30)),
         payload: null,
         originalText: 'stable paragraph text',
-        isHorizontalScrollChild: true,
-        scrollContext: carousel,
+        coordinates: const CoordinateContext.page(scroll: carousel),
       );
       final fresh = _Block(
         absoluteRect: const AbsoluteRect(Rect.fromLTWH(0, 400, 200, 30)),
         payload: null,
         originalText: 'stable paragraph text',
-        isHorizontalScrollChild: true,
-        scrollContext: carousel,
+        coordinates: const CoordinateContext.page(scroll: carousel),
       );
       final output = rig.engine.merge(fresh, existing);
 

@@ -191,10 +191,6 @@ class SpatialBlockIndex<T extends TrackedBlock> implements SpatialIndexView<T> {
 
   /// Add [block] to the spatial index.
   void add(T block) {
-    assert(
-      block.containerId == null || block.isInnerScrollerChild,
-      'TrackedBlock invariant: containerId requires isInnerScrollerChild',
-    );
     final absKey = absoluteCellKey(block);
     (_cells[absKey] ??= []).add(block);
     if (block.isInnerScrollerChild) {

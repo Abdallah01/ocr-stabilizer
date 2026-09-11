@@ -11,21 +11,28 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 // =============================================================================
 
 class _TestBlock implements ObservableBlock<Never> {
+  // 3.0 (#147): the engine reads the frame through this one getter; the
+  // flat fields below stay as this fixture's construction convenience.
+  @override
+  CoordinateContext get coordinates => CoordinateContext.fromFlags(
+        isViewportRelative: isViewportRelative,
+        isInnerScrollerChild: isInnerScrollerChild,
+        innerScrollerTop: innerScrollerTop,
+        isHorizontalScrollChild: isHorizontalScrollChild,
+        containerId: containerId,
+        scrollContext: scrollContext,
+        isFromStickyElement: isFromStickyElement,
+        stickyFallback: stickyFallback,
+      );
   @override
   final AbsoluteRect absoluteRect;
-  @override
   final ContainerId? containerId;
-  @override
   final bool isViewportRelative;
-  @override
   final bool isInnerScrollerChild;
-  @override
   final bool isHorizontalScrollChild;
-  @override
   final double innerScrollerTop;
   @override
   final String originalText;
-  @override
   final bool isFromStickyElement;
   @override
   final PositionConfidence positionConfidence;
@@ -90,14 +97,12 @@ class _TestBlock implements ObservableBlock<Never> {
     this.stickyFallbackHzIndex = -1,
   });
 
-  @override
   ScrollContext get scrollContext => ScrollContext(
         scrollY: captureScrollY,
         scrollX: captureScrollX,
         hzScrollerIndex: hzScrollerIndex,
       );
 
-  @override
   StickyFallback get stickyFallback => StickyFallback(
         scrollY: stickyFallbackScrollY,
         scrollX: stickyFallbackScrollX,
@@ -217,8 +222,10 @@ _TestBlock _block({
     observationCount: observationCount,
     isViewportRelative: isVR,
     isInnerScrollerChild: isIC,
-    isHorizontalScrollChild: isHz,
-    hzScrollerIndex: hzScrollerIndex,
+    // 3.0 (#147): a carousel child always has an index, and an index
+    // always makes a carousel child — keep the two in step.
+    isHorizontalScrollChild: isHz || hzScrollerIndex >= 0,
+    hzScrollerIndex: isHz && hzScrollerIndex < 0 ? 0 : hzScrollerIndex,
     classificationVotes: classVotes ?? {10: 1},
     carouselVotes: carouselVotes ?? const CarouselVotes.none(),
     textVotes: textVotes ?? {},
@@ -482,8 +489,8 @@ void main() {
       final existingWithHz = _TestBlock(
         absoluteRect: existing.absoluteRect,
         originalText: existing.originalText,
-        isHorizontalScrollChild: true,
-        hzScrollerIndex: -1, // was non-carousel initially
+        isHorizontalScrollChild: false, // was non-carousel initially
+        hzScrollerIndex: -1,
         carouselVotes: const CarouselVotes.none(),
       );
       final spatialIndex = SpatialBlockIndex<_TestBlock>();

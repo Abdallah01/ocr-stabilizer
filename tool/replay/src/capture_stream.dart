@@ -201,27 +201,31 @@ DefaultTrackedBlock<Object> blockFromJson(Map<String, Object?> b) {
     positionConfidence: PositionConfidence.from((b['pconf'] as num).toDouble()),
     textConfidence: TextConfidence.from((b['tconf'] as num).toDouble()),
     sourceQuality: (b['srcQ'] as num?)?.toInt() ?? 0,
-    isViewportRelative: b['vr'] as bool? ?? false,
-    isInnerScrollerChild: b['isc'] as bool? ?? false,
-    innerScrollerTop: (b['iscTop'] as num?)?.toDouble() ?? 0,
-    isHorizontalScrollChild: b['hsc'] as bool? ?? false,
-    containerId: cid == null ? null : ContainerId(cid),
-    isFromStickyElement: b['sticky'] as bool? ?? false,
-    stickyFallback: sf == null
-        ? StickyFallback.none
-        : StickyFallback(
-            scrollY: (sf[0] as num).toDouble(),
-            scrollX: (sf[1] as num).toDouble(),
-            isIc: sf[2] as bool,
-            hzScrollerIndex: (sf[3] as num).toInt(),
-          ),
-    scrollContext: sc == null
-        ? ScrollContext.none
-        : ScrollContext(
-            scrollY: sc[0].toDouble(),
-            scrollX: sc[1].toDouble(),
-            hzScrollerIndex: sc[2].toInt(),
-          ),
+    // The recorded flat flags → one sealed frame (3.0, #147). A recorded
+    // combination the sealed type cannot express throws here, loudly.
+    coordinates: CoordinateContext.fromFlags(
+      isViewportRelative: b['vr'] as bool? ?? false,
+      isInnerScrollerChild: b['isc'] as bool? ?? false,
+      innerScrollerTop: (b['iscTop'] as num?)?.toDouble() ?? 0,
+      isHorizontalScrollChild: b['hsc'] as bool? ?? false,
+      containerId: cid == null ? null : ContainerId(cid),
+      isFromStickyElement: b['sticky'] as bool? ?? false,
+      stickyFallback: sf == null
+          ? StickyFallback.none
+          : StickyFallback(
+              scrollY: (sf[0] as num).toDouble(),
+              scrollX: (sf[1] as num).toDouble(),
+              isIc: sf[2] as bool,
+              hzScrollerIndex: (sf[3] as num).toInt(),
+            ),
+      scrollContext: sc == null
+          ? ScrollContext.none
+          : ScrollContext(
+              scrollY: sc[0].toDouble(),
+              scrollX: sc[1].toDouble(),
+              hzScrollerIndex: sc[2].toInt(),
+            ),
+    ),
     observationCount: (b['obsN'] as num?)?.toInt() ?? 1,
     isProvisional: b['prov'] as bool? ?? false,
     provisionalCapturesRemaining: (b['provN'] as num?)?.toInt() ?? 0,

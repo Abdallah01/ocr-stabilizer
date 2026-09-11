@@ -16,21 +16,28 @@ import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 // =============================================================================
 
 class _TestBlock implements TrackedBlock<Never> {
+  // 3.0 (#147): the engine reads the frame through this one getter; the
+  // flat fields below stay as this fixture's construction convenience.
+  @override
+  CoordinateContext get coordinates => CoordinateContext.fromFlags(
+        isViewportRelative: isViewportRelative,
+        isInnerScrollerChild: isInnerScrollerChild,
+        innerScrollerTop: innerScrollerTop,
+        isHorizontalScrollChild: isHorizontalScrollChild,
+        containerId: containerId,
+        scrollContext: scrollContext,
+        isFromStickyElement: isFromStickyElement,
+        stickyFallback: stickyFallback,
+      );
   @override
   final AbsoluteRect absoluteRect;
-  @override
   final bool isViewportRelative;
-  @override
   final bool isInnerScrollerChild;
-  @override
   final double innerScrollerTop;
-  @override
   final ContainerId? containerId;
-  @override
   final bool isHorizontalScrollChild;
   @override
   final String originalText;
-  @override
   final bool isFromStickyElement;
   @override
   final PositionConfidence positionConfidence;
@@ -56,14 +63,13 @@ class _TestBlock implements TrackedBlock<Never> {
     this.sourceQuality = 0,
   });
 
-  @override
-  ScrollContext get scrollContext => const ScrollContext(
+  // 3.0 (#147): a carousel child always carries its index.
+  ScrollContext get scrollContext => ScrollContext(
         scrollY: 0,
         scrollX: 0,
-        hzScrollerIndex: -1,
+        hzScrollerIndex: isHorizontalScrollChild ? 0 : -1,
       );
 
-  @override
   StickyFallback get stickyFallback => const StickyFallback(
         scrollY: 0,
         scrollX: 0,

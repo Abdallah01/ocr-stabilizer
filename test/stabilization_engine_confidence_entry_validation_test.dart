@@ -3,6 +3,7 @@
 
 import 'package:test/test.dart';
 
+import 'package:ocr_stabilizer/src/types/coordinate_context.dart';
 import 'package:ocr_stabilizer/src/carousel_votes.dart';
 import 'package:ocr_stabilizer/src/default_tracked_block.dart';
 import 'package:ocr_stabilizer/src/observable_block.dart';
@@ -18,6 +19,19 @@ import 'package:ocr_stabilizer/src/types/sticky_fallback.dart';
 /// Used to prove engine-entry validation catches non-`DefaultTrackedBlock`
 /// implementors too, per spec §3 (Solution A).
 class _BareTrackedBlock implements ObservableBlock<Object> {
+  // 3.0 (#147): the engine reads the frame through this one getter; the
+  // flat fields below stay as this fixture's construction convenience.
+  @override
+  CoordinateContext get coordinates => CoordinateContext.fromFlags(
+        isViewportRelative: isViewportRelative,
+        isInnerScrollerChild: isInnerScrollerChild,
+        innerScrollerTop: innerScrollerTop,
+        isHorizontalScrollChild: isHorizontalScrollChild,
+        containerId: containerId,
+        scrollContext: scrollContext,
+        isFromStickyElement: isFromStickyElement,
+        stickyFallback: stickyFallback,
+      );
   _BareTrackedBlock({
     required this.positionConfidence,
     required this.textConfidence,
@@ -30,25 +44,17 @@ class _BareTrackedBlock implements ObservableBlock<Object> {
 
   @override
   AbsoluteRect get absoluteRect => AbsoluteRect.fromLTWH(0, 0, 10, 10);
-  @override
   ContainerId? get containerId => null;
-  @override
   bool get isViewportRelative => false;
-  @override
   bool get isInnerScrollerChild => false;
-  @override
   double get innerScrollerTop => 0;
-  @override
   bool get isHorizontalScrollChild => false;
   @override
   Object get payload => const Object();
   @override
   String get originalText => 'hi';
-  @override
   ScrollContext get scrollContext => ScrollContext.none;
-  @override
   bool get isFromStickyElement => false;
-  @override
   StickyFallback get stickyFallback => StickyFallback.none;
   @override
   int get sourceQuality => 0;

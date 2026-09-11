@@ -27,8 +27,10 @@ DefaultTrackedBlock<void> _at(
       payload: null,
       originalText: text,
       observationCount: observations,
-      isHorizontalScrollChild: carousel,
-      isViewportRelative: vr,
+      coordinates: vr
+          ? const CoordinateContext.viewport()
+          : CoordinateContext.page(
+              scroll: ScrollContext(hzScrollerIndex: carousel ? 0 : -1)),
     );
 
 StabilizationEngine<DefaultTrackedBlock<void>, void> _engine({

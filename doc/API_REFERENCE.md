@@ -13,20 +13,23 @@ The engine's central interface. Every block the engine processes implements this
 class MyBlock implements TrackedBlock<MyPayload> {
   @override final AbsoluteRect absoluteRect;
   @override final String originalText;
-  @override final ContainerId? containerId;
-  @override final bool isViewportRelative;
-  @override final bool isInnerScrollerChild;
-  @override final double innerScrollerTop;
-  @override final bool isHorizontalScrollChild;
-  @override final ScrollContext scrollContext;
-  @override final bool isFromStickyElement;
-  @override final StickyFallback stickyFallback;
+  @override final CoordinateContext coordinates;  // page / innerScroller / viewport
   @override final PositionConfidence positionConfidence;
   @override final TextConfidence textConfidence;
   @override final int sourceQuality;
   @override final MyPayload payload;  // opaque — engine carries but never reads
 }
 ```
+
+`coordinates` (3.0, #147) is one sealed value — `CoordinateContext.page()`
+(the default; a carousel child is a page block whose scroll context carries
+the carousel index), `.innerScroller(top:, containerId:, scroll:)` or
+`.viewport(stickyFallback:)`. The eight 2.x flags (`isViewportRelative`,
+`isInnerScrollerChild`, `innerScrollerTop`, `isHorizontalScrollChild`,
+`containerId`, `scrollContext`, `isFromStickyElement`, `stickyFallback`)
+are derived views readable on every block; a consumer that still stores
+them flat builds the frame with `CoordinateContext.fromFlags(...)`, which
+rejects the combinations the engine never expected.
 
 For the stabilization pipeline (vote accumulation, provisional state,
 SAR-merge history), implement `ObservableBlock<T>` instead — it extends
@@ -177,7 +180,7 @@ A block's identity is a six-dimensional signature:
 
 | Type | Purpose |
 |------|---------|
-| `TrackedBlock<T>` | Core block contract (14 getters including the opaque `payload`) |
+| `TrackedBlock<T>` | Core block contract (7 getters including the opaque `payload`; the 2.x coordinate flags are derived views) |
 | `ObservableBlock<T>` | Extends `TrackedBlock`; adds observation history (8 getters: counts, votes, provisional state) |
 | `ClassificationInput` | Platform-agnostic viewport geometry |
 | `CarouselInput` | Carousel-specific geometry |
@@ -237,6 +240,7 @@ A block's identity is a six-dimensional signature:
 
 | Type | Purpose |
 |------|---------|
+| `CoordinateContext` | Sealed frame of a block's rect: `page(scroll:)`, `innerScroller(top:, containerId:, scroll:)`, `viewport(stickyFallback:)`; `fromFlags(...)` adapts flat flags (3.0+) |
 | `ScrollContext` | Scroll offsets and carousel identity at capture time |
 | `StickyFallback` | Fallback coordinate context for demoted sticky elements |
 | `TextVote` | Accumulated confidence evidence for one text variant |

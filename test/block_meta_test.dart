@@ -8,18 +8,14 @@ void main() {
   group('BlockMeta', () {
     test('required fields are stored correctly', () {
       final meta = BlockMeta(
-        isViewportRelative: true,
-        isInnerScrollerChild: false,
-        innerScrollerTop: 0,
-        captureContext: const ScrollContext(
-          scrollY: 500.0,
-          scrollX: 100.0,
-          hzScrollerIndex: 2,
-        ),
         positionConfidence: PositionConfidence.from(0.85),
         textConfidence: TextConfidence.from(0.92),
+        coordinates: const CoordinateContext.page(
+          scroll: ScrollContext(scrollY: 500, scrollX: 100, hzScrollerIndex: 2),
+        ),
       );
-      expect(meta.isViewportRelative, isTrue);
+      expect(meta.isViewportRelative, isFalse);
+      expect(meta.isHorizontalScrollChild, isTrue);
       expect(meta.captureScrollY, 500.0);
       expect(meta.captureScrollX, 100.0);
       expect(meta.hzScrollerIndex, 2);
@@ -29,12 +25,9 @@ void main() {
 
     test('optional fields have correct defaults', () {
       final meta = BlockMeta(
-        isViewportRelative: false,
-        isInnerScrollerChild: false,
-        innerScrollerTop: 0,
-        captureContext: ScrollContext.none,
         positionConfidence: PositionConfidence.from(0.5),
         textConfidence: TextConfidence.from(0.5),
+        coordinates: CoordinateContext.page(scroll: ScrollContext.none),
       );
       expect(meta.isFromStickyElement, isFalse);
       expect(meta.stickyFallbackScrollY, 0.0);
@@ -47,13 +40,12 @@ void main() {
 
     test('containerId is threaded through', () {
       final meta = BlockMeta(
-        isViewportRelative: false,
-        isInnerScrollerChild: true,
-        innerScrollerTop: 200.0,
-        captureContext: const ScrollContext(scrollY: 100.0),
         positionConfidence: PositionConfidence.from(0.7),
         textConfidence: TextConfidence.from(0.8),
-        containerId: const ContainerId('sidebar_abc'),
+        coordinates: CoordinateContext.innerScroller(
+            top: 200.0,
+            containerId: const ContainerId('sidebar_abc'),
+            scroll: const ScrollContext(scrollY: 100.0)),
       );
       expect(meta.containerId, const ContainerId('sidebar_abc'));
       expect(meta.isInnerScrollerChild, isTrue);
@@ -62,19 +54,15 @@ void main() {
 
     test('sticky fallback fields are stored via StickyFallback', () {
       final meta = BlockMeta(
-        isViewportRelative: true,
-        isInnerScrollerChild: false,
-        innerScrollerTop: 0,
-        captureContext: ScrollContext.none,
-        isFromStickyElement: true,
-        stickyFallback: const StickyFallback(
+        positionConfidence: PositionConfidence.from(0.9),
+        textConfidence: TextConfidence.from(0.95),
+        coordinates: CoordinateContext.viewport(
+            stickyFallback: const StickyFallback(
           scrollY: 300.0,
           scrollX: 50.0,
           isIc: true,
           hzScrollerIndex: 1,
-        ),
-        positionConfidence: PositionConfidence.from(0.9),
-        textConfidence: TextConfidence.from(0.95),
+        )),
       );
       expect(meta.isFromStickyElement, isTrue);
       expect(meta.stickyFallbackScrollY, 300.0);
@@ -87,12 +75,10 @@ void main() {
       'isHorizontalScrollChild is true when hzScrollerIndex >= 0 and not VR',
       () {
         final meta = BlockMeta(
-          isViewportRelative: false,
-          isInnerScrollerChild: false,
-          innerScrollerTop: 0,
-          captureContext: const ScrollContext(hzScrollerIndex: 0),
           positionConfidence: PositionConfidence.from(0.5),
           textConfidence: TextConfidence.from(0.5),
+          coordinates: CoordinateContext.page(
+              scroll: const ScrollContext(hzScrollerIndex: 0)),
         );
         expect(meta.isHorizontalScrollChild, isTrue);
       },
@@ -102,12 +88,9 @@ void main() {
       'isHorizontalScrollChild is false when VR even with hzScrollerIndex >= 0',
       () {
         final meta = BlockMeta(
-          isViewportRelative: true,
-          isInnerScrollerChild: false,
-          innerScrollerTop: 0,
-          captureContext: const ScrollContext(hzScrollerIndex: 0),
           positionConfidence: PositionConfidence.from(0.5),
           textConfidence: TextConfidence.from(0.5),
+          coordinates: const CoordinateContext.viewport(),
         );
         expect(meta.isHorizontalScrollChild, isFalse);
       },
