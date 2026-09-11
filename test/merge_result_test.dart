@@ -23,7 +23,7 @@ MergeResult _validResult({
     textWasPromoted: false,
     updatedClassificationVotes: const {},
     needsReclassification: false,
-    updatedCarouselIdVotes: const {-1: 1},
+    updatedCarouselVotes: const CarouselVotes.none(),
     observationCount: observationCount,
     isProvisional: isProvisional,
     provisionalCapturesRemaining: provisionalCapturesRemaining,
@@ -162,8 +162,7 @@ void main() {
     // block. A `MergeResult` combining both is, like the nested-fragment
     // combination above, a state the engine can never produce — the
     // constructor must catch a direct-construction bypass here too.
-    test('throws when isProvisional and stepResponseApplied are both set',
-        () {
+    test('throws when isProvisional and stepResponseApplied are both set', () {
       expect(
         () => _validResult(
           isProvisional: true,

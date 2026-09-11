@@ -20,9 +20,8 @@ void main() {
       expect(block.positionConfidence, PositionConfidence.groundTruth);
       expect(block.textConfidence, TextConfidence.groundTruth);
 
-      // Critical: carouselIdVotes must be {-1: 1}, NOT {}, so the engine's
-      // phantom-carousel-vote clearing logic works on first observation.
-      expect(block.carouselIdVotes, {-1: 1});
+      // 3.0 (#148): no phantom vote — the value type starts empty.
+      expect(block.carouselVotes, const CarouselVotes.none());
       expect(block.classificationVotes, isEmpty);
       expect(block.textVotes, isEmpty);
 
@@ -88,7 +87,7 @@ void main() {
         textWasPromoted: true,
         updatedClassificationVotes: const {10: 2},
         needsReclassification: false,
-        updatedCarouselIdVotes: const {-1: 2},
+        updatedCarouselVotes: CarouselVotes.fromHistogram({-1: 2}),
         observationCount: 2,
         isProvisional: false,
         provisionalCapturesRemaining: 0,

@@ -2333,7 +2333,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         textWasPromoted: false,
         updatedClassificationVotes: existing.classificationVotes,
         needsReclassification: existing.needsReclassification,
-        updatedCarouselIdVotes: existing.carouselIdVotes,
+        updatedCarouselVotes: existing.carouselVotes,
         observationCount: existing.observationCount + 1,
         isProvisional: false,
         provisionalCapturesRemaining: 0,
@@ -2380,7 +2380,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         textWasPromoted: false,
         updatedClassificationVotes: existing.classificationVotes,
         needsReclassification: existing.needsReclassification,
-        updatedCarouselIdVotes: existing.carouselIdVotes,
+        updatedCarouselVotes: existing.carouselVotes,
         observationCount: existing.observationCount,
         isProvisional: remaining > 0,
         provisionalCapturesRemaining: remaining,
@@ -2474,16 +2474,11 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
         classVotes.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
     final needsReclass = bestWeight != existing.hierarchyWeight;
 
-    // 4b. Carousel ID vote accumulation
-    final carouselVotes = Map<int, int>.from(existing.carouselIdVotes);
-    final freshHzIdx = fresh.scrollContext.hzScrollerIndex;
-    // Clear phantom non-carousel vote on first real carousel observation
-    if (freshHzIdx != -1 &&
-        carouselVotes.length == 1 &&
-        carouselVotes[-1] == 1) {
-      carouselVotes.remove(-1);
-    }
-    carouselVotes[freshHzIdx] = (carouselVotes[freshHzIdx] ?? 0) + 1;
+    // 4b. Carousel ID vote accumulation (#148: the value type owns the
+    // histogram; a freshly constructed block carries no phantom vote to
+    // clear).
+    final carouselVotes =
+        existing.carouselVotes.record(fresh.scrollContext.hzScrollerIndex);
 
     // 4c. Text vote accumulation
     final updatedTextVotes = Map<String, TextVote>.from(existing.textVotes);
@@ -2593,7 +2588,7 @@ class StabilizationEngine<T extends ObservableBlock<P>, P> {
       textWasPromoted: textWasPromoted,
       updatedClassificationVotes: Map.unmodifiable(classVotes),
       needsReclassification: needsReclass,
-      updatedCarouselIdVotes: Map.unmodifiable(carouselVotes),
+      updatedCarouselVotes: carouselVotes,
       observationCount: newObservationCount,
       isProvisional: admitAsProvisional,
       provisionalCapturesRemaining:

@@ -226,6 +226,7 @@ A block's identity is a six-dimensional signature:
 |------|---------|
 | `StabilizationResult<T>` | Output of `engine.stabilize()` — stable blocks + bookkeeping |
 | `MergeResult` | Exhaustive engine-computed delta passed to `BlockMerger` |
+| `CarouselVotes` | Histogram of horizontal-scroller indices a block was observed under; `none()`, `seeded(index)`, `record(index)`, `hasObservedCarousel` (3.0+) |
 | `ClassificationResult` | Output of `BlockClassifierService` |
 | `MergeDecisionDiagnostic` | One grouper boundary decision — verdict, reason set, gap/threshold context (2.0.0+) |
 | `CoherentShiftEvent` | The coherent shift a capture applied — translation, member count, adopted count, deciding path (2.5.0+) |

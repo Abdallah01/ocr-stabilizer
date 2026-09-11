@@ -71,7 +71,7 @@ class _EquatableBlock implements ObservableBlock<void> {
   @override
   Map<int, int> get classificationVotes => const {};
   @override
-  Map<int, int> get carouselIdVotes => const {-1: 1};
+  CarouselVotes get carouselVotes => const CarouselVotes.none();
   @override
   Map<String, TextVote> get textVotes => const {};
   @override

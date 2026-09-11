@@ -29,6 +29,31 @@ pick up in an hour. Breaking; each entry carries its migration.
   | `missedFrameRetention:` | `retention: RetentionConfig(missedFrames: …)` |
   | `transformEstimateMinPairs:` | `diagnostics: DiagnosticsConfig(transformEstimateMinPairs: …)` |
 
+- **`CarouselVotes` replaces the `{-1: 1}` phantom-vote sentinel (#148).**
+  `ObservableBlock.carouselIdVotes: Map<int, int>` is now
+  `carouselVotes: CarouselVotes`, and `MergeResult.updatedCarouselIdVotes`
+  is `updatedCarouselVotes`. A freshly constructed block carries
+  `CarouselVotes.none()` — no vote at all — so the engine no longer has to
+  recognise and clear a phantom `-1` entry on the first real carousel
+  observation, and a consumer's block type no longer has to default to
+  it. The engine advances the histogram with `record(hzScrollerIndex)`;
+  `hasObservedCarousel` says whether any observation placed the block in
+  a horizontal scroller. Vote counts differ from 2.x in one way: a
+  block's own non-carousel construction is no longer a vote, so a
+  block observed twice outside any carousel now tallies `{-1: 1}` where
+  2.x tallied `{-1: 2}`. Nothing in the engine or the replay reports
+  reads the counts; every committed replay stream is byte-identical.
+  The replay loader maps a recorded lone `{-1: 1}` to `none()`.
+  Migration:
+
+  | 2.6.x | 3.0 |
+  |---|---|
+  | `Map<int, int> get carouselIdVotes` | `CarouselVotes get carouselVotes` |
+  | `carouselIdVotes: const {-1: 1}` (default) | `carouselVotes: const CarouselVotes.none()` |
+  | `carouselIdVotes: {hzScrollerIndex: 1}` (own context as first vote) | `carouselVotes: CarouselVotes.seeded(hzScrollerIndex)` |
+  | `carouselIdVotes: merge.updatedCarouselIdVotes` | `carouselVotes: merge.updatedCarouselVotes` |
+  | reading the histogram | `block.carouselVotes.votes` |
+
 ## 2.6.1 - 2026-09-11
 
 ### Changed

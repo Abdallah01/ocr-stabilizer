@@ -32,7 +32,7 @@ import 'step_response.dart';
 /// - `updatedTextVotes` → `textVotes`
 /// - `updatedClassificationVotes` → `classificationVotes`
 /// - `needsReclassification` → `needsReclassification`
-/// - `updatedCarouselIdVotes` → `carouselIdVotes`
+/// - `updatedCarouselVotes` → `carouselVotes`
 /// - `observationCount` → `observationCount`
 /// - `isProvisional` → `isProvisional`
 /// - `provisionalCapturesRemaining` → `provisionalCapturesRemaining`
