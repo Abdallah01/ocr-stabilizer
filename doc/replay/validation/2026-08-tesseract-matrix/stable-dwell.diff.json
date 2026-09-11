@@ -539,6 +539,59 @@
         }
       ],
       "digest": "99d8930b753e28b0"
+    },
+    "legacyCoherent": {
+      "captures": [
+        {
+          "capture": 1,
+          "hash": "778d00a09b2313d6"
+        },
+        {
+          "capture": 2,
+          "hash": "5647bbec1056123c"
+        },
+        {
+          "capture": 3,
+          "hash": "2c49f5e87e26ef1f"
+        },
+        {
+          "capture": 4,
+          "hash": "36ad01829ce68a1d"
+        },
+        {
+          "capture": 5,
+          "hash": "ae1c5ee2eb6ceb53"
+        },
+        {
+          "capture": 6,
+          "hash": "61017db979cce07c"
+        },
+        {
+          "capture": 7,
+          "hash": "a418e2e95ece1b43"
+        },
+        {
+          "capture": 8,
+          "hash": "bcbaa1ebccf8c992"
+        },
+        {
+          "capture": 9,
+          "hash": "c9c7d5d9b4fa2b91"
+        },
+        {
+          "capture": 10,
+          "hash": "b1b75cc9534c16a1"
+        },
+        {
+          "capture": 11,
+          "hash": "48c1ed62f774b072"
+        },
+        {
+          "capture": 12,
+          "hash": "aef0a9f19bd4eb1e"
+        }
+      ],
+      "digest": "25a6e727a80d0753"
     }
   }
 }

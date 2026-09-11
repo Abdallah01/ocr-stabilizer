@@ -71,6 +71,11 @@ class DifferentialArm {
 ///   cross-frame supersession pass is skipped entirely; a mutant that
 ///   broke that pass survived every other arm (this file's PR), so a
 ///   `RetentionManager` extraction needs this arm to be seen at all.
+/// - `legacyCoherent` — `PositionMergeModel.legacy` with
+///   `StepResponse.coherentShift` requested: the documented no-op (legacy
+///   has no agreement scale to detect "moved" against, so no plan is ever
+///   decided). Pins that a `CoherentShiftDetector` extraction keeps that
+///   gate where it is.
 const List<DifferentialArm> kDifferentialArms = [
   DifferentialArm('legacy',
       model: PositionMergeModel.legacy, stepResponse: StepResponse.damp),
@@ -110,6 +115,10 @@ const List<DifferentialArm> kDifferentialArms = [
       stepResponse: StepResponse.coherentShift,
       adoptAgreeing: true,
       retention: RetentionConfig(missedFrames: 2)),
+  DifferentialArm('legacyCoherent',
+      model: PositionMergeModel.legacy,
+      stepResponse: StepResponse.coherentShift,
+      adoptAgreeing: true),
 ];
 
 /// Replay [stream] under [arm], invoking [onCapture] after every
