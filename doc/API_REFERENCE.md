@@ -20,8 +20,9 @@ into stable blocks. Everything below is sorted by how likely you are to
 touch it. **Public?** — exported from `package:ocr_stabilizer/ocr_stabilizer.dart`.
 **Usually instantiate?** — *Yes* (you construct it on the basic path),
 *Optional* (construct it only when you want the lever), *Usually no* (the
-engine builds its own; inject one only to share or observe it), *Returned
-by engine* (you read it, never build it).
+engine builds its own; inject one only to share it), *Returned by engine*
+(you read it, never build it), *Returned by X* (a named producer other
+than the engine), *No — static* (a helper with a private constructor).
 
 ### You need this
 
@@ -37,7 +38,8 @@ by engine* (you read it, never build it).
 | Type | Public? | Usually instantiate? | Purpose |
 |------|---------|----------------------|---------|
 | `StabilizerConfig` (+ `MatchingConfig`, `MergeConfig`, `StepResponseConfig`, `RetentionConfig`, `DiagnosticsConfig`) | Yes | Optional — only with a measured reason | Every engine lever, grouped by stage |
-| `StabilizationEngine<T, P>` | Yes | Optional — only for a custom `Track` | The general engine `OcrStabilizer` is a thin subclass of |
+| `Observation<T>` / `Track<T>` | Yes | Usually no — `DefaultTrackedBlock` implements them | The contract a block satisfies; implement it yourself only for custom persistent state |
+| `StabilizationEngine<T, P>` | Yes | Optional — only for a custom `Track` | The general engine; `OcrStabilizer` is its thin subclass |
 | `ParagraphGrouper` | Yes | Optional — AFTER the engine | Groups stable blocks into translation-sized units; not part of the identity model |
 
 ### Advanced and specialized
@@ -78,48 +80,6 @@ Confidences default to ground truth; `coordinates` defaults to
 `CoordinateContext.page()`; the state half (observation count, votes,
 provisional status) starts at "first observation" and the engine carries
 it from there.
-
-### Observation\<T\> and Track\<T\>
-
-**Do I normally instantiate this?** Usually no. `DefaultTrackedBlock<T>` already implements `Track<T>`; implement it yourself only when your block needs custom persistent state, and then construct `StabilizationEngine` with your own merger.
-
-`Observation<T>` is what a consumer supplies per capture; `Track<T>` is an
-observation plus the state the engine accumulates (observation count, vote
-histograms, provisional status). The engine stores and returns tracks; a
-fresh block enters as a track at its first observation, and the engine
-only ever reads the observation half of a fresh block.
-
-```dart
-class MyBlock implements Observation<MyPayload> {
-  @override final AbsoluteRect absoluteRect;
-  @override final String originalText;
-  @override final CoordinateContext coordinates;  // page / innerScroller / viewport
-  @override final PositionConfidence positionConfidence;
-  @override final TextConfidence textConfidence;
-  @override final int sourceQuality;
-  @override final MyPayload payload;  // opaque — engine carries but never reads
-}
-```
-
-`coordinates` (3.0, #147) is one sealed value — `CoordinateContext.page()`
-(the default; a carousel child is a page block whose scroll context carries
-the carousel index), `.innerScroller(top:, containerId:, scroll:)` or
-`.viewport(stickyFallback:)`. The eight 2.x flags (`isViewportRelative`,
-`isInnerScrollerChild`, `innerScrollerTop`, `isHorizontalScrollChild`,
-`containerId`, `scrollContext`, `isFromStickyElement`, `stickyFallback`)
-are derived views readable on every block; a consumer that still stores
-them flat builds the frame with `CoordinateContext.fromFlags(...)`, which
-rejects the combinations the engine never expected.
-
-To feed the stabilization engine, implement `Track<T>` — it extends
-`Observation<T>` with 8 state getters the engine writes through your
-merger (`MergeResult` → `copyWith`). Most integrators want
-`DefaultTrackedBlock<T>` rather than rolling their own: construct it with
-the observation fields and let its defaults carry the state.
-
-The generic `T` carries app-specific data (translations, styles) without
-coupling the engine to your domain types.
-
 
 ### StabilizationResult\<T\>
 
@@ -164,6 +124,48 @@ Groups: `MatchingConfig` (band fallback), `MergeConfig`
 `ExperimentalCoherentShiftOptions`), `RetentionConfig`, `DiagnosticsConfig`.
 Every lever has a documented default and a measured history.
 
+### Observation\<T\> and Track\<T\>
+
+**Do I normally instantiate this?** Usually no. `DefaultTrackedBlock<T>` already implements `Track<T>`; implement it yourself only when your block needs custom persistent state, and then construct `StabilizationEngine` with your own merger.
+
+`Observation<T>` is what a consumer supplies per capture; `Track<T>` is an
+observation plus the state the engine accumulates (observation count, vote
+histograms, provisional status). The engine stores and returns tracks; a
+fresh block enters as a track at its first observation, and the engine
+only ever reads the observation half of a fresh block.
+
+```dart
+class MyBlock implements Observation<MyPayload> {
+  @override final AbsoluteRect absoluteRect;
+  @override final String originalText;
+  @override final CoordinateContext coordinates;  // page / innerScroller / viewport
+  @override final PositionConfidence positionConfidence;
+  @override final TextConfidence textConfidence;
+  @override final int sourceQuality;
+  @override final MyPayload payload;  // opaque — engine carries but never reads
+}
+```
+
+`coordinates` (3.0, #147) is one sealed value — `CoordinateContext.page()`
+(the default; a carousel child is a page block whose scroll context carries
+the carousel index), `.innerScroller(top:, containerId:, scroll:)` or
+`.viewport(stickyFallback:)`. The eight 2.x flags (`isViewportRelative`,
+`isInnerScrollerChild`, `innerScrollerTop`, `isHorizontalScrollChild`,
+`containerId`, `scrollContext`, `isFromStickyElement`, `stickyFallback`)
+are derived views readable on every block; a consumer that still stores
+them flat builds the frame with `CoordinateContext.fromFlags(...)`, which
+rejects the combinations the engine never expected.
+
+To feed the stabilization engine, implement `Track<T>` — it extends
+`Observation<T>` with 8 state getters the engine writes through your
+merger (`MergeResult` → `copyWith`). Most integrators want
+`DefaultTrackedBlock<T>` rather than rolling their own: construct it with
+the observation fields and let its defaults carry the state.
+
+The generic `T` carries app-specific data (translations, styles) without
+coupling the engine to your domain types.
+
+
 ### StabilizationEngine\<T, P\>
 
 **Do I normally instantiate this?** Optional — only for a custom `Track<T>`.
@@ -181,7 +183,7 @@ block type. Behaviour is identical to `OcrStabilizer` for a
 
 ### ParagraphGrouper (v1.2.0+)
 
-**Do I normally instantiate this?** Optional, and AFTER the engine: OCR → engine → ParagraphGrouper → translation. Construct it only if you want translation-sized units.
+**Do I normally instantiate this?** Optional, and AFTER the engine: OCR → engine → ParagraphGrouper → translation. Construct it only if you want translation-sized units. It takes `OcrBlock`s (`boundingBox`, `text`, `lines`), not tracks: build one per stable block from `absoluteRect.raw` and `originalText` (a single line each) — the grouper never reads tracked state, so nothing is lost in that adapter.
 
 **The boundary first: `StabilizationEngine` does not know what a paragraph
 is. Consumers decide the unit of tracking** — lines, paragraphs, DOM
@@ -235,7 +237,7 @@ to revisit for Latin-script or dense-layout content.
 
 ### DriftTracker
 
-**Do I normally instantiate this?** Usually no. The engine builds its own; pass one in only to share it between engines or to read its corrections.
+**Do I normally instantiate this?** Usually no. The engine builds its own and exposes it as `engine.driftTracker`; pass one in only to share it between engines.
 
 Tracks positional drift per coordinate-space region. OCR positions jitter
 between captures due to scroll timing, viewport changes, and sensor noise.
@@ -318,15 +320,15 @@ Zero-cost compile-time wrappers for coordinate safety:
 
 ## How the engine decides two observations are the same block
 
-Six dimensions take part. You do not configure all six: two you supply on
-the observation, two the engine derives, one the engine maintains, one is
-an optional callback.
+Six dimensions take part. You do not configure all six: three you supply
+on the observation (two of them with defaults), one the engine derives,
+one the engine maintains, one is an optional callback.
 
 | Dimension | What it answers | Where it comes from | Who supplies it |
 |-----------|-----------------|---------------------|-----------------|
 | **Textual** | What does this text say? | `originalText` on `Observation` | consumer-supplied |
 | **Spatial** | Where is it in the page? | `absoluteRect`, `positionConfidence` | consumer-supplied (confidence defaults to ground truth) |
-| **Relative** | Which coordinate space? | `SpaceKey`, `ContainerId` from `coordinates` | derived |
+| **Relative** | Which coordinate space? | `coordinates` (`page` / `innerScroller(containerId:)` / `viewport`); the engine derives its `SpaceKey` from it | consumer-supplied frame (defaults to `page()`), derived key |
 | **Semantic** | What kind of element? | `hierarchyWeight` (extension) | derived |
 | **Temporal** | How much evidence? | `observationCount` on `Track` | engine-maintained |
 | **Contextual** | What context was it in? | `ContextualInvalidationCheck` | callback (optional) |
@@ -356,15 +358,16 @@ Every exported type, with the same two columns as the tier table.
 | `StabilizerConfig` | Yes | Optional | Every engine lever, grouped by stage: `MatchingConfig`, `MergeConfig`, `StepResponseConfig` (+ `CoherentShiftConfig`, `ExperimentalCoherentShiftOptions`), `RetentionConfig`, `DiagnosticsConfig` (3.0+) |
 | `DriftTracker` | Yes | Usually no | Regional drift correction with submap isolation |
 | `SpatialBlockIndex` | Yes | Usually no | Grid-cell spatial index for overlap queries (implements `SpatialIndexView`) |
-| `BlockClassifierService` | Yes | Usually no | Classifies blocks into fixed / sticky / carousel / IC / normal |
-| `OverlapResolver` | Yes | Usually no | Spatial NMS with language-aware thresholds |
-| `BlockKeyGenerator` | Yes | Usually no | Position + text dedup keys with fuzzy neighbor matching |
+| `BlockClassifierService` | Yes | Optional — standalone; the engine neither builds nor accepts one | Classifies blocks into fixed / sticky / carousel / IC / normal |
+| `OverlapResolver` | Yes | Usually no (the engine builds its own) | Spatial NMS with language-aware thresholds |
+| `BlockKeyGenerator` | Yes | Usually no (the engine builds its own) | Position + text dedup keys with fuzzy neighbor matching |
 | `CssSubmapMembership` | Yes | Usually no | Default WebView submap partitioning |
+| `HierarchyWeightX` (extension) | Yes | No — a derived view on every `Observation` | `hierarchyWeight` from the coordinate frame |
 | `ParagraphGrouper` | Yes | Optional (after the engine) | CJK-aware block→paragraph grouping (Otsu gap clustering + noise guards) |
 | `otsusThreshold` / `otsusThresholdWithFallback` | Yes | Optional (function) | Otsu bimodal threshold for 1-D gap distributions (function API) |
-| `RobustStats` | Yes | Usually no | Robust statistics (median, MAD, IQR) |
-| `IqrOutlier` | Yes | Usually no | Tukey-fence outlier detection |
-| `TextDedupUtils` | Yes | Usually no | Levenshtein, Jaccard, CJK detection helpers |
+| `RobustStats` | Yes | No — static | Robust statistics (median, MAD, IQR) |
+| `IqrOutlier` | Yes | No — static | Tukey-fence outlier detection |
+| `TextDedupUtils` | Yes | No — static | Levenshtein, Jaccard, CJK detection helpers |
 
 ### BandFallback (v0.4.0+)
 
@@ -388,9 +391,9 @@ Every exported type, with the same two columns as the tier table.
 |------|---------|----------------------|---------|
 | `StabilizationResult<T>` | Yes | Returned by engine | Output of `engine.stabilize()` — stable blocks + bookkeeping |
 | `MergeResult` | Yes | Returned by engine (to your merger) | Exhaustive engine-computed delta passed to `BlockMerger` |
-| `CarouselVotes` | Yes | Returned by engine | Histogram of horizontal-scroller indices a block was observed under; `none()`, `seeded(index)`, `record(index)`, `hasObservedCarousel` (3.0+) |
-| `ClassificationResult` | Yes | Returned by engine | Output of `BlockClassifierService` |
-| `MergeDecisionDiagnostic` | Yes | Returned by engine | One grouper boundary decision — verdict, reason set, gap/threshold context (2.0.0+) |
+| `CarouselVotes` | Yes | Optional — `none()` is the default; `seeded(index)` to count construction as an observation | Histogram of horizontal-scroller indices a block was observed under; `none()`, `seeded(index)`, `record(index)`, `hasObservedCarousel` (3.0+) |
+| `ClassificationResult` | Yes | Returned by `BlockClassifierService` | Output of `BlockClassifierService` |
+| `MergeDecisionDiagnostic` | Yes | Via `ParagraphGrouper.onMergeDecision` (optional callback) | One grouper boundary decision — verdict, reason set, gap/threshold context (2.0.0+) |
 | `CoherentShiftEvent` | Yes | Returned by engine | The coherent shift a capture applied — translation, member count, adopted count, deciding path (2.5.0+) |
 | `IdentityTurnover` | Yes | Returned by engine | Per-capture identity census — merged / admitted / retained / dropped, `admittedShare` (2.5.0+) |
 | `TransformEstimate` | Yes | Returned by engine | Per-capture similarity-transform fit over the matched pairs — `scale`, `translation`, `fixedPoint`, `residualPx`, `spanPx`, `pairCount`, `rejectedPairs`; observed, never applied (2.6.0+) |
@@ -403,15 +406,15 @@ Every exported type, with the same two columns as the tier table.
 | `ScrollContext` | Yes | Optional (inside `CoordinateContext`) | Scroll offsets and carousel identity at capture time |
 | `StickyFallback` | Yes | Optional (inside `viewport(...)`) | Fallback coordinate context for demoted sticky elements |
 | `TextVote` | Yes | Returned by engine | Accumulated confidence evidence for one text variant |
-| `MergeRejectReason` | Yes | Returned by engine | 9-value enum naming every grouper rejection guard (2.0.0+) |
+| `MergeRejectReason` | Yes | Via `ParagraphGrouper.onMergeDecision` (optional callback) | 9-value enum naming every grouper rejection guard (2.0.0+) |
 | `CoherentShiftSource` | Yes | Returned by engine | 3-value enum naming the path that decided a coherent shift — quorum / floor / reanchor (2.5.0+) |
 
 ### Extension Types
 
-| Type | Wraps | Purpose |
-|------|-------|---------|
-| `AbsoluteRect` | `Rect` | World-space coordinate safety |
-| `ContainerId` | `String` | Stable container identity |
-| `SpaceKey` | `String` | Typed drift observation keys |
-| `PositionConfidence` | `double` | Position-accuracy confidence in [0, 1] |
-| `TextConfidence` | `double` | OCR-text confidence in [0, 1] |
+| Type | Wraps | Public? | Usually instantiate? | Purpose |
+|------|-------|---------|----------------------|---------|
+| `AbsoluteRect` | `Rect` | Yes | **Yes** — wrap every rect you hand in | World-space coordinate safety |
+| `ContainerId` | `String` | Yes | Optional — only with `innerScroller(...)` | Stable container identity |
+| `SpaceKey` | `String` | Yes | Usually no (derived from `coordinates`) | Typed drift observation keys |
+| `PositionConfidence` | `double` | Yes | Optional — defaults to ground truth | Position-accuracy confidence in [0, 1] |
+| `TextConfidence` | `double` | Yes | Optional — defaults to ground truth | OCR-text confidence in [0, 1] |

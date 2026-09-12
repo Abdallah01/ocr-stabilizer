@@ -160,7 +160,7 @@ renders from the fully synthetic
    your app -- OCR boxes --> ocr_stabilizer (identity . matching . position . dedup . retention)
                                      |
                                      v  stable blocks (this capture)
-                             ParagraphGrouper (optional)
+                             ParagraphGrouper (optional; takes OcrBlocks)
                                      |
                                      v  translation / rendering
 ```
