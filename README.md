@@ -156,6 +156,15 @@ renders from the fully synthetic
 
 ## How it works
 
+```
+   your app -- OCR boxes --> ocr_stabilizer (identity . matching . position . dedup . retention)
+                                     |
+                                     v  stable blocks (this capture)
+                             ParagraphGrouper (optional)
+                                     |
+                                     v  translation / rendering
+```
+
 Live OCR on scrollable content produces a stream of noisy, jittery
 observations: the same paragraph appears at slightly different positions
 each capture, and without a stabilization layer overlays flicker,
@@ -194,7 +203,8 @@ You might need `StabilizerConfig` (a lever with a measured reason) and
 `ParagraphGrouper` (grouping stable blocks into translation-sized units —
 downstream of the engine, not part of its identity model). Everything
 else — `StabilizationEngine` for a custom `Track`, `DriftTracker`,
-`SpatialBlockIndex`, `BandFallback`, the value types — is in the
+`SpatialBlockIndex`, `BandFallback`, the value types — is listed by tier
+with a "do I normally instantiate this?" answer in the
 [API reference](doc/API_REFERENCE.md).
 
 ## Platform support
