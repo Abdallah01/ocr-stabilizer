@@ -22,48 +22,120 @@ does not do, and what is yours to configure — is one page:
 
 ```yaml
 dependencies:
-  ocr_stabilizer: ^3.0.0
+  ocr_stabilizer: ^3.1.0 # OcrStabilizer arrived in 3.1.0
 ```
 
-## Quick start
+## Quick start — the whole basic integration
 
-`DefaultTrackedBlock<T>` is the fastest path — a concrete block with
-documented defaults for every field the engine reads.
+Copy this. It is everything a first integration needs.
 
 ```dart
 import 'package:ocr_stabilizer/ocr_stabilizer.dart';
 
-final engine = OcrStabilizer<MyPayload>(
-  // Every lever has a documented default; group overrides by stage:
-  // config: StabilizerConfig(retention: RetentionConfig(missedFrames: 2)),
-);
-// Spelled out, this is StabilizationEngine<DefaultTrackedBlock<MyPayload>,
-// MyPayload>(merger: (existing, fresh, merge) => existing.applyMerge(merge)).
+// Once, for the life of the capture stream. Defaults for everything.
+final stabilizer = OcrStabilizer<MyPayload>();
 
-// Each capture (e.g. a screenshot on scroll-settle, 1–2 Hz):
-final blocks = ocrResults.map((ocr) => DefaultTrackedBlock<MyPayload>(
-  absoluteRect: ocr.absoluteRect,
-  originalText: ocr.text,
-  payload: ocr.payload,                               // opaque to the engine
-  positionConfidence: PositionConfidence.from(ocr.posConf),
-  textConfidence: TextConfidence.from(ocr.txtConf),
+// Every capture: wrap your OCR boxes, hand them over, render what comes back.
+final observations = ocrResults.map((r) => DefaultTrackedBlock<MyPayload>(
+  absoluteRect: AbsoluteRect(r.rect), // page coordinates, wrapped (see Level 1)
+  originalText: r.text,
+  payload: r.payload,                 // anything of yours; the engine never reads it
 )).toList();
 
-final result = engine.stabilize(blocks);
+final result = stabilizer.stabilize(observations);
+
 for (final block in result.stableBlocks) {
-  // Render at first sight; re-observations only refine the box and text.
+  renderText(text: block.originalText, rect: block.absoluteRect.raw);
 }
 ```
 
-Runnable version: [`example/example.dart`](example/example.dart). Your own
-block type: implement `Track<T>` — an `Observation<T>` (rect, frame, text,
-confidences, payload: 7 getters) plus the engine-owned state (count, votes,
-provisional status: 8 getters) — see the [API reference](doc/API_REFERENCE.md).
+(`r.rect` is the package's own `Rect`; a Flutter `ui.Rect` becomes one with
+`.toStabilizer()` from [Platform support](#platform-support).)
 
-Every `stabilize()` result also reports what the engine decided this
-capture — a coherent shift, the identity turnover, a similarity-transform
-estimate — so a layout layer can react without reverse-engineering
-`stableBlocks`: [observing the engine's decisions](doc/OBSERVING_DECISIONS.md).
+That is the whole basic integration. `result.stableBlocks` are the blocks to
+draw for **this** capture: a block is drawable from its first observation,
+and later captures only refine its box and text ([timing
+model](doc/TIMING_MODEL.md)). Runnable version:
+[`example/example.dart`](example/example.dart).
+
+### Level 1 — I just want stabilization
+
+- **The defaults are the product.** `OcrStabilizer<MyPayload>()` with no
+  arguments is the measured configuration: every lever's default carries
+  its own validation history in [`doc/`](doc/README.md), and an entry that
+  overrides one says so in its caption (the demo below names its one
+  override). Configuration is the escape hatch, not a setup step.
+- **Two fields are required** on `DefaultTrackedBlock`: `absoluteRect` and
+  `payload`. Confidences default to ground truth; pass
+  `positionConfidence: PositionConfidence.from(x)` /
+  `textConfidence: TextConfidence.from(x)` only if your OCR gives you them.
+- **Coordinates: use the default.** `CoordinateContext.page()` is the
+  default, so you can omit the field entirely. A horizontal carousel child
+  stays in page coordinates too (`page(scroll: ...)` carries its carousel
+  identity). Reach for `innerScroller(...)` only for a vertically
+  scrolling container inside the page, and `viewport(...)` only for
+  fixed-position content — the `CoordinateContext` row of the
+  [API reference](doc/API_REFERENCE.md) lists the three constructors.
+- **Capture rate.** Designed for event-driven capture pipelines (a
+  screenshot on scroll-settle, a DOM re-extraction); validated extensively
+  at about 1–2 captures per second. That is the design target, not an
+  operating limit.
+- **Why does this package have its own `Rect`?** It is pure Dart and runs
+  outside Flutter, so its geometry types (`Rect`, `Offset`, `Size`, member-
+  compatible with `dart:ui`'s) do not depend on `dart:ui`. Flutter apps
+  convert at the render boundary — the two-line extensions are under
+  [Platform support](#platform-support). `AbsoluteRect` is a zero-cost
+  wrapper that marks a `Rect` as page-absolute: `AbsoluteRect(rect)` in,
+  `.raw` out, `AbsoluteRect.fromLTWH(...)` to build one directly.
+
+### Level 2 — what is happening
+
+You give the engine **observations**; it keeps **tracks**.
+
+- An `Observation<T>` is what you supply per capture: rect, text,
+  coordinates, two confidences, source quality, payload (7 getters).
+- A `Track<T>` is an observation plus the state the engine accumulates:
+  observation count, text and classification votes, provisional status
+  (8 more getters). The engine only ever reads the observation half of a
+  fresh block and writes the state half through a merger.
+- `DefaultTrackedBlock<T>` is a ready-made `Track<T>` with defaults for the
+  state half. **You normally do not implement `Track`.** Give the engine
+  fresh observations as `DefaultTrackedBlock`s and let it carry the state.
+
+Each `stabilize()` call dedups the capture, matches each fresh block to a
+tracked one, decides whether a group of blocks moved together (a real
+layout reflow) or jittered individually, merges positions and votes, and
+retains or drops what went unobserved — the five steps under [How it
+works](#how-it-works).
+
+Besides `stableBlocks`, a result carries optional signals for a layout
+layer: `coherentShift` (a decided shared translation, applied to the
+tracked blocks that followed it — a slab can move while other blocks stay
+put), `identityTurnover` (how many fresh blocks were merged / admitted as
+new, and how many cached identities were retained / dropped),
+`transformEstimate` (a similarity transform over the matched pairs). Ignore them until you need
+them: [observing the engine's decisions](doc/OBSERVING_DECISIONS.md).
+
+### Level 3 — I need custom persistent state, or a lever
+
+- **Your own block type.** Implement `Track<T>` and construct the general
+  engine yourself: `StabilizationEngine<MyBlock, MyPayload>(merger: (existing,
+  fresh, merge) => existing.copyWith(/* apply merge */))`. `OcrStabilizer`
+  is exactly `StabilizationEngine<DefaultTrackedBlock<P>, P>` with that
+  merger pre-wired — the differential test pins the two identical capture
+  for capture — so moving up changes nothing about behaviour. See the
+  [API reference](doc/API_REFERENCE.md).
+- **A lever.** Every lever has a documented default and a measured history,
+  grouped by stage:
+
+  ```dart
+  OcrStabilizer<MyPayload>(
+    config: StabilizerConfig(retention: RetentionConfig(missedFrames: 2)),
+  );
+  ```
+
+  Reach for one only with a measured reason ([contract](doc/CONTRACT.md)
+  lists what is yours to configure).
 
 ![Demo: raw per-frame ML Kit boxes jittering on the left; the same stream stabilized on the right](https://raw.githubusercontent.com/Abdallah01/ocr-stabilizer/9e8df3f/doc/media/stabilizer-demo-mlkit.gif)
 
@@ -109,20 +181,21 @@ is withheld while evidence accrues ([timing model](doc/TIMING_MODEL.md)).
 
 ## Core components
 
+The types on the basic path, in the order you meet them:
+
 | Type | Purpose |
 |------|---------|
-| `StabilizationEngine<T, P>` | The pipeline above; `stabilize(blocks)` per capture, or `merge(fresh, existing)` when you run your own matching |
-| `Observation<T>` / `Track<T>` | What you supply per capture / what the engine keeps and returns |
-| `DefaultTrackedBlock<T>` | Reference block with defaults, `copyWith`, `applyMerge` |
-| `StabilizationResult<T>` | `stableBlocks` + `coherentShift`, `identityTurnover`, `transformEstimate`, contradictions |
-| `DriftTracker` | Per-region drift correction (bounded to a line height, rolling window, submap isolation) |
-| `SpatialBlockIndex` | Grid-cell candidate lookup; three coordinate-space namespaces |
-| `ParagraphGrouper` | Downstream grouping into translation-sized units — not part of the identity model |
-| `AbsoluteRect`, `ContainerId`, `SpaceKey`, `PositionConfidence`, `TextConfidence` | Zero-cost typed wrappers for coordinate and confidence safety |
+| `OcrStabilizer<P>` | The common path: `stabilize(blocks)` per capture, defaults for everything, one generic parameter (your payload) |
+| `DefaultTrackedBlock<P>` | The block you construct per OCR box: `absoluteRect` + `payload` required, defaults for the rest |
+| `StabilizationResult<DefaultTrackedBlock<P>>` | What `stabilize()` returns: `stableBlocks` to draw, plus the optional `coherentShift` / `identityTurnover` / `transformEstimate` signals |
+| `CoordinateContext` | `page()` (the default — omit it), `innerScroller(...)`, `viewport(...)` |
 
-Full tables — interfaces, components, result and value types, the
-six-dimension identity model, hierarchy weights:
-[`doc/API_REFERENCE.md`](doc/API_REFERENCE.md).
+You might need `StabilizerConfig` (a lever with a measured reason) and
+`ParagraphGrouper` (grouping stable blocks into translation-sized units —
+downstream of the engine, not part of its identity model). Everything
+else — `StabilizationEngine` for a custom `Track`, `DriftTracker`,
+`SpatialBlockIndex`, `BandFallback`, the value types — is in the
+[API reference](doc/API_REFERENCE.md).
 
 ## Platform support
 
