@@ -82,10 +82,12 @@ model](doc/TIMING_MODEL.md)). Runnable version:
   | A fixed / sticky element | `CoordinateContext.viewport(stickyFallback:)` |
   | I don't understand coordinate spaces yet | `CoordinateContext.page()` |
 
-  The last row is deliberate: start simple. `SpaceKey` / `ContainerId` are
-  engine-internal namespaces you never construct on this path; the carousel
-  index, `fromFlags(...)` and the derived 2.x views are under "when you
-  need more" in the [API reference](doc/API_REFERENCE.md#coordinatecontext-30).
+  The last row is deliberate: start simple. Nothing else is needed on this
+  path: `SpaceKey` is the engine's own drift namespace (never yours to
+  build), and `ContainerId` — your stable hash of a scrolling container —
+  only comes up with `innerScroller(...)`; the carousel index,
+  `fromFlags(...)` and the derived 2.x views are under "when you need more"
+  in the [API reference](doc/API_REFERENCE.md#coordinatecontext-30).
 - **Capture rate.** Designed for event-driven capture pipelines (a
   screenshot on scroll-settle, a DOM re-extraction); validated extensively
   at about 1–2 captures per second. That is the design target, not an

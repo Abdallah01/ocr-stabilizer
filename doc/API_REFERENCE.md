@@ -116,9 +116,11 @@ rect is in. A horizontal carousel child is still a page block: `page(scroll:
 scroll:)` is for a vertically scrolling container inside the page;
 `viewport(stickyFallback:)` for fixed-position content. `fromFlags(...)`
 adapts the flat 2.x flags and rejects combinations the engine never
-expected. `SpaceKey` / `ContainerId` are the engine's own namespaces
-derived from this frame — you never construct a `SpaceKey`; a `ContainerId`
-only with `innerScroller(...)`.
+expected. Two neighbouring types: `SpaceKey` is the engine's own drift
+namespace derived from this frame (you never construct one); `ContainerId`
+is YOUR stable hash of a scrolling container, an optional argument to
+`innerScroller(containerId:)` so the engine can tell two inner scrollers
+apart.
 
 ## You might need this
 
