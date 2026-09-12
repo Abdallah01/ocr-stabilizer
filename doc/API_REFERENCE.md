@@ -97,13 +97,28 @@ similarity-transform fit over the matched pairs; observed, never applied),
 ### CoordinateContext (3.0+)
 
 **Do I normally instantiate this?** Optional — `page()` is the default.
+**Most users should use `CoordinateContext.page()`**; it is the default, so
+you can omit the field entirely. Only reach for `innerScroller(...)` or
+`viewport(...)` if your capture source has independently scrolling or
+fixed-position content:
 
-One sealed value per block saying which frame its rect is in. A horizontal
-carousel child is still a page block: `page(scroll: ...)` carries the
-carousel index. `innerScroller(top:, containerId:, scroll:)` is for a
-vertically scrolling container inside the page; `viewport(stickyFallback:)`
-for fixed-position content. `fromFlags(...)` adapts the flat 2.x flags and
-rejects combinations the engine never expected.
+| My OCR comes from... | Use |
+|---|---|
+| A normal page / document | `CoordinateContext.page()` (the default — omit the field) |
+| A horizontal carousel / slider child | `CoordinateContext.page(scroll: ...)` — still page coordinates; the scroll context carries the carousel index |
+| An element inside its own VERTICALLY scrolling container | `CoordinateContext.innerScroller(top:, containerId:, scroll:)` |
+| A fixed / sticky element | `CoordinateContext.viewport(stickyFallback:)` |
+| I don't understand coordinate spaces yet | `CoordinateContext.page()` |
+
+**When you need more.** One sealed value per block says which frame its
+rect is in. A horizontal carousel child is still a page block: `page(scroll:
+...)` carries the carousel index. `innerScroller(top:, containerId:,
+scroll:)` is for a vertically scrolling container inside the page;
+`viewport(stickyFallback:)` for fixed-position content. `fromFlags(...)`
+adapts the flat 2.x flags and rejects combinations the engine never
+expected. `SpaceKey` / `ContainerId` are the engine's own namespaces
+derived from this frame — you never construct a `SpaceKey`; a `ContainerId`
+only with `innerScroller(...)`.
 
 ## You might need this
 
@@ -146,10 +161,12 @@ class MyBlock implements Observation<MyPayload> {
 }
 ```
 
-`coordinates` (3.0, #147) is one sealed value — `CoordinateContext.page()`
-(the default; a carousel child is a page block whose scroll context carries
-the carousel index), `.innerScroller(top:, containerId:, scroll:)` or
-`.viewport(stickyFallback:)`. The eight 2.x flags (`isViewportRelative`,
+`coordinates` (3.0, #147) — which one? See the decision table under
+[CoordinateContext](#coordinatecontext-30); the default `page()` is right
+for most sources. When you need more: it is one sealed value —
+`CoordinateContext.page()` (a carousel child is a page block whose scroll
+context carries the carousel index), `.innerScroller(top:, containerId:,
+scroll:)` or `.viewport(stickyFallback:)`. The eight 2.x flags (`isViewportRelative`,
 `isInnerScrollerChild`, `innerScrollerTop`, `isHorizontalScrollChild`,
 `containerId`, `scrollContext`, `isFromStickyElement`, `stickyFallback`)
 are derived views readable on every block; a consumer that still stores
