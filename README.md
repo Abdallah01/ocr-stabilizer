@@ -69,13 +69,25 @@ model](doc/TIMING_MODEL.md)). Runnable version:
   `payload`. Confidences default to ground truth; pass
   `positionConfidence: PositionConfidence.from(x)` /
   `textConfidence: TextConfidence.from(x)` only if your OCR gives you them.
-- **Coordinates: use the default.** `CoordinateContext.page()` is the
-  default, so you can omit the field entirely. A horizontal carousel child
-  stays in page coordinates too (`page(scroll: ...)` carries its carousel
-  identity). Reach for `innerScroller(...)` only for a vertically
-  scrolling container inside the page, and `viewport(...)` only for
-  fixed-position content — the `CoordinateContext` row of the
-  [API reference](doc/API_REFERENCE.md) lists the three constructors.
+- **Coordinates: most users should use `CoordinateContext.page()`.** It
+  is the default, so you can omit the field entirely. Only reach for
+  `innerScroller(...)` or `viewport(...)` if your capture source has
+  independently scrolling or fixed-position content:
+
+  | My OCR comes from... | Use |
+  |---|---|
+  | A normal page / document | `CoordinateContext.page()` (the default — omit the field) |
+  | A horizontal carousel / slider child | `CoordinateContext.page(scroll: ...)` — still page coordinates; the scroll context carries the carousel index |
+  | An element inside its own VERTICALLY scrolling container | `CoordinateContext.innerScroller(top:, containerId:, scroll:)` |
+  | A fixed / sticky element | `CoordinateContext.viewport(stickyFallback:)` |
+  | I don't understand coordinate spaces yet | `CoordinateContext.page()` |
+
+  The last row is deliberate: start simple. Nothing else is needed on this
+  path: `SpaceKey` is the engine's own drift namespace (never yours to
+  build), and `ContainerId` — your stable hash of a scrolling container —
+  only comes up with `innerScroller(...)`; the carousel index,
+  `fromFlags(...)` and the derived 2.x views are under "when you need more"
+  in the [API reference](doc/API_REFERENCE.md#coordinatecontext-30).
 - **Capture rate.** Designed for event-driven capture pipelines (a
   screenshot on scroll-settle, a DOM re-extraction); validated extensively
   at about 1–2 captures per second. That is the design target, not an
